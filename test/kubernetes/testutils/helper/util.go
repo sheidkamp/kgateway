@@ -22,9 +22,9 @@ import (
 
 // Deprecated; if this is needed create a resource yaml for it.
 func GetHttpEchoImage() string {
-	httpEchoImage := "hashicorp/http-echo"
+	httpEchoImage := "docker.io/davidjumani/http-echo:0.2.4"
 	if runtime.GOARCH == "arm64" {
-		httpEchoImage = "gcr.io/solo-test-236622/http-echo"
+		httpEchoImage = "docker.io/davidjumani/http-echo:0.2.4"
 	}
 	return httpEchoImage
 }
