@@ -1,7 +1,7 @@
 package helper
 
 const (
-	defaultHttpEchoImage = "docker.io/davidjumani/http-echo:0.2.4"
+	defaultHttpEchoImage = "davidjumani/kennship-http-echo"
 	HttpEchoName         = "http-echo"
 	HttpEchoPort         = 3000
 )
