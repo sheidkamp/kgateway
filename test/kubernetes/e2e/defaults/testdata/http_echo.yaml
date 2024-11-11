@@ -26,7 +26,7 @@ metadata:
 spec:
   containers:
   - name: http-echo
-    image: docker.io/davidjumani/http-echo:0.2.4
+    image: us-docker.pkg.dev/developers-369321/rav-test/kennship-http-echo
     ports:
       - containerPort: 3000
     resources:
