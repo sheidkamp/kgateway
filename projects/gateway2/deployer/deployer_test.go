@@ -804,6 +804,14 @@ var _ = Describe("Deployer", func() {
 					Expect(dep.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring(":" + version.Version))
 				}
 				Expect(dep.Spec.Template.Spec.Containers[0].ImagePullPolicy).To(Equal(*expectedGwp.EnvoyContainer.Image.PullPolicy))
+				Expect(dep.Spec.Template.Spec.Containers[0].LivenessProbe.Exec.Command).To(BeEquivalentTo(
+					[]string{
+						"wget",
+						"-O",
+						"/dev/null",
+						"127.0.0.1:19000/ready",
+					}))
+
 				Expect(dep.Spec.Template.Annotations).To(matchers.ContainMapElements(expectedGwp.PodTemplate.ExtraAnnotations))
 				Expect(dep.Spec.Template.Annotations).To(HaveKeyWithValue("prometheus.io/scrape", "true"))
 				Expect(dep.Spec.Template.Spec.SecurityContext.RunAsUser).To(Equal(expectedGwp.PodTemplate.SecurityContext.RunAsUser))
@@ -876,6 +884,13 @@ var _ = Describe("Deployer", func() {
 			Expect(envoyContainer.ImagePullPolicy).To(Equal(*expectedGwp.EnvoyContainer.Image.PullPolicy))
 			Expect(envoyContainer.Resources.Limits.Cpu()).To(Equal(expectedGwp.EnvoyContainer.Resources.Limits.Cpu()))
 			Expect(envoyContainer.Resources.Requests.Cpu()).To(Equal(expectedGwp.EnvoyContainer.Resources.Requests.Cpu()))
+			Expect(envoyContainer.LivenessProbe.Exec.Command).To(BeEquivalentTo(
+				[]string{
+					"wget",
+					"-O",
+					"/dev/null",
+					"127.0.0.1:19000/ready",
+				}))
 
 			// assert sds container
 			expectedSdsImage := fmt.Sprintf("%s/%s",
