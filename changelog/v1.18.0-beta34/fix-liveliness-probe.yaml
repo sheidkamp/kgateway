@@ -2,5 +2,5 @@ changelog:
 - type: FIX
   issueLink: https://github.com/solo-io/solo-projects/issues/7084
   resolvesIssue: false
-  description: Fix the proxy deployment to include the liveliness probe.
+  description: Fix the proxy deployment to include the liveness probe.
 
