@@ -1,8 +1,12 @@
-package proxy_syncer
+package mcpsyncer
+
+//go:generate go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+//go:generate protoc --proto_path=. --go_out=. --go_opt=paths=source_relative target.proto
 
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	envoytypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
@@ -110,7 +114,13 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 		return ret
 	})
 	xds := krt.NewCollection(services, func(kctx krt.HandlerContext, s mcpService) *envoytypes.ResourceWithName {
-		panic("TODO")
+		t := &Target{
+			Name: s.ResourceName(),
+			Host: s.ip,
+			Port: uint32(s.port),
+		}
+		var r envoytypes.ResourceWithName = t
+		return &r
 	})
 
 	version := atomic.NewInt32(0)
@@ -156,7 +166,7 @@ func (s *McpSyncer) Start(ctx context.Context) error {
 	return nil
 }
 
-const typeUrl = "type.googleapis.com/ToDo.Type"
+const typeUrl = "type.googleapis.com/mcp.kgateway.dev.target.v1alpha1.Target"
 
 type mcpSnapshot struct {
 	mcpServices envoycache.Resources
@@ -256,4 +266,27 @@ func newTranslator(
 	return &mcpTranslator{
 		gwtranslator: gwtranslator.NewTranslator(query.NewData(commonCols)),
 	}
+}
+
+type report struct {
+	// lower case so krt doesn't error in debug handler
+	reportMap reports.ReportMap
+}
+
+func (r report) ResourceName() string {
+	return "report"
+}
+
+// do we really need this for a singleton?
+func (r report) Equals(in report) bool {
+	if !maps.Equal(r.reportMap.Gateways, in.reportMap.Gateways) {
+		return false
+	}
+	if !maps.Equal(r.reportMap.HTTPRoutes, in.reportMap.HTTPRoutes) {
+		return false
+	}
+	if !maps.Equal(r.reportMap.TCPRoutes, in.reportMap.TCPRoutes) {
+		return false
+	}
+	return true
 }

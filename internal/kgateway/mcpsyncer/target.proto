@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package mcp.kgateway.dev.target.v1alpha1;
+
+option go_package = "github.com/kgateway-dev/kgateway/v2/internal/kgateway/mcpsyncer;mcpsyncer";
+
+message Target {
+  // The name of the target.
+  string name = 1;
+  // The host of the target.
+  string host = 2;
+  // The port of the target.
+  uint32 port = 3;
+}
