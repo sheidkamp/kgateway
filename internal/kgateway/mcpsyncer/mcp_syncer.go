@@ -12,14 +12,21 @@ import (
 	envoytypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/solo-io/go-utils/contextutils"
+	"istio.io/istio/pkg/config/schema/kubeclient"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
+	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/kube/kubetypes"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/common"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
@@ -29,19 +36,43 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/xds"
+	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
 	TargetTypeUrl = "type.googleapis.com/mcp.kgateway.dev.target.v1alpha1.Target"
 )
 
+func registerTypes(restConfig *rest.Config) {
+	cli, err := versioned.NewForConfig(restConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	mcpRoute := v1alpha1.SchemeGroupVersion.WithResource("mcpauthpolicies")
+	// schema.GroupVersionResource{Group: v1alpha1.GroupVersion.Group, Version: "v1alpha2", Resource: "tcproutes"}
+	kubeclient.Register[*v1alpha1.MCPAuthPolicy](
+		mcpRoute,
+		v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicy"),
+		func(c kubeclient.ClientGetter, namespace string, o metav1.ListOptions) (runtime.Object, error) {
+			return cli.GatewayV1alpha1().MCPRoutes(namespace).List(context.Background(), o)
+		},
+		func(c kubeclient.ClientGetter, namespace string, o metav1.ListOptions) (watch.Interface, error) {
+			return cli.GatewayV1alpha1().MCPRoutes(namespace).Watch(context.Background(), o)
+		},
+	)
+
+}
+
 type McpSyncer struct {
 	commonCols     *common.CommonCollections
 	translator     *mcpTranslator
 	controllerName string
 
-	xDS      krt.Collection[mcpXdsResources]
-	xdsCache envoycache.SnapshotCache
+	xDS         krt.Collection[mcpXdsResources]
+	xdsCache    envoycache.SnapshotCache
+	istioClient kube.Client
 
 	waitForSync []cache.InformerSynced
 }
@@ -54,13 +85,14 @@ func NewMcpSyncer(
 	commonCols *common.CommonCollections,
 	xdsCache envoycache.SnapshotCache,
 ) *McpSyncer {
+	registerTypes(mgr.GetConfig())
 	return &McpSyncer{
 		commonCols:     commonCols,
 		translator:     newTranslator(ctx, commonCols),
 		controllerName: controllerName,
 		xdsCache:       xdsCache,
 		// mgr:            mgr,
-		// istioClient:    client,
+		istioClient: client,
 	}
 }
 
@@ -104,6 +136,9 @@ func (r mcpService) Equals(in mcpService) bool {
 
 func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error {
 	// find mcp gateways
+	mcpauthpolicies := krt.WrapClient(kclient.NewDelayedInformer[*v1alpha1.MCPAuthPolicy](s.istioClient, v1alpha1.SchemeGroupVersion.WithResource("mcpauthpolicies"), kubetypes.StandardInformer, kclient.Filter{}), krtopts.ToOptions("MCPAuthPolicy")...)
+	mcpauthpolicies = mcpauthpolicies
+
 	gateways := krt.NewCollection(s.commonCols.GatewayIndex.Gateways, func(kctx krt.HandlerContext, gw ir.Gateway) *ir.Gateway {
 		if gw.Obj.Spec.GatewayClassName != "mcp" {
 			return nil
