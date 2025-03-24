@@ -11,8 +11,6 @@ import (
 	envoytypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/solo-io/go-utils/contextutils"
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
@@ -81,7 +79,8 @@ func (r mcpXdsResources) Equals(in mcpXdsResources) bool {
 }
 
 type envoyResourceWithName struct {
-	inner envoytypes.ResourceWithName
+	inner   envoytypes.ResourceWithName
+	version uint64
 }
 
 func (r envoyResourceWithName) ResourceName() string {
@@ -89,7 +88,7 @@ func (r envoyResourceWithName) ResourceName() string {
 }
 
 func (r envoyResourceWithName) Equals(in envoyResourceWithName) bool {
-	return proto.Equal(r.inner, in.inner)
+	return r.version == in.version
 }
 
 type mcpService struct {
@@ -147,7 +146,7 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 			Host: s.ip,
 			Port: uint32(s.port),
 		}
-		return &envoyResourceWithName{inner: t}
+		return &envoyResourceWithName{inner: t, version: utils.HashProto(t)}
 	}, krtopts.ToOptions("target-xds")...)
 
 	// translate gateways to xds
@@ -157,7 +156,7 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 		r := make([]envoytypes.Resource, len(resources))
 		var version uint64
 		for i, res := range resources {
-			version ^= utils.HashProto(res.inner)
+			version ^= res.version
 			r[i] = res.inner
 		}
 
@@ -214,6 +213,38 @@ type mcpSnapshot struct {
 	VersionMap map[string]map[string]string
 }
 
+// GetResources implements cache.ResourceSnapshot.
+func (m *mcpSnapshot) GetResources(typeURL string) map[string]envoytypes.Resource {
+	resources := m.GetResourcesAndTTL(typeURL)
+	if resources == nil {
+		return nil
+	}
+
+	withoutTTL := make(map[string]envoytypes.Resource, len(resources))
+
+	for k, v := range resources {
+		withoutTTL[k] = v.Resource
+	}
+
+	return withoutTTL
+}
+
+// GetResourcesAndTTL implements cache.ResourceSnapshot.
+func (m *mcpSnapshot) GetResourcesAndTTL(typeURL string) map[string]envoytypes.ResourceWithTTL {
+	if typeURL == TargetTypeUrl {
+		return m.mcpServices.Items
+	}
+	return nil
+}
+
+// GetVersion implements cache.ResourceSnapshot.
+func (m *mcpSnapshot) GetVersion(typeURL string) string {
+	if typeURL == TargetTypeUrl {
+		return m.mcpServices.Version
+	}
+	return ""
+}
+
 // ConstructVersionMap implements cache.ResourceSnapshot.
 func (m *mcpSnapshot) ConstructVersionMap() error {
 	if m == nil {
@@ -249,53 +280,15 @@ func (m *mcpSnapshot) ConstructVersionMap() error {
 	return nil
 }
 
-// GetResources implements cache.ResourceSnapshot.
-func (m *mcpSnapshot) GetResources(typeURL string) map[string]envoytypes.Resource {
-	resources := m.GetResourcesAndTTL(typeURL)
-	if resources == nil {
-		return nil
-	}
-
-	withoutTTL := make(map[string]envoytypes.Resource, len(resources))
-
-	for k, v := range resources {
-		withoutTTL[k] = v.Resource
-	}
-
-	return withoutTTL
-}
-
-// GetResourcesAndTTL implements cache.ResourceSnapshot.
-func (m *mcpSnapshot) GetResourcesAndTTL(typeURL string) map[string]envoytypes.ResourceWithTTL {
-	if typeURL == TargetTypeUrl {
-		return m.mcpServices.Items
-	}
-	return nil
-}
-
-// GetVersion implements cache.ResourceSnapshot.
-func (m *mcpSnapshot) GetVersion(typeURL string) string {
-	if typeURL == TargetTypeUrl {
-		return m.mcpServices.Version
-	}
-	return ""
-}
-
 // GetVersionMap implements cache.ResourceSnapshot.
 func (m *mcpSnapshot) GetVersionMap(typeURL string) map[string]string {
-	return map[string]string{
-		TargetTypeUrl: m.mcpServices.Version,
-	}
+	return m.VersionMap[TargetTypeUrl]
 }
 
 var _ envoycache.ResourceSnapshot = &mcpSnapshot{}
 
 type mcpTranslator struct {
-	waitForSync []cache.InformerSynced
-
 	gwtranslator extensionsplug.KGwTranslator
-
-	logger *zap.Logger
 }
 
 func newTranslator(
