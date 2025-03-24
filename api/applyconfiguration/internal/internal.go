@@ -886,6 +886,150 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: tokenBucket
       type:
         namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.TokenBucket
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicy
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
+      default: {}
+    - name: spec
+      type:
+        namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicySpec
+      default: {}
+    - name: status
+      type:
+        namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyStatus
+      default: {}
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyMatch
+  map:
+    fields:
+    - name: jwt
+      type:
+        namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyMatchJWT
+    - name: serviceAccount
+      type:
+        namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyMatchServiceAccount
+    - name: type
+      type:
+        scalar: string
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyMatchJWT
+  map:
+    fields:
+    - name: claim
+      type:
+        scalar: string
+    - name: value
+      type:
+        scalar: string
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyMatchServiceAccount
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+    - name: namespace
+      type:
+        scalar: string
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyRule
+  map:
+    fields:
+    - name: matches
+      type:
+        list:
+          elementType:
+            namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyMatch
+          elementRelationship: atomic
+    - name: resource
+      type:
+        namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPResource
+      default: {}
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicySpec
+  map:
+    fields:
+    - name: rules
+      type:
+        list:
+          elementType:
+            namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyRule
+          elementRelationship: atomic
+    - name: targetRefs
+      type:
+        list:
+          elementType:
+            namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.LocalPolicyTargetReference
+          elementRelationship: atomic
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPAuthPolicyStatus
+  map:
+    fields:
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
+          elementRelationship: associative
+          keys:
+          - type
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPResource
+  map:
+    fields:
+    - name: kind
+      type:
+        scalar: string
+    - name: name
+      type:
+        scalar: string
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPRoute
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
+      default: {}
+    - name: spec
+      type:
+        namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPRouteSpec
+      default: {}
+    - name: status
+      type:
+        namedType: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPRouteStatus
+      default: {}
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPRouteSpec
+  map:
+    fields:
+    - name: backendRef
+      type:
+        namedType: io.k8s.sigs.gateway-api.apis.v1.BackendRef
+      default: {}
+    - name: parentRefs
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.sigs.gateway-api.apis.v1.ParentReference
+          elementRelationship: atomic
+- name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.MCPRouteStatus
+  map:
+    fields:
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
+          elementRelationship: associative
+          keys:
+          - type
 - name: com.github.kgateway-dev.kgateway.v2.api.v1alpha1.Message
   map:
     fields:
@@ -2385,6 +2529,28 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
       default: ""
+- name: io.k8s.sigs.gateway-api.apis.v1.ParentReference
+  map:
+    fields:
+    - name: group
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: namespace
+      type:
+        scalar: string
+    - name: port
+      type:
+        scalar: numeric
+    - name: sectionName
+      type:
+        scalar: string
 - name: __untyped_atomic_
   scalar: untyped
   list:

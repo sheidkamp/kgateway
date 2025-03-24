@@ -33,6 +33,14 @@ func (c *FakeGatewayV1alpha1) HTTPListenerPolicies(namespace string) v1alpha1.HT
 	return newFakeHTTPListenerPolicies(c, namespace)
 }
 
+func (c *FakeGatewayV1alpha1) MCPAuthPolicies(namespace string) v1alpha1.MCPAuthPolicyInterface {
+	return newFakeMCPAuthPolicies(c, namespace)
+}
+
+func (c *FakeGatewayV1alpha1) MCPRoutes(namespace string) v1alpha1.MCPRouteInterface {
+	return newFakeMCPRoutes(c, namespace)
+}
+
 func (c *FakeGatewayV1alpha1) TrafficPolicies(namespace string) v1alpha1.TrafficPolicyInterface {
 	return newFakeTrafficPolicies(c, namespace)
 }

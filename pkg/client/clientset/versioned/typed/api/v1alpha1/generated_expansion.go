@@ -12,4 +12,8 @@ type GatewayParametersExpansion interface{}
 
 type HTTPListenerPolicyExpansion interface{}
 
+type MCPAuthPolicyExpansion interface{}
+
+type MCPRouteExpansion interface{}
+
 type TrafficPolicyExpansion interface{}

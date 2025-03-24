@@ -76,6 +76,8 @@ rules:
   - gatewayextensions
   - gatewayparameters
   - httplistenerpolicies
+  - mcpauthpolicies
+  - mcproutes
   - trafficpolicies
   verbs:
   - get
@@ -89,6 +91,8 @@ rules:
   - gatewayextensions/status
   - gatewayparameters/status
   - httplistenerpolicies/status
+  - mcpauthpolicies/status
+  - mcproutes/status
   - trafficpolicies/status
   verbs:
   - get

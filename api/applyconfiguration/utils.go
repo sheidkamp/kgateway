@@ -127,6 +127,28 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.LocalPolicyTargetReferenceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("LocalRateLimitPolicy"):
 		return &apiv1alpha1.LocalRateLimitPolicyApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicy"):
+		return &apiv1alpha1.MCPAuthPolicyApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicyMatch"):
+		return &apiv1alpha1.MCPAuthPolicyMatchApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicyMatchJWT"):
+		return &apiv1alpha1.MCPAuthPolicyMatchJWTApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicyMatchServiceAccount"):
+		return &apiv1alpha1.MCPAuthPolicyMatchServiceAccountApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicyRule"):
+		return &apiv1alpha1.MCPAuthPolicyRuleApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicySpec"):
+		return &apiv1alpha1.MCPAuthPolicySpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicyStatus"):
+		return &apiv1alpha1.MCPAuthPolicyStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPResource"):
+		return &apiv1alpha1.MCPResourceApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPRoute"):
+		return &apiv1alpha1.MCPRouteApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPRouteSpec"):
+		return &apiv1alpha1.MCPRouteSpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MCPRouteStatus"):
+		return &apiv1alpha1.MCPRouteStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Message"):
 		return &apiv1alpha1.MessageApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Moderation"):

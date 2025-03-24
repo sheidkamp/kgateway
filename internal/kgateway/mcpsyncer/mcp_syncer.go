@@ -2,6 +2,7 @@ package mcpsyncer
 
 //go:generate go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
 //go:generate protoc --proto_path=. --go_out=. --go_opt=paths=source_relative target.proto
+//go:generate protoc --proto_path=. --go_out=. --go_opt=paths=source_relative rbac.proto
 
 import (
 	"context"

@@ -13,6 +13,9 @@ import (
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/backendref"
@@ -548,6 +551,7 @@ func NewRoutesIndex(
 	httproutes krt.Collection[*gwv1.HTTPRoute],
 	tcproutes krt.Collection[*gwv1a2.TCPRoute],
 	tlsroutes krt.Collection[*gwv1a2.TLSRoute],
+	mcproutes krt.Collection[*v1alpha1.MCPRoute],
 	policies *PolicyIndex,
 	backends *BackendIndex,
 	refgrants *RefGrantIndex,
@@ -566,8 +570,12 @@ func NewRoutesIndex(
 		t := h.transformTlsRoute(kctx, i)
 		return &RouteWrapper{Route: t}
 	}, krtopts.ToOptions("routes-tls-routes-with-policy")...)
+	mcpRoutesCollection := krt.NewCollection(mcproutes, func(kctx krt.HandlerContext, i *v1alpha1.MCPRoute) *RouteWrapper {
+		t := h.transformMcpRoute(kctx, i)
+		return &RouteWrapper{Route: t}
+	}, krtopts.ToOptions("routes-mcp-routes-with-policy")...)
 
-	h.routes = krt.JoinCollection([]krt.Collection[RouteWrapper]{httpRouteCollection, tcpRoutesCollection, tlsRoutesCollection}, krtopts.ToOptions("all-routes-with-policy")...)
+	h.routes = krt.JoinCollection([]krt.Collection[RouteWrapper]{httpRouteCollection, tcpRoutesCollection, tlsRoutesCollection, mcpRoutesCollection}, krtopts.ToOptions("all-routes-with-policy")...)
 
 	httpByNamespace := krt.NewIndex(h.httpRoutes, func(i ir.HttpRouteIR) []string {
 		return []string{i.GetNamespace()}
@@ -689,6 +697,48 @@ func (h *RoutesIndex) transformTlsRoute(kctx krt.HandlerContext, i *gwv1a2.TLSRo
 		ParentRefs:       i.Spec.ParentRefs,
 		Backends:         h.getTcpBackends(kctx, src, backends),
 		Hostnames:        tostr(i.Spec.Hostnames),
+		AttachedPolicies: toAttachedPolicies(h.policies.getTargetingPolicies(kctx, extensionsplug.RouteAttachmentPoint, src, "")),
+	}
+}
+
+type mcpRouteIR struct {
+	ir.ObjectSource  `json:",inline"`
+	SourceObject     *v1alpha1.MCPRoute
+	ParentRefs       []gwv1.ParentReference
+	AttachedPolicies ir.AttachedPolicies
+	Backends         []ir.BackendRefIR
+}
+
+var _ ir.Route = &mcpRouteIR{}
+
+func (c *mcpRouteIR) GetParentRefs() []gwv1.ParentReference {
+	return c.ParentRefs
+}
+func (c *mcpRouteIR) GetSourceObject() metav1.Object {
+	return c.SourceObject
+}
+func (c mcpRouteIR) ResourceName() string {
+	return c.ObjectSource.ResourceName()
+}
+
+func (c mcpRouteIR) Equals(in mcpRouteIR) bool {
+	return c.ObjectSource == in.ObjectSource && c.SourceObject.UID == in.SourceObject.UID && c.SourceObject.Generation == in.SourceObject.Generation && c.AttachedPolicies.Equals(in.AttachedPolicies)
+}
+
+func (h *RoutesIndex) transformMcpRoute(kctx krt.HandlerContext, i *v1alpha1.MCPRoute) *mcpRouteIR {
+	src := ir.ObjectSource{
+		Group:     v1alpha1.SchemeGroupVersion.Group,
+		Kind:      "MCPRoute",
+		Namespace: i.Namespace,
+		Name:      i.Name,
+	}
+	backends := []gwv1.BackendRef{i.Spec.BackendRef}
+
+	return &mcpRouteIR{
+		ObjectSource:     src,
+		SourceObject:     i,
+		ParentRefs:       i.Spec.ParentRefs,
+		Backends:         h.getTcpBackends(kctx, src, backends),
 		AttachedPolicies: toAttachedPolicies(h.policies.getTargetingPolicies(kctx, extensionsplug.RouteAttachmentPoint, src, "")),
 	}
 }
