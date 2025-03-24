@@ -52,6 +52,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/controller"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/mcpsyncer"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/proxy_syncer"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/setup"
 )
@@ -285,6 +286,79 @@ spec:
 			t.Fatalf("expected filter config to contain x-solo-request321")
 		}
 
+		t.Logf("%s finished", t.Name())
+	})
+}
+
+func TestMcp(t *testing.T) {
+	st, err := settings.BuildSettings()
+	if err != nil {
+		t.Fatalf("can't get settings %v", err)
+	}
+	setupEnvTestAndRun(t, st, func(t *testing.T, ctx context.Context, kdbg *krt.DebugHandler, client istiokube.CLIClient, xdsPort int) {
+		client.Kube().CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "gwtest"}}, metav1.CreateOptions{})
+
+		err = client.ApplyYAMLContents("gwtest", `
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp
+  namespace: gwtest
+  labels:
+    app: mcp
+spec:
+  clusterIP: 10.0.0.11
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      appProtocol: kgateway.dev/mcp
+  selector:
+    app: mcp
+---
+kind: GatewayClass
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: mcp
+spec:
+  controllerName: kgateway.dev/kgateway
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: http-gw
+  namespace: gwtest
+spec:
+  gatewayClassName: mcp
+  listeners:
+  - protocol: HTTP
+    port: 8080
+    name: http
+    allowedRoutes:
+      namespaces:
+        from: All`)
+
+		if err != nil {
+			t.Fatalf("failed to apply yamls: %v", err)
+		}
+
+		time.Sleep(time.Second / 2)
+
+		dumper := newXdsDumper(t, ctx, xdsPort, "http-gw")
+		t.Cleanup(dumper.Close)
+		t.Cleanup(func() {
+			if t.Failed() {
+				logKrtState(t, fmt.Sprintf("krt state for failed test: %s", t.Name()), kdbg)
+			} else if os.Getenv("KGW_DUMP_KRT_ON_SUCCESS") == "true" {
+				logKrtState(t, fmt.Sprintf("krt state for successful test: %s", t.Name()), kdbg)
+			}
+		})
+
+		dump := dumper.DumpMcp(t, ctx)
+		targets := dump.Targets
+		if len(targets) != 1 {
+			t.Fatalf("expected 1 target config, got %d", len(targets))
+		}
 		t.Logf("%s finished", t.Name())
 	})
 }
@@ -550,12 +624,16 @@ func newXdsDumper(t *testing.T, ctx context.Context, xdsPort int, gwname string)
 
 	d := xdsDumper{
 		conn: conn,
-		dr: &discovery_v3.DiscoveryRequest{Node: &envoycore.Node{
-			Id: "gateway.gwtest",
-			Metadata: &structpb.Struct{
-				Fields: map[string]*structpb.Value{"role": {Kind: &structpb.Value_StringValue{StringValue: fmt.Sprintf("kgateway-kube-gateway-api~%s~%s", "gwtest", gwname)}}},
+		dr: &discovery_v3.DiscoveryRequest{
+			Node: &envoycore.Node{
+				Id: "gateway.gwtest",
+				Metadata: &structpb.Struct{
+					Fields: map[string]*structpb.Value{
+						"role": structpb.NewStringValue(fmt.Sprintf("kgateway-kube-gateway-api~%s~%s", "gwtest", gwname)),
+					},
+				},
 			},
-		}},
+		},
 	}
 
 	ads := discovery_v3.NewAggregatedDiscoveryServiceClient(d.conn)
@@ -720,11 +798,63 @@ func (x xdsDumper) Dump(t *testing.T, ctx context.Context) xdsDump {
 	}
 }
 
+func (x xdsDumper) DumpMcp(t *testing.T, ctx context.Context) mcpDump {
+	dr := proto.Clone(x.dr).(*discovery_v3.DiscoveryRequest)
+	dr.TypeUrl = mcpsyncer.TargetTypeUrl
+	dr.Node.Metadata.Fields["role"] = structpb.NewStringValue("mcp-" + dr.Node.Metadata.Fields["role"].GetStringValue())
+	x.adsClient.Send(dr)
+
+	var targets []*mcpsyncer.Target
+
+	// run this in parallel with a 5s timeout
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		sent := 1
+		for i := 0; i < sent; i++ {
+			dresp, err := x.adsClient.Recv()
+			if err != nil {
+				t.Errorf("failed to get response from xds server: %v", err)
+			}
+			t.Logf("got response: %s len: %d", dresp.GetTypeUrl(), len(dresp.GetResources()))
+			if dresp.GetTypeUrl() == mcpsyncer.TargetTypeUrl {
+				for _, anyCluster := range dresp.GetResources() {
+					var cluster mcpsyncer.Target
+					if err := anyCluster.UnmarshalTo(&cluster); err != nil {
+						t.Errorf("failed to unmarshal cluster: %v", err)
+					}
+					targets = append(targets, &cluster)
+				}
+			}
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		// don't fatal yet as we want to dump the state while still connected
+		t.Error("timed out waiting for targets for mcp xds dump")
+		return mcpDump{}
+	}
+	if len(targets) == 0 {
+		t.Error("no targets found")
+		return mcpDump{}
+	}
+	t.Logf("xds: found %d targets", len(targets))
+
+	return mcpDump{
+		Targets: targets,
+	}
+}
+
 type xdsDump struct {
 	Clusters  []*envoycluster.Cluster
 	Listeners []*envoylistener.Listener
 	Endpoints []*envoyendpoint.ClusterLoadAssignment
 	Routes    []*envoy_config_route_v3.RouteConfiguration
+}
+
+type mcpDump struct {
+	Targets []*mcpsyncer.Target
 }
 
 func (x *xdsDump) Compare(t *testing.T, other xdsDump) {

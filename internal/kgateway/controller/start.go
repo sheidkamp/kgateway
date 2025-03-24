@@ -28,6 +28,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/mcpsyncer"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/proxy_syncer"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
@@ -189,9 +190,23 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		cfg.SetupOpts.Cache,
 	)
 	proxySyncer.Init(ctx, cfg.KrtOptions)
+	mcpSyncer := mcpsyncer.NewMcpSyncer(
+		ctx,
+		cfg.ControllerName,
+		mgr,
+		cfg.Client,
+		commoncol,
+		cfg.SetupOpts.Cache,
+	)
+	mcpSyncer.Init(ctx, cfg.KrtOptions)
 
 	if err := mgr.Add(proxySyncer); err != nil {
 		setupLog.Error(err, "unable to add proxySyncer runnable")
+		return nil, err
+	}
+
+	if err := mgr.Add(mcpSyncer); err != nil {
+		setupLog.Error(err, "unable to add mcpSyncer runnable")
 		return nil, err
 	}
 

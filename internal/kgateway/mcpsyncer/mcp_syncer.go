@@ -10,8 +10,9 @@ import (
 
 	envoytypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
-	"go.uber.org/atomic"
+	"github.com/solo-io/go-utils/contextutils"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
@@ -26,9 +27,13 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/reports"
 	gwtranslator "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/gateway"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/xds"
+)
+
+const (
+	TargetTypeUrl = "type.googleapis.com/mcp.kgateway.dev.target.v1alpha1.Target"
 )
 
 type McpSyncer struct {
@@ -38,6 +43,8 @@ type McpSyncer struct {
 
 	xDS      krt.Collection[mcpXdsResources]
 	xdsCache envoycache.SnapshotCache
+
+	waitForSync []cache.InformerSynced
 }
 
 func NewMcpSyncer(
@@ -66,11 +73,23 @@ type mcpXdsResources struct {
 }
 
 func (r mcpXdsResources) ResourceName() string {
-	return xds.OwnerNamespaceNameID(wellknown.GatewayApiProxyValue, r.Namespace, r.Name)
+	return xds.OwnerNamespaceNameID("mcp-kgateway-kube-gateway-api", r.Namespace, r.Name)
 }
 
 func (r mcpXdsResources) Equals(in mcpXdsResources) bool {
 	return r.NamespacedName == in.NamespacedName && report{r.reports}.Equals(report{in.reports}) && r.McpServices.Version == in.McpServices.Version
+}
+
+type envoyResourceWithName struct {
+	inner envoytypes.ResourceWithName
+}
+
+func (r envoyResourceWithName) ResourceName() string {
+	return r.inner.GetName()
+}
+
+func (r envoyResourceWithName) Equals(in envoyResourceWithName) bool {
+	return proto.Equal(r.inner, in.inner)
 }
 
 type mcpService struct {
@@ -85,21 +104,29 @@ func (r mcpService) Equals(in mcpService) bool {
 
 func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error {
 	// find mcp gateways
-	gateways := krt.NewCollection(s.commonCols.GatewayIndex.Gateways, func(kctx krt.HandlerContext, gw ir.Gateway) *ir.GatewayIR {
+	gateways := krt.NewCollection(s.commonCols.GatewayIndex.Gateways, func(kctx krt.HandlerContext, gw ir.Gateway) *ir.Gateway {
 		if gw.Obj.Spec.GatewayClassName != "mcp" {
 			return nil
 		}
+		return &gw
 
-		rm := reports.NewReportMap()
-		r := reports.NewReporter(&rm)
-		// TODO: don't ignore reports
-		return s.translator.gwtranslator.Translate(kctx, ctx, &gw, r)
 	}, krtopts.ToOptions("mcp-gateways")...)
+
+	////	// translate gateways to xds resources and send it to the mcp relay
+	////	gatewaysXds := krt.NewCollection(gateways, func(kctx krt.HandlerContext, gw ir.Gateway) *ir.GatewayIR {
+	////		rm := reports.NewReportMap()
+	////		r := reports.NewReporter(&rm)
+	////		// TODO: don't ignore reports
+	////		return s.translator.gwtranslator.Translate(kctx, ctx, &gw, r)
+	////	}, krtopts.ToOptions("mcp-gateways")...)
 
 	services := krt.NewManyCollection(s.commonCols.Services, func(kctx krt.HandlerContext, s *corev1.Service) []mcpService {
 		var ret []mcpService
 		for _, port := range s.Spec.Ports {
-			if corev1.Protocol(*port.AppProtocol) != "kgateway.dev/mcp" {
+			if port.AppProtocol == nil || *port.AppProtocol != "kgateway.dev/mcp" {
+				continue
+			}
+			if s.Spec.ClusterIP == "" {
 				continue
 			}
 			ret = append(ret, mcpService{
@@ -112,41 +139,56 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 			})
 		}
 		return ret
-	})
-	xds := krt.NewCollection(services, func(kctx krt.HandlerContext, s mcpService) *envoytypes.ResourceWithName {
+	}, krtopts.ToOptions("mcpService")...)
+
+	xds := krt.NewCollection(services, func(kctx krt.HandlerContext, s mcpService) *envoyResourceWithName {
 		t := &Target{
 			Name: s.ResourceName(),
 			Host: s.ip,
 			Port: uint32(s.port),
 		}
-		var r envoytypes.ResourceWithName = t
-		return &r
-	})
-
-	version := atomic.NewInt32(0)
+		return &envoyResourceWithName{inner: t}
+	}, krtopts.ToOptions("target-xds")...)
 
 	// translate gateways to xds
-	s.xDS = krt.NewCollection(gateways, func(kctx krt.HandlerContext, gw ir.GatewayIR) *mcpXdsResources {
+	s.xDS = krt.NewCollection(gateways, func(kctx krt.HandlerContext, gw ir.Gateway) *mcpXdsResources {
 		resources := krt.Fetch(kctx, xds)
 
 		r := make([]envoytypes.Resource, len(resources))
+		var version uint64
 		for i, res := range resources {
-			r[i] = res
+			version ^= utils.HashProto(res.inner)
+			r[i] = res.inner
 		}
 
 		return &mcpXdsResources{
 			NamespacedName: types.NamespacedName{
-				Namespace: gw.SourceObject.Namespace,
-				Name:      gw.SourceObject.Name,
+				Namespace: gw.Namespace,
+				Name:      gw.Name,
 			},
-			McpServices: envoycache.NewResources(fmt.Sprintf("%d", version.Add(1)), r),
+			McpServices: envoycache.NewResources(fmt.Sprintf("%d", version), r),
 		}
 	}, krtopts.ToOptions("mcp-xds")...)
-
+	s.waitForSync = []cache.InformerSynced{
+		s.commonCols.HasSynced,
+		xds.HasSynced,
+		gateways.HasSynced,
+		services.HasSynced,
+		s.xDS.HasSynced,
+	}
 	return nil
 }
 
 func (s *McpSyncer) Start(ctx context.Context) error {
+	logger := contextutils.LoggerFrom(ctx)
+	logger.Infof("starting %s Proxy Syncer", s.controllerName)
+	// wait for krt collections to sync
+	logger.Infof("waiting for cache to sync")
+	kube.WaitForCacheSync(
+		"kube gw proxy syncer",
+		ctx.Done(),
+		s.waitForSync...,
+	)
 
 	s.xDS.RegisterBatch(func(o []krt.Event[mcpXdsResources], initialSync bool) {
 		for _, e := range o {
@@ -165,8 +207,6 @@ func (s *McpSyncer) Start(ctx context.Context) error {
 
 	return nil
 }
-
-const typeUrl = "type.googleapis.com/mcp.kgateway.dev.target.v1alpha1.Target"
 
 type mcpSnapshot struct {
 	mcpServices envoycache.Resources
@@ -187,8 +227,8 @@ func (m *mcpSnapshot) ConstructVersionMap() error {
 
 	m.VersionMap = make(map[string]map[string]string)
 
-	if _, ok := m.VersionMap[typeUrl]; !ok {
-		m.VersionMap[typeUrl] = make(map[string]string, len(m.mcpServices.Items))
+	if _, ok := m.VersionMap[TargetTypeUrl]; !ok {
+		m.VersionMap[TargetTypeUrl] = make(map[string]string, len(m.mcpServices.Items))
 	}
 
 	for _, r := range m.mcpServices.Items {
@@ -202,7 +242,7 @@ func (m *mcpSnapshot) ConstructVersionMap() error {
 			return fmt.Errorf("failed to build resource version: %w", err)
 		}
 
-		m.VersionMap[typeUrl][envoycache.GetResourceName(r.Resource)] = v
+		m.VersionMap[TargetTypeUrl][envoycache.GetResourceName(r.Resource)] = v
 
 	}
 
@@ -227,7 +267,7 @@ func (m *mcpSnapshot) GetResources(typeURL string) map[string]envoytypes.Resourc
 
 // GetResourcesAndTTL implements cache.ResourceSnapshot.
 func (m *mcpSnapshot) GetResourcesAndTTL(typeURL string) map[string]envoytypes.ResourceWithTTL {
-	if typeURL == typeUrl {
+	if typeURL == TargetTypeUrl {
 		return m.mcpServices.Items
 	}
 	return nil
@@ -235,7 +275,7 @@ func (m *mcpSnapshot) GetResourcesAndTTL(typeURL string) map[string]envoytypes.R
 
 // GetVersion implements cache.ResourceSnapshot.
 func (m *mcpSnapshot) GetVersion(typeURL string) string {
-	if typeURL == typeUrl {
+	if typeURL == TargetTypeUrl {
 		return m.mcpServices.Version
 	}
 	return ""
@@ -244,7 +284,7 @@ func (m *mcpSnapshot) GetVersion(typeURL string) string {
 // GetVersionMap implements cache.ResourceSnapshot.
 func (m *mcpSnapshot) GetVersionMap(typeURL string) map[string]string {
 	return map[string]string{
-		typeUrl: m.mcpServices.Version,
+		TargetTypeUrl: m.mcpServices.Version,
 	}
 }
 
