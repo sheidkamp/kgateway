@@ -53,16 +53,16 @@ func registerTypes(restConfig *rest.Config) {
 		panic(err)
 	}
 
-	mcpRoute := v1alpha1.SchemeGroupVersion.WithResource("mcpauthpolicies")
+	mcpAuthPolicies := v1alpha1.SchemeGroupVersion.WithResource("mcpauthpolicies")
 	// schema.GroupVersionResource{Group: v1alpha1.GroupVersion.Group, Version: "v1alpha2", Resource: "tcproutes"}
 	kubeclient.Register[*v1alpha1.MCPAuthPolicy](
-		mcpRoute,
+		mcpAuthPolicies,
 		v1alpha1.SchemeGroupVersion.WithKind("MCPAuthPolicy"),
 		func(c kubeclient.ClientGetter, namespace string, o metav1.ListOptions) (runtime.Object, error) {
-			return cli.GatewayV1alpha1().MCPRoutes(namespace).List(context.Background(), o)
+			return cli.GatewayV1alpha1().MCPAuthPolicies(namespace).List(context.Background(), o)
 		},
 		func(c kubeclient.ClientGetter, namespace string, o metav1.ListOptions) (watch.Interface, error) {
-			return cli.GatewayV1alpha1().MCPRoutes(namespace).Watch(context.Background(), o)
+			return cli.GatewayV1alpha1().MCPAuthPolicies(namespace).Watch(context.Background(), o)
 		},
 	)
 
