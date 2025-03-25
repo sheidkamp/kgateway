@@ -94,7 +94,7 @@ type MCPAuthPolicyRule struct {
 type MCPAuthPolicyMatchType string
 
 const (
-	MCPAuthPolicyMatchTypeJWT MCPAuthPolicyMatchType = "jwt"
+	MCPAuthPolicyMatchTypeJWT MCPAuthPolicyMatchType = "JWT"
 )
 
 // match an incoming JWT token
