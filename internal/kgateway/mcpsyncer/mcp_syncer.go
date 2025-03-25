@@ -44,7 +44,7 @@ import (
 
 const (
 	TargetTypeUrl   = "type.googleapis.com/mcp.kgateway.dev.target.v1alpha1.Target"
-	TargetConfigUrl = "type.googleapis.com/mcp.kgateway.dev.target.v1alpha1.Config"
+	TargetConfigUrl = "type.googleapis.com/mcp.kgateway.dev.rbac.v1alpha1.Config"
 )
 
 func registerTypes(restConfig *rest.Config) {
@@ -130,16 +130,16 @@ func (r envoyResourceWithName) Equals(in envoyResourceWithName) bool {
 
 type envoyResourceWithCustomName struct {
 	proto.Message
-	name    string
+	Name    string
 	version uint64
 }
 
 func (r envoyResourceWithCustomName) ResourceName() string {
-	return r.name
+	return r.Name
 }
 
 func (r envoyResourceWithCustomName) GetName() string {
-	return r.name
+	return r.Name
 }
 
 func (r envoyResourceWithCustomName) Equals(in envoyResourceWithCustomName) bool {
@@ -149,16 +149,16 @@ func (r envoyResourceWithCustomName) Equals(in envoyResourceWithCustomName) bool
 var _ envoytypes.ResourceWithName = envoyResourceWithCustomName{}
 
 type rbacConfig struct {
-	targetRefs []types.NamespacedName
+	TargetRefs []types.NamespacedName
 	// config     *Config
-	config envoyResourceWithCustomName
+	Config envoyResourceWithCustomName
 }
 
 func (r rbacConfig) ResourceName() string {
-	return r.config.ResourceName()
+	return r.Config.ResourceName()
 }
 func (r rbacConfig) Equals(in rbacConfig) bool {
-	return slices.Equal(r.targetRefs, in.targetRefs) && r.config.Equals(in.config)
+	return slices.Equal(r.TargetRefs, in.TargetRefs) && r.Config.Equals(in.Config)
 }
 
 type mcpService struct {
@@ -233,13 +233,13 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 		}.ResourceName()
 
 		return &rbacConfig{
-			targetRefs: gateways,
-			config:     envoyResourceWithCustomName{cfg, cfgName, utils.HashProto(cfg)},
+			TargetRefs: gateways,
+			Config:     envoyResourceWithCustomName{cfg, cfgName, utils.HashProto(cfg)},
 		}
 	}, krtopts.ToOptions("mcp-rbac")...)
 
 	mcpGwIndex := krt.NewIndex(mcpRbac, func(rbac rbacConfig) []types.NamespacedName {
-		return rbac.targetRefs
+		return rbac.TargetRefs
 	})
 
 	gateways := krt.NewCollection(s.commonCols.GatewayIndex.Gateways, func(kctx krt.HandlerContext, gw ir.Gateway) *ir.Gateway {
@@ -298,8 +298,8 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 		rbacEvnoyResources := make([]envoytypes.Resource, len(rbacResources))
 		var rbacVersion uint64
 		for i, res := range rbacResources {
-			rbacVersion ^= res.config.version
-			rbacEvnoyResources[i] = res.config
+			rbacVersion ^= res.Config.version
+			rbacEvnoyResources[i] = res.Config
 		}
 
 		serviceResources := krt.Fetch(kctx, xdsServices)
@@ -350,7 +350,8 @@ func (s *McpSyncer) Start(ctx context.Context) error {
 			}
 			r := e.Latest()
 			snapshot := &mcpSnapshot{
-				mcpServices: r.McpServices,
+				McpServices: r.McpServices,
+				McpRbac:     r.McpRbac,
 			}
 
 			s.xdsCache.SetSnapshot(ctx, r.ResourceName(), snapshot)
@@ -361,8 +362,8 @@ func (s *McpSyncer) Start(ctx context.Context) error {
 }
 
 type mcpSnapshot struct {
-	mcpServices envoycache.Resources
-	mcpRbac     envoycache.Resources
+	McpServices envoycache.Resources
+	McpRbac     envoycache.Resources
 	VersionMap  map[string]map[string]string
 }
 
@@ -386,9 +387,9 @@ func (m *mcpSnapshot) GetResources(typeURL string) map[string]envoytypes.Resourc
 func (m *mcpSnapshot) GetResourcesAndTTL(typeURL string) map[string]envoytypes.ResourceWithTTL {
 	switch typeURL {
 	case TargetTypeUrl:
-		return m.mcpServices.Items
+		return m.McpServices.Items
 	case TargetConfigUrl:
-		return m.mcpRbac.Items
+		return m.McpRbac.Items
 	}
 	return nil
 }
@@ -397,9 +398,9 @@ func (m *mcpSnapshot) GetResourcesAndTTL(typeURL string) map[string]envoytypes.R
 func (m *mcpSnapshot) GetVersion(typeURL string) string {
 	switch typeURL {
 	case TargetTypeUrl:
-		return m.mcpServices.Version
+		return m.McpServices.Version
 	case TargetConfigUrl:
-		return m.mcpRbac.Version
+		return m.McpRbac.Version
 	}
 	return ""
 }
@@ -411,8 +412,8 @@ func (m *mcpSnapshot) ConstructVersionMap() error {
 	}
 
 	resources := map[string]map[string]envoytypes.ResourceWithTTL{
-		TargetTypeUrl:   m.mcpServices.Items,
-		TargetConfigUrl: m.mcpRbac.Items,
+		TargetTypeUrl:   m.McpServices.Items,
+		TargetConfigUrl: m.McpRbac.Items,
 	}
 
 	// The snapshot resources never change, so no need to ever rebuild.
