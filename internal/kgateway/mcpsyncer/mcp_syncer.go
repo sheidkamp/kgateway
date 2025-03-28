@@ -28,6 +28,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/common"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
@@ -39,7 +41,6 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/xds"
 	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -165,10 +166,11 @@ type mcpService struct {
 	krt.Named
 	ip   string
 	port int
+	path string
 }
 
 func (r mcpService) Equals(in mcpService) bool {
-	return r.ip == in.ip && r.port == in.port
+	return r.ip == in.ip && r.port == in.port && r.path == in.path
 }
 
 func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error {
@@ -264,16 +266,21 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 			if port.AppProtocol == nil || *port.AppProtocol != "kgateway.dev/mcp" {
 				continue
 			}
-			if s.Spec.ClusterIP == "" {
+			if s.Spec.ClusterIP == "" && s.Spec.ExternalName == "" {
 				continue
+			}
+			addr := s.Spec.ClusterIP
+			if addr == "" {
+				addr = s.Spec.ExternalName
 			}
 			ret = append(ret, mcpService{
 				Named: krt.Named{
 					Name:      s.Name,
 					Namespace: s.Namespace,
 				},
-				ip:   s.Spec.ClusterIP,
+				ip:   addr,
 				port: int(port.Port),
+				path: s.Annotations["kgateway.dev/mcp-path"],
 			})
 		}
 		return ret
@@ -284,6 +291,7 @@ func (s *McpSyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) error 
 			Name: s.ResourceName(),
 			Host: s.ip,
 			Port: uint32(s.port),
+			Path: s.path,
 		}
 		return &envoyResourceWithName{inner: t, version: utils.HashProto(t)}
 	}, krtopts.ToOptions("target-xds")...)
