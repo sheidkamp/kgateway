@@ -17,7 +17,8 @@ COPY . .
 RUN go build -o main ./main.go
 
 # Expose port 5001 (the port used in the application)
-EXPOSE 5001
+EXPOSE 8443
+EXPOSE 8080
 
 # Run the application
 CMD ["./main"]

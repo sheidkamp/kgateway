@@ -197,5 +197,5 @@ func (s *tsuite) getGatewayURL() string {
 		assert.Greaterf(c, len(svc.Status.LoadBalancer.Ingress), 0, "LB IP not found on service %s/%s", svc.Namespace, svc.Name)
 	}, 10*time.Second, 1*time.Second)
 
-	return fmt.Sprintf("http://%s:%d", svc.Status.LoadBalancer.Ingress[0].IP, svc.Spec.Ports[0].Port)
+	return fmt.Sprintf("https://%s:%d", svc.Status.LoadBalancer.Ingress[0].IP, svc.Spec.Ports[0].Port)
 }

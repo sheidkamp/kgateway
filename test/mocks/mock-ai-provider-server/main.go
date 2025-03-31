@@ -230,7 +230,7 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:      ":5001",
+		Addr:      ":8443",
 		Handler:   r,
 		TLSConfig: generateTLSConfig(),
 	}

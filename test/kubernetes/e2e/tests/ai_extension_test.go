@@ -54,6 +54,7 @@ func TestAIExtensions(t *testing.T) {
 
 	// Install kgateway
 	testInstallation.InstallKgatewayFromLocalChart(ctx)
+	testInstallation.Assertions.EventuallyNamespaceExists(ctx, installNs)
 	err := bootstrapEnv(ctx, testInstallation, installNs)
 	if err != nil {
 		t.Error(err)
@@ -198,6 +199,7 @@ func installProviderMockApp(ctx context.Context, testInstallation *e2e.TestInsta
 		},
 	}
 
+	// TODO: convert to use standard e2e framework assertions
 	// Wait for the deployment to be ready
 	err = wait.PollUntilContextTimeout(ctx, time.Second, time.Minute*2, true, func(ctx context.Context) (done bool, err error) {
 		if err := testInstallation.ClusterContext.Client.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {

@@ -25,7 +25,7 @@ const (
 	tlsPort = 443
 )
 
-var tls_match = structpb.Struct{
+var tlsMatch = structpb.Struct{
 	Fields: map[string]*structpb.Value{
 		"tls": structpb.NewStringValue("true"),
 	},
@@ -143,7 +143,7 @@ func buildModelCluster(ctx context.Context, aiUs *v1alpha1.AIBackend, aiSecret *
 					TypedConfig: tlsCtxAny,
 				},
 			},
-			Match: &tls_match,
+			Match: &tlsMatch,
 		},
 		{
 			Name: "plaintext",
@@ -313,7 +313,7 @@ func buildLocalityLbEndpoint(
 	}
 	if port == tlsPort {
 		// Used for transport socket matching
-		metadata.GetFilterMetadata()["envoy.transport_socket_match"] = &tls_match
+		metadata.GetFilterMetadata()["envoy.transport_socket_match"] = &tlsMatch
 	}
 	return &envoy_config_endpoint_v3.LbEndpoint{
 		Metadata: metadata,
