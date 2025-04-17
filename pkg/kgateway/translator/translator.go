@@ -24,7 +24,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/utils"
 )
 
-// Combines all the translators needed for xDS translation.
+// CombinedTranslator combines all the translators needed for xDS translation.
 type CombinedTranslator struct {
 	extensions extensionsplug.Plugin
 	commonCols *common.CommonCollections
@@ -39,6 +39,7 @@ type CombinedTranslator struct {
 	logger *zap.Logger
 }
 
+// NewCombinedTranslator creates a new CombinedTranslator.
 func NewCombinedTranslator(
 	ctx context.Context,
 	extensions extensionsplug.Plugin,
@@ -75,7 +76,8 @@ func (s *CombinedTranslator) Init(ctx context.Context) error {
 		s.backendTranslator.ContributedBackends[k] = up.BackendInit
 	}
 
-	s.waitForSync = append(s.waitForSync,
+	s.waitForSync = append(
+		s.waitForSync,
 		s.commonCols.HasSynced,
 		s.extensions.HasSynced,
 	)
@@ -95,6 +97,7 @@ func (s *CombinedTranslator) HasSynced() bool {
 func (s *CombinedTranslator) buildProxy(kctx krt.HandlerContext, ctx context.Context, gw ir.Gateway, r reports.Reporter) *ir.GatewayIR {
 	stopwatch := utils.NewTranslatorStopWatch("CombinedTranslator")
 	stopwatch.Start()
+
 	var gatewayTranslator extensionsplug.KGwTranslator = s.gwtranslator
 	if s.extensions.ContributesGwTranslator != nil {
 		maybeGatewayTranslator := s.extensions.ContributesGwTranslator(gw.Obj)
@@ -102,6 +105,7 @@ func (s *CombinedTranslator) buildProxy(kctx krt.HandlerContext, ctx context.Con
 			gatewayTranslator = maybeGatewayTranslator
 		}
 	}
+
 	proxy := gatewayTranslator.Translate(kctx, ctx, &gw, r)
 	if proxy == nil {
 		return nil
@@ -109,11 +113,6 @@ func (s *CombinedTranslator) buildProxy(kctx krt.HandlerContext, ctx context.Con
 
 	duration := stopwatch.Stop(ctx)
 	contextutils.LoggerFrom(ctx).Debugf("translated proxy %s/%s in %s", gw.Namespace, gw.Name, duration.String())
-
-	// TODO: these are likely unnecessary and should be removed!
-	//	applyPostTranslationPlugins(ctx, pluginRegistry, &gwplugins.PostTranslationContext{
-	//		TranslatedGateways: translatedGateways,
-	//	})
 
 	return proxy
 }
@@ -130,7 +129,6 @@ func (s *CombinedTranslator) TranslateGateway(kctx krt.HandlerContext, ctx conte
 	r := reports.NewReporter(&rm)
 	logger.Debugf("building proxy for kube gw %s version %s", client.ObjectKeyFromObject(gw.Obj), gw.Obj.GetResourceVersion())
 	gwir := s.buildProxy(kctx, ctx, gw, r)
-
 	if gwir == nil {
 		return nil, reports.ReportMap{}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/solo-io/go-utils/contextutils"
 	"istio.io/istio/pkg/config/schema/gvr"
 	"istio.io/istio/pkg/kube"
 	istiokube "istio.io/istio/pkg/kube"
@@ -16,12 +17,12 @@ import (
 
 	gwv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
+	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/pkg/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/krtcollections"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/utils/krtutil"
-	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
 
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 )
@@ -143,6 +144,8 @@ func NewCommonCollections(
 // This can't be part of NewCommonCollections because the setup
 // of plugins themselves rely on a reference to CommonCollections.
 func (c *CommonCollections) InitPlugins(ctx context.Context, mergedPlugins extensionsplug.Plugin) {
+	logger := contextutils.LoggerFrom(ctx)
+	logger.Infof("initializing collections using the %s controller name", c.controllerName)
 	gateways, routeIndex, backendIndex, endpointIRs := krtcollections.InitCollections(
 		ctx,
 		c.controllerName,

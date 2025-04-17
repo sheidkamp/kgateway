@@ -19,6 +19,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	infextv1a2 "sigs.k8s.io/gateway-api-inference-extension/api/v1alpha2"
 
+	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/deployer"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/extensions2"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/extensions2/common"
@@ -31,7 +32,6 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/proxy_syncer"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
-	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
 	kgtwschemes "github.com/kgateway-dev/kgateway/v2/pkg/schemes"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/namespaces"
@@ -104,7 +104,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		return nil, err
 	}
 
-	mgrOpts := ctrl.Options{
+	mgr, err := ctrl.NewManager(cfg.RestConfig, ctrl.Options{
 		BaseContext:      func() context.Context { return ctx },
 		Scheme:           scheme,
 		PprofBindAddress: cfg.SetupOpts.PprofBindAddress,
@@ -120,8 +120,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 			// the name validation here.
 			SkipNameValidation: ptr.To(true),
 		},
-	}
-	mgr, err := ctrl.NewManager(cfg.RestConfig, mgrOpts)
+	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		return nil, err
@@ -163,6 +162,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	if err != nil {
 		return nil, err
 	}
+	setupLog.Info("initializing common collections")
 	commoncol := common.NewCommonCollections(
 		ctx,
 		cfg.KrtOptions,
@@ -175,7 +175,9 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	)
 	mergedPlugins := pluginFactoryWithBuiltin(cfg.ExtraPlugins)(ctx, commoncol)
 	commoncol.InitPlugins(ctx, mergedPlugins)
-
+	if len(commoncol.GatewayIndex.Gateways.List()) == 0 {
+		setupLog.Info("no gateways found!")
+	}
 	// Create the proxy syncer for the Gateway API resources
 	setupLog.Info("initializing proxy syncer")
 	proxySyncer := proxy_syncer.NewProxySyncer(
