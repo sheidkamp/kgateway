@@ -173,6 +173,16 @@ var _ = DescribeTable("Basic GatewayTranslator Tests",
 				Name:      "example-gateway",
 			},
 		}),
+	FEntry(
+		"TrafficPolicy merging",
+		translatorTestCase{
+			inputFile:  "traffic-policy/extauth.yaml",
+			outputFile: "traffic-policy/extauth.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "infra",
+				Name:      "example-gateway",
+			},
+		}),
 	Entry(
 		"tcp gateway with basic routing",
 		translatorTestCase{
