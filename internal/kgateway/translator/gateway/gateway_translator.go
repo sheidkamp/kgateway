@@ -10,6 +10,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/listener"
@@ -17,14 +18,16 @@ import (
 	reports "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/reporter"
 )
 
-func NewTranslator(queries query.GatewayQueries) extensionsplug.KGwTranslator {
+func NewTranslator(queries query.GatewayQueries, settings settings.Settings) extensionsplug.KGwTranslator {
 	return &translator{
-		queries: queries,
+		queries:  queries,
+		settings: settings,
 	}
 }
 
 type translator struct {
-	queries query.GatewayQueries
+	queries  query.GatewayQueries
+	settings settings.Settings
 }
 
 func (t *translator) Translate(
@@ -72,6 +75,7 @@ func (t *translator) Translate(
 		gateway,
 		routesForGw,
 		reporter,
+		t.settings,
 	)
 
 	return &ir.GatewayIR{

@@ -62,7 +62,7 @@ func NewCombinedTranslator(
 func (s *CombinedTranslator) Init(ctx context.Context) {
 	queries := query.NewData(s.commonCols)
 
-	s.gwtranslator = gwtranslator.NewTranslator(queries)
+	s.gwtranslator = gwtranslator.NewTranslator(queries, s.commonCols.Settings)
 	s.irtranslator = &irtranslator.Translator{
 		ContributedPolicies: s.extensions.ContributesPolicies,
 	}

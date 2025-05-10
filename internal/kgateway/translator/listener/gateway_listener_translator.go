@@ -17,6 +17,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ports"
@@ -36,10 +37,11 @@ func TranslateListeners(
 	gateway *ir.Gateway,
 	routesForGw *query.RoutesForGwResult,
 	reporter reports.Reporter,
+	settings settings.Settings,
 ) []ir.ListenerIR {
 	validatedListeners := validateListeners(gateway, reporter.Gateway(gateway.Obj))
 
-	mergedListeners := mergeGWListeners(queries, gateway.Namespace, validatedListeners, *gateway, routesForGw, reporter.Gateway(gateway.Obj))
+	mergedListeners := mergeGWListeners(queries, gateway.Namespace, validatedListeners, *gateway, routesForGw, reporter.Gateway(gateway.Obj), settings)
 	translatedListeners := mergedListeners.translateListeners(kctx, ctx, queries, reporter)
 	return translatedListeners
 }
@@ -51,11 +53,13 @@ func mergeGWListeners(
 	parentGw ir.Gateway,
 	routesForGw *query.RoutesForGwResult,
 	reporter reports.GatewayReporter,
+	settings settings.Settings,
 ) *MergedListeners {
 	ml := &MergedListeners{
 		parentGw:         parentGw,
 		GatewayNamespace: gatewayNamespace,
 		Queries:          queries,
+		settings:         settings,
 	}
 	for _, listener := range listeners {
 		result, ok := routesForGw.ListenerResults[string(listener.Name)]
@@ -79,6 +83,7 @@ type MergedListeners struct {
 	parentGw         ir.Gateway
 	Listeners        []*MergedListener
 	Queries          query.GatewayQueries
+	settings         settings.Settings
 }
 
 func (ml *MergedListeners) AppendListener(
@@ -144,6 +149,7 @@ func (ml *MergedListeners) appendHttpListener(
 		httpFilterChain:  fc,
 		listenerReporter: reporter,
 		listener:         listener,
+		settings:         ml.settings,
 	})
 }
 
@@ -183,6 +189,7 @@ func (ml *MergedListeners) appendHttpsListener(
 		httpsFilterChains: []httpsFilterChain{mfc},
 		listenerReporter:  reporter,
 		listener:          listener,
+		settings:          ml.settings,
 	})
 }
 
@@ -245,6 +252,7 @@ func (ml *MergedListeners) AppendTcpListener(
 		TcpFilterChains:  []tcpFilterChain{fc},
 		listenerReporter: reporter,
 		listener:         listener,
+		settings:         ml.settings,
 	})
 }
 
@@ -310,6 +318,7 @@ func (ml *MergedListeners) AppendTlsListener(
 		TcpFilterChains:  []tcpFilterChain{fc},
 		listenerReporter: reporter,
 		listener:         listener,
+		settings:         ml.settings,
 	})
 }
 
@@ -349,6 +358,7 @@ type MergedListener struct {
 	TcpFilterChains   []tcpFilterChain
 	listenerReporter  reports.ListenerReporter
 	listener          ir.Listener
+	settings          settings.Settings
 
 	// TODO(policy via http listener options)
 }
@@ -425,11 +435,16 @@ func (ml *MergedListener) TranslateListener(
 		}
 	}
 
+	// Get bind address based on ListenerBindIpv6 setting
+	bindAddress := "0.0.0.0"
+	if ml.settings.ListenerBindIpv6 {
+		bindAddress = "::"
+	}
+
 	// Create and return the listener with all filter chains and TCP listeners
-	//	panic("TODO: handle listener policy attachment")
 	return ir.ListenerIR{
 		Name:              ml.name,
-		BindAddress:       "::",
+		BindAddress:       bindAddress,
 		BindPort:          uint32(ml.port),
 		AttachedPolicies:  ir.AttachedPolicies{}, // TODO: find policies attached to listener and attach them <- this might not be possilbe due to listener merging. also a gw listener ~= envoy filter chain; and i don't believe we need policies there
 		HttpFilterChain:   httpFilterChains,

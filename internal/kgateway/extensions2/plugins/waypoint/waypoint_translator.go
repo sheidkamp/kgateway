@@ -35,8 +35,10 @@ const (
 	// IstioPROXYProtocol is the only protocol for a kgateway-waypoint's Listener
 	IstioPROXYProtocol = "istio.io/PROXY"
 
-	loopbackBindAddr = "::ffff:127.0.0.1"
-	wildcardBindAddr = "::"
+	loopbackBindAddr   = "127.0.0.1"
+	wildcardBindAddr   = "0.0.0.0"
+	loopbackBindAddrV6 = "::ffff:127.0.0.1"
+	wildcardBindAddrV6 = "::"
 )
 
 var _ extensionsplug.KGwTranslator = &waypointTranslator{}
@@ -47,6 +49,7 @@ type waypointTranslator struct {
 
 	localBind     bool
 	rootNamespace string
+	bindIpv6      bool
 }
 
 func NewTranslator(
@@ -59,6 +62,7 @@ func NewTranslator(
 		waypointQueries: waypointQueries,
 		localBind:       settings.WaypointLocalBinding,
 		rootNamespace:   settings.IstioNamespace,
+		bindIpv6:        settings.ListenerBindIpv6,
 	}
 }
 
@@ -182,8 +186,14 @@ func (w *waypointTranslator) buildInboundListener(gw *ir.Gateway, reporter repor
 	}
 
 	bindAddr := wildcardBindAddr
+	if w.bindIpv6 {
+		bindAddr = loopbackBindAddrV6
+	}
 	if w.localBind {
 		bindAddr = loopbackBindAddr
+		if w.bindIpv6 {
+			bindAddr = loopbackBindAddrV6
+		}
 	}
 
 	return &ir.ListenerIR{
