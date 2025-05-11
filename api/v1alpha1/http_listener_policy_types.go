@@ -43,6 +43,10 @@ type HTTPListenerPolicySpec struct {
 	// See here for more information: https://www.envoyproxy.io/docs/envoy/v1.33.0/api-v3/config/accesslog/v3/accesslog.proto
 	// +kubebuilder:validation:Items={type=object}
 	AccessLog []AccessLog `json:"accessLog,omitempty"`
+
+	// UpgradeConfig contains configuration for HTTP upgrades like WebSocket.
+	// See here for more information: https://www.envoyproxy.io/docs/envoy/v1.34.1/intro/arch_overview/http/upgrades.html
+	UpgradeConfig *UpgradeConfig `json:"upgradeConfig,omitempty"`
 }
 
 // AccessLog represents the top-level access log configuration.
@@ -228,3 +232,10 @@ const (
 	DATA_LOSS           GrpcStatus = "DATA_LOSS"
 	UNAUTHENTICATED     GrpcStatus = "UNAUTHENTICATED"
 )
+
+// UpgradeConfig represents configuration for HTTP upgrades.
+type UpgradeConfig struct {
+	// List of upgrade types to enable (e.g. "websocket", "CONNECT", etc.)
+	// +kubebuilder:validation:MinItems=1
+	EnabledUpgrades []string `json:"enabledUpgrades,omitempty"`
+}
