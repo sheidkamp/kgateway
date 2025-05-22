@@ -43,7 +43,7 @@ tilt up
 
 If there are any issues, manually triggering an update on the problematic resource should fix it
 
-### Attach a debugger with VSCode
+### Run the Delve debugger
 The Delve debugger can be run on the kgateway pod by editing the `tilt-settings.yaml` file to set the debug_port and add it to port_forwarding.
 The file currently has the settings to use port 50100 commented out.
 
