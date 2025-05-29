@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -14,19 +13,17 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func setupTest(_ *testing.T) func() {
-	// Create a new registry for each test to avoid conflicts
-	originalRegistry := metrics.Registry
-	metrics.Registry = prometheus.NewRegistry()
-
-	return func() {
-		metrics.Registry = originalRegistry
-	}
+func setupTest() {
+	reconciliationsTotal.Reset()
+	reconcileDuration.Reset()
+	controllerResourcesTotal.Reset()
+	translationsTotal.Reset()
+	translationDuration.Reset()
+	translatorResourcesTotal.Reset()
 }
 
 func TestNewControllerMetrics(t *testing.T) {
-	cleanup := setupTest(t)
-	defer cleanup()
+	setupTest()
 
 	controllerName := "test-controller"
 	m := NewControllerMetrics(controllerName)
@@ -43,9 +40,9 @@ func TestNewControllerMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedMetrics := []string{
-		"kgateway_controller_" + controllerName + "_reconciliations_total",
-		"kgateway_controller_" + controllerName + "_reconcile_duration_seconds",
-		"kgateway_controller_" + controllerName + "_resources_total",
+		"kgateway_controller_reconciliations_total",
+		"kgateway_controller_reconcile_duration_seconds",
+		"kgateway_controller_resources_total",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -59,8 +56,7 @@ func TestNewControllerMetrics(t *testing.T) {
 }
 
 func TestReconcileStart_Success(t *testing.T) {
-	cleanup := setupTest(t)
-	defer cleanup()
+	setupTest()
 
 	m := NewControllerMetrics("test-controller")
 
@@ -75,7 +71,7 @@ func TestReconcileStart_Success(t *testing.T) {
 	var found bool
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_test-controller_reconciliations_total" {
+		if *mf.Name == "kgateway_controller_reconciliations_total" {
 			found = true
 			assert.Equal(t, 1, len(mf.Metric))
 
@@ -90,13 +86,13 @@ func TestReconcileStart_Success(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_controller_test-controller_reconciliations_total metric not found")
+	assert.True(t, found, "kgateway_controller_reconciliations_total metric not found")
 
 	// Check that duration was recorded (should be > 0).
 	var durationFound bool
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_test-controller_reconcile_duration_seconds" {
+		if *mf.Name == "kgateway_controller_reconcile_duration_seconds" {
 			durationFound = true
 			assert.Equal(t, 1, len(mf.Metric))
 			assert.True(t, *mf.Metric[0].Histogram.SampleCount > 0)
@@ -108,8 +104,7 @@ func TestReconcileStart_Success(t *testing.T) {
 }
 
 func TestReconcileStart_Error(t *testing.T) {
-	cleanup := setupTest(t)
-	defer cleanup()
+	setupTest()
 
 	m := NewControllerMetrics("test-controller")
 
@@ -122,7 +117,7 @@ func TestReconcileStart_Error(t *testing.T) {
 
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_test-controller_reconciliations_total" {
+		if *mf.Name == "kgateway_controller_reconciliations_total" {
 			found = true
 			assert.Equal(t, 1, len(mf.Metric))
 
@@ -137,12 +132,11 @@ func TestReconcileStart_Error(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_controller_test-controller_reconciliations_total metric not found")
+	assert.True(t, found, "kgateway_controller_reconciliations_total metric not found")
 }
 
 func TestControllerResourceCount(t *testing.T) {
-	cleanup := setupTest(t)
-	defer cleanup()
+	setupTest()
 
 	m := NewControllerMetrics("test-controller")
 
@@ -156,7 +150,7 @@ func TestControllerResourceCount(t *testing.T) {
 	// Find the resource count metric.
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_test-controller_resources_total" {
+		if *mf.Name == "kgateway_controller_resources_total" {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
@@ -174,7 +168,7 @@ func TestControllerResourceCount(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_controller_test-controller_resources_total metric not found")
+	assert.True(t, found, "kgateway_controller_resources_total metric not found")
 
 	// Test IncResourceCount.
 	m.IncResourceCount("default")
@@ -183,7 +177,7 @@ func TestControllerResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_test-controller_resources_total" {
+		if *mf.Name == "kgateway_controller_resources_total" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(6), metric.Gauge.GetValue())
@@ -199,7 +193,7 @@ func TestControllerResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_test-controller_resources_total" {
+		if *mf.Name == "kgateway_controller_resources_total" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(5), metric.Gauge.GetValue())
@@ -215,7 +209,7 @@ func TestControllerResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_test-controller_resources_total" {
+		if *mf.Name == "kgateway_controller_resources_total" {
 			assert.Equal(t, 0, len(mf.Metric), "Expected no metrics after reset")
 		}
 	}

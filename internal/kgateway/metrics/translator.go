@@ -1,11 +1,42 @@
 package metrics
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
+)
+
+var (
+	translationsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "kgateway",
+			Subsystem: "translator",
+			Name:      "translations_total",
+			Help:      "Total translations",
+		},
+		[]string{"translator", "result"},
+	)
+	translationDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace:                       "kgateway",
+			Subsystem:                       "translator",
+			Name:                            "translation_duration_seconds",
+			Help:                            "Translation duration",
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: time.Hour,
+		},
+		[]string{"translator"},
+	)
+	translatorResourcesTotal = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "kgateway",
+			Subsystem: "translator",
+			Name:      "resources_total",
+			Help:      "Current number of managed resources for translator",
+		},
+		[]string{"translator", "namespace"},
+	)
 )
 
 // TranslatorMetrics provides metrics for translator operations.
@@ -19,58 +50,10 @@ type TranslatorMetrics struct {
 // NewTranslatorMetrics creates a new TranslatorMetrics instance.
 func NewTranslatorMetrics(translatorName string) *TranslatorMetrics {
 	m := &TranslatorMetrics{
-		translatorName: translatorName,
-		translationTotal: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "kgateway",
-				Subsystem: "translator_" + translatorName,
-				Name:      "translations_total",
-				Help:      "Total translations for " + translatorName,
-				ConstLabels: prometheus.Labels{
-					"translator": translatorName,
-				},
-			},
-			[]string{"result"},
-		),
-		translationDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "kgateway",
-				Subsystem: "translator_" + translatorName,
-				Name:      "translation_duration_seconds",
-				Help:      "Translation duration for " + translatorName,
-				ConstLabels: prometheus.Labels{
-					"translator": translatorName,
-				},
-				NativeHistogramBucketFactor:     1.1,
-				NativeHistogramMaxBucketNumber:  100,
-				NativeHistogramMinResetDuration: time.Hour,
-			},
-			[]string{},
-		),
-		resourceTotal: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "kgateway",
-				Subsystem: "translator_" + translatorName,
-				Name:      "resources_total",
-				Help:      "Current number of managed resources for " + translatorName,
-				ConstLabels: prometheus.Labels{
-					"translator": translatorName,
-				},
-			},
-			[]string{"namespace"},
-		),
-	}
-
-	if err := metrics.Registry.Register(m.translationTotal); err != nil {
-		fmt.Println("Failed to register translator metrics:", err)
-	}
-
-	if err := metrics.Registry.Register(m.translationDuration); err != nil {
-		fmt.Println("Failed to register translator metrics:", err)
-	}
-
-	if err := metrics.Registry.Register(m.resourceTotal); err != nil {
-		fmt.Println("Failed to register translator metrics:", err)
+		translatorName:      translatorName,
+		translationTotal:    translationsTotal,
+		translationDuration: translationDuration,
+		resourceTotal:       translatorResourcesTotal,
 	}
 
 	return m
@@ -84,30 +67,30 @@ func (m *TranslatorMetrics) TranslationStart() func(error) {
 	return func(err error) {
 		duration := time.Since(start)
 
-		m.translationDuration.WithLabelValues().Observe(duration.Seconds())
+		m.translationDuration.WithLabelValues(m.translatorName).Observe(duration.Seconds())
 
 		result := "success"
 		if err != nil {
 			result = "error"
 		}
 
-		m.translationTotal.WithLabelValues(result).Inc()
+		m.translationTotal.WithLabelValues(m.translatorName, result).Inc()
 	}
 }
 
 // SetResourceCount updates the resource count gauge.
 func (m *TranslatorMetrics) SetResourceCount(namespace string, count int) {
-	m.resourceTotal.WithLabelValues(namespace).Set(float64(count))
+	m.resourceTotal.WithLabelValues(m.translatorName, namespace).Set(float64(count))
 }
 
 // IncResourceCount increments the resource count gauge.
 func (m *TranslatorMetrics) IncResourceCount(namespace string) {
-	m.resourceTotal.WithLabelValues(namespace).Inc()
+	m.resourceTotal.WithLabelValues(m.translatorName, namespace).Inc()
 }
 
 // DecResourceCount decrements the resource count gauge.
 func (m *TranslatorMetrics) DecResourceCount(namespace string) {
-	m.resourceTotal.WithLabelValues(namespace).Dec()
+	m.resourceTotal.WithLabelValues(m.translatorName, namespace).Dec()
 }
 
 // ResetResourceCounts clears all resource counts.
