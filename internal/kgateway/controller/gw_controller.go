@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -14,6 +15,7 @@ import (
 	api "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/deployer"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 const (
@@ -28,11 +30,17 @@ type gatewayReconciler struct {
 
 	scheme   *runtime.Scheme
 	deployer *deployer.Deployer
+	metrics  *metrics.ControllerMetrics
 }
 
-func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {
 	log := log.FromContext(ctx).WithValues("gw", req.NamespacedName)
 	log.V(1).Info("reconciling request", "req", req)
+
+	// Start metrics collection.
+	if r.metrics != nil {
+		defer r.metrics.ReconcileStart()(rErr)
+	}
 
 	// check if we need to auto deploy the gateway
 	ns := req.Namespace
@@ -51,8 +59,15 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	var gw api.Gateway
 	if err := r.cli.Get(ctx, req.NamespacedName, &gw); err != nil {
+		if r.metrics != nil && apierrors.IsNotFound(err) {
+			r.metrics.DecResourceCount(req.Namespace)
+		}
+
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	} else if r.metrics != nil {
+		r.metrics.IncResourceCount(req.Namespace)
 	}
+
 	if gw.GetDeletionTimestamp() != nil {
 		// no need to do anything as we have owner refs, so children will be deleted
 		log.Info("gateway deleted, no need for reconciling")

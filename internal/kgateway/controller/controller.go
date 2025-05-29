@@ -28,6 +28,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/deployer"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	common "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"
 )
@@ -317,6 +318,7 @@ func (c *controllerBuilder) watchGw(ctx context.Context) error {
 		controllerName: c.cfg.ControllerName,
 		autoProvision:  c.cfg.AutoProvision,
 		deployer:       d,
+		metrics:        metrics.NewControllerMetrics(c.cfg.ControllerName),
 	})
 }
 
@@ -442,6 +444,7 @@ func (c *controllerBuilder) watchInferencePool(ctx context.Context) error {
 			cli:      c.cfg.Mgr.GetClient(),
 			scheme:   c.cfg.Mgr.GetScheme(),
 			deployer: d,
+			metrics:  metrics.NewControllerMetrics(c.cfg.ControllerName),
 		}
 		if err := buildr.Complete(r); err != nil {
 			return err

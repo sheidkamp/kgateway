@@ -22,5 +22,6 @@ providers:
     binary_name: kgateway-linux-$ARCH
     # debug_port: 50100
     port_forwards:
-      - 9091
+      - 9092
+      - 9097
     #  - 50100

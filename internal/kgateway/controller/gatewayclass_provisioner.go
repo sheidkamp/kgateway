@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -33,6 +34,7 @@ type gatewayClassProvisioner struct {
 	// initialReconcileCh is a channel that is used to trigger initial reconciliation when
 	// no GatewayClass objects exist in the cluster.
 	initialReconcileCh chan event.TypedGenericEvent[client.Object]
+	metrics            *metrics.ControllerMetrics
 }
 
 var _ reconcile.TypedReconciler[reconcile.Request] = &gatewayClassProvisioner{}
@@ -51,6 +53,7 @@ func NewGatewayClassProvisioner(mgr ctrl.Manager, controllerName string, classCo
 		controllerName:     controllerName,
 		classConfigs:       classConfigs,
 		initialReconcileCh: initialReconcileCh,
+		metrics:            metrics.NewControllerMetrics(controllerName + "-gatewayclass-provisioner"),
 	}
 	if err := provisioner.SetupWithManager(mgr); err != nil {
 		return err
@@ -78,14 +81,19 @@ func (r *gatewayClassProvisioner) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {
 	log := log.FromContext(ctx)
 	log.Info("reconciling GatewayClasses", "controllerName", "gatewayclass-provisioner")
 	defer log.Info("finished reconciling GatewayClasses", "controllerName", "gatewayclass-provisioner")
 
+	// Start metrics collection.
+	if r.metrics != nil {
+		defer r.metrics.ReconcileStart()(rErr)
+	}
+
 	var errs []error
 	for name, config := range r.classConfigs {
-		if err := r.createGatewayClass(ctx, name, config); err != nil {
+		if err := r.createGatewayClass(ctx, req.Namespace, name, config); err != nil {
 			errs = append(errs, err)
 			continue
 		}
@@ -94,11 +102,21 @@ func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, _ ctrl.Request)
 	return ctrl.Result{}, errors.Join(errs...)
 }
 
-func (r *gatewayClassProvisioner) createGatewayClass(ctx context.Context, name string, config *ClassInfo) error {
+func (r *gatewayClassProvisioner) createGatewayClass(ctx context.Context, ns, name string, config *ClassInfo) error {
 	gc := &apiv1.GatewayClass{}
 	err := r.Get(ctx, client.ObjectKey{Name: name}, gc)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
+	if err != nil {
+		if r.metrics != nil && apierrors.IsNotFound(err) {
+			r.metrics.DecResourceCount(ns)
+		}
+
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	if r.metrics != nil {
+		r.metrics.IncResourceCount(ns)
 	}
 
 	gc = &apiv1.GatewayClass{

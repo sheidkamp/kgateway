@@ -15,6 +15,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/common"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/reports"
 	gwtranslator "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/gateway"
@@ -37,7 +38,8 @@ type CombinedTranslator struct {
 	backendTranslator *irtranslator.BackendTranslator
 	endpointPlugins   []extensionsplug.EndpointPlugin
 
-	logger *slog.Logger
+	logger  *slog.Logger
+	metrics *metrics.TranslatorMetrics
 }
 
 func NewCombinedTranslator(
@@ -57,6 +59,7 @@ func NewCombinedTranslator(
 		endpointPlugins: endpointPlugins,
 		logger:          logger,
 		waitForSync:     []cache.InformerSynced{extensions.HasSynced},
+		metrics:         metrics.NewTranslatorMetrics("CombinedTranslator"),
 	}
 }
 
@@ -98,6 +101,10 @@ func (s *CombinedTranslator) HasSynced() bool {
 func (s *CombinedTranslator) buildProxy(kctx krt.HandlerContext, ctx context.Context, gw ir.Gateway, r reports.Reporter) *ir.GatewayIR {
 	stopwatch := utils.NewTranslatorStopWatch("CombinedTranslator")
 	stopwatch.Start()
+
+	// Start metrics collection.
+	defer s.metrics.TranslationStart()(nil)
+
 	var gatewayTranslator extensionsplug.KGwTranslator = s.gwtranslator
 	if s.extensions.ContributesGwTranslator != nil {
 		maybeGatewayTranslator := s.extensions.ContributesGwTranslator(gw.Obj)

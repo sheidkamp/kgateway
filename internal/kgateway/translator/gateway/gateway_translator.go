@@ -10,6 +10,7 @@ import (
 
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/listener"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils"
@@ -27,12 +28,14 @@ func NewTranslator(queries query.GatewayQueries, settings TranslatorConfig) exte
 	return &translator{
 		queries:  queries,
 		settings: settings,
+		metrics:  metrics.NewTranslatorMetrics("TranslateProxy"),
 	}
 }
 
 type translator struct {
 	queries  query.GatewayQueries
 	settings TranslatorConfig
+	metrics  *metrics.TranslatorMetrics
 }
 
 func (t *translator) Translate(
@@ -44,6 +47,11 @@ func (t *translator) Translate(
 	stopwatch := utils.NewTranslatorStopWatch("TranslateProxy")
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)
+
+	// Start metrics collection.
+	defer t.metrics.TranslationStart()(nil)
+
+	resCount := make(map[string]int)
 
 	routesForGw, err := t.queries.GetRoutesForGateway(kctx, ctx, gateway)
 	if err != nil {
@@ -62,7 +70,7 @@ func (t *translator) Translate(
 		})
 	}
 
-	setAttachedRoutes(gateway, routesForGw, reporter)
+	setAttachedRoutes(gateway, routesForGw, reporter, resCount)
 
 	listeners := listener.TranslateListeners(
 		kctx,
@@ -74,6 +82,10 @@ func (t *translator) Translate(
 		t.settings.ListenerTranslatorConfig,
 	)
 
+	for ns, count := range resCount {
+		t.metrics.SetResourceCount(ns, count)
+	}
+
 	return &ir.GatewayIR{
 		SourceObject:         gateway,
 		Listeners:            listeners,
@@ -82,8 +94,10 @@ func (t *translator) Translate(
 	}
 }
 
-func setAttachedRoutes(gateway *ir.Gateway, routesForGw *query.RoutesForGwResult, reporter reports.Reporter) {
+func setAttachedRoutes(gateway *ir.Gateway, routesForGw *query.RoutesForGwResult, reporter reports.Reporter, resCount map[string]int) {
 	for _, listener := range gateway.Listeners {
+		resCount[gateway.Namespace] += 1
+
 		parentReporter := listener.GetParentReporter(reporter)
 
 		availRoutes := 0
