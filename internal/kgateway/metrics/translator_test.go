@@ -29,7 +29,7 @@ func TestNewTranslatorMetrics(t *testing.T) {
 	expectedMetrics := []string{
 		"kgateway_translator_translations_total",
 		"kgateway_translator_translation_duration_seconds",
-		"kgateway_translator_resources_total",
+		"kgateway_translator_resources_managed",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -137,7 +137,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	// Find the resource count metric.
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_total" {
+		if *mf.Name == "kgateway_translator_resources_managed" {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
@@ -155,7 +155,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_translator_resources_total metric not found")
+	assert.True(t, found, "kgateway_translator_resources_managed metric not found")
 
 	// Test IncResourceCount.
 	m.IncResourceCount("default")
@@ -164,7 +164,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_total" {
+		if *mf.Name == "kgateway_translator_resources_managed" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(6), metric.Gauge.GetValue())
@@ -180,7 +180,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_total" {
+		if *mf.Name == "kgateway_translator_resources_managed" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(5), metric.Gauge.GetValue())
@@ -196,7 +196,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_total" {
+		if *mf.Name == "kgateway_translator_resources_managed" {
 			assert.Equal(t, 0, len(mf.Metric), "Expected no metrics after reset")
 		}
 	}

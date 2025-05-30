@@ -28,11 +28,11 @@ var (
 		},
 		[]string{"translator"},
 	)
-	translatorResourcesTotal = prometheus.NewGaugeVec(
+	translatorResourcesManaged = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "kgateway",
 			Subsystem: "translator",
-			Name:      "resources_total",
+			Name:      "resources_managed",
 			Help:      "Current number of managed resources for translator",
 		},
 		[]string{"translator", "namespace"},
@@ -42,18 +42,18 @@ var (
 // TranslatorMetrics provides metrics for translator operations.
 type TranslatorMetrics struct {
 	translatorName      string
-	translationTotal    *prometheus.CounterVec
+	translationsTotal   *prometheus.CounterVec
 	translationDuration *prometheus.HistogramVec
-	resourceTotal       *prometheus.GaugeVec
+	resourcesManaged    *prometheus.GaugeVec
 }
 
 // NewTranslatorMetrics creates a new TranslatorMetrics instance.
 func NewTranslatorMetrics(translatorName string) *TranslatorMetrics {
 	m := &TranslatorMetrics{
 		translatorName:      translatorName,
-		translationTotal:    translationsTotal,
+		translationsTotal:   translationsTotal,
 		translationDuration: translationDuration,
-		resourceTotal:       translatorResourcesTotal,
+		resourcesManaged:    translatorResourcesManaged,
 	}
 
 	return m
@@ -74,26 +74,26 @@ func (m *TranslatorMetrics) TranslationStart() func(error) {
 			result = "error"
 		}
 
-		m.translationTotal.WithLabelValues(m.translatorName, result).Inc()
+		m.translationsTotal.WithLabelValues(m.translatorName, result).Inc()
 	}
 }
 
 // SetResourceCount updates the resource count gauge.
 func (m *TranslatorMetrics) SetResourceCount(namespace string, count int) {
-	m.resourceTotal.WithLabelValues(m.translatorName, namespace).Set(float64(count))
+	m.resourcesManaged.WithLabelValues(m.translatorName, namespace).Set(float64(count))
 }
 
 // IncResourceCount increments the resource count gauge.
 func (m *TranslatorMetrics) IncResourceCount(namespace string) {
-	m.resourceTotal.WithLabelValues(m.translatorName, namespace).Inc()
+	m.resourcesManaged.WithLabelValues(m.translatorName, namespace).Inc()
 }
 
 // DecResourceCount decrements the resource count gauge.
 func (m *TranslatorMetrics) DecResourceCount(namespace string) {
-	m.resourceTotal.WithLabelValues(m.translatorName, namespace).Dec()
+	m.resourcesManaged.WithLabelValues(m.translatorName, namespace).Dec()
 }
 
 // ResetResourceCounts clears all resource counts.
 func (m *TranslatorMetrics) ResetResourceCounts() {
-	m.resourceTotal.Reset()
+	m.resourcesManaged.Reset()
 }

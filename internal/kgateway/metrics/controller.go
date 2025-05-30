@@ -28,11 +28,11 @@ var (
 		},
 		[]string{"controller"},
 	)
-	controllerResourcesTotal = prometheus.NewGaugeVec(
+	controllerResourcesManaged = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "kgateway",
 			Subsystem: "controller",
-			Name:      "resources_total",
+			Name:      "resources_managed",
 			Help:      "Current number of managed resources for controller",
 		},
 		[]string{"controller", "namespace"},
@@ -41,19 +41,19 @@ var (
 
 // ControllerMetrics provides metrics for controller operations.
 type ControllerMetrics struct {
-	controllerName    string
-	reconcileTotal    *prometheus.CounterVec
-	reconcileDuration *prometheus.HistogramVec
-	resourceTotal     *prometheus.GaugeVec
+	controllerName       string
+	reconciliationsTotal *prometheus.CounterVec
+	reconcileDuration    *prometheus.HistogramVec
+	resourcesManaged     *prometheus.GaugeVec
 }
 
 // NewControllerMetrics creates a new ControllerMetrics instance.
 func NewControllerMetrics(controllerName string) *ControllerMetrics {
 	m := &ControllerMetrics{
-		controllerName:    controllerName,
-		reconcileTotal:    reconciliationsTotal,
-		reconcileDuration: reconcileDuration,
-		resourceTotal:     controllerResourcesTotal,
+		controllerName:       controllerName,
+		reconciliationsTotal: reconciliationsTotal,
+		reconcileDuration:    reconcileDuration,
+		resourcesManaged:     controllerResourcesManaged,
 	}
 
 	return m
@@ -75,26 +75,26 @@ func (m *ControllerMetrics) ReconcileStart() func(error) {
 			result = "error"
 		}
 
-		m.reconcileTotal.WithLabelValues(m.controllerName, result).Inc()
+		m.reconciliationsTotal.WithLabelValues(m.controllerName, result).Inc()
 	}
 }
 
 // SetResourceCount updates the resource count gauge.
 func (m *ControllerMetrics) SetResourceCount(namespace string, count int) {
-	m.resourceTotal.WithLabelValues(m.controllerName, namespace).Set(float64(count))
+	m.resourcesManaged.WithLabelValues(m.controllerName, namespace).Set(float64(count))
 }
 
 // IncResourceCount increments the resource count gauge.
 func (m *ControllerMetrics) IncResourceCount(namespace string) {
-	m.resourceTotal.WithLabelValues(m.controllerName, namespace).Inc()
+	m.resourcesManaged.WithLabelValues(m.controllerName, namespace).Inc()
 }
 
 // DecResourceCount decrements the resource count gauge.
 func (m *ControllerMetrics) DecResourceCount(namespace string) {
-	m.resourceTotal.WithLabelValues(m.controllerName, namespace).Dec()
+	m.resourcesManaged.WithLabelValues(m.controllerName, namespace).Dec()
 }
 
 // ResetResourceCounts clears all resource counts.
 func (m *ControllerMetrics) ResetResourceCounts() {
-	m.resourceTotal.Reset()
+	m.resourcesManaged.Reset()
 }
