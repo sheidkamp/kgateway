@@ -5,6 +5,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+const metricsNamespace = "kgateway"
+
 func init() {
 	// Register the metrics with the global registry.
 	metrics.Registry.MustRegister(

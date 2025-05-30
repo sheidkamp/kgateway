@@ -6,36 +6,41 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	controllerSubsystem = "controller"
+	controllerNameLabel = "controller"
+)
+
 var (
 	reconciliationsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "kgateway",
-			Subsystem: "controller",
+			Namespace: metricsNamespace,
+			Subsystem: controllerSubsystem,
 			Name:      "reconciliations_total",
 			Help:      "Total controller reconciliations",
 		},
-		[]string{"controller", "result"},
+		[]string{controllerNameLabel, "result"},
 	)
 	reconcileDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace:                       "kgateway",
-			Subsystem:                       "controller",
+			Namespace:                       metricsNamespace,
+			Subsystem:                       controllerSubsystem,
 			Name:                            "reconcile_duration_seconds",
 			Help:                            "Reconcile duration for controller",
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,
 		},
-		[]string{"controller"},
+		[]string{controllerNameLabel},
 	)
 	controllerResourcesManaged = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: "kgateway",
-			Subsystem: "controller",
+			Namespace: metricsNamespace,
+			Subsystem: controllerSubsystem,
 			Name:      "resources_managed",
 			Help:      "Current number of managed resources for controller",
 		},
-		[]string{"controller", "namespace"},
+		[]string{controllerNameLabel, "namespace"},
 	)
 )
 

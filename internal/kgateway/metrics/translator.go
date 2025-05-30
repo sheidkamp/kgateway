@@ -6,36 +6,41 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	translatorSubsystem = "translator"
+	translatorNameLabel = "translator"
+)
+
 var (
 	translationsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "kgateway",
-			Subsystem: "translator",
+			Namespace: metricsNamespace,
+			Subsystem: translatorSubsystem,
 			Name:      "translations_total",
 			Help:      "Total translations",
 		},
-		[]string{"translator", "result"},
+		[]string{translatorNameLabel, "result"},
 	)
 	translationDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace:                       "kgateway",
-			Subsystem:                       "translator",
+			Namespace:                       metricsNamespace,
+			Subsystem:                       translatorSubsystem,
 			Name:                            "translation_duration_seconds",
 			Help:                            "Translation duration",
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,
 		},
-		[]string{"translator"},
+		[]string{translatorNameLabel},
 	)
 	translatorResourcesManaged = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: "kgateway",
-			Subsystem: "translator",
+			Namespace: metricsNamespace,
+			Subsystem: translatorSubsystem,
 			Name:      "resources_managed",
 			Help:      "Current number of managed resources for translator",
 		},
-		[]string{"translator", "namespace"},
+		[]string{translatorNameLabel, "namespace"},
 	)
 )
 
