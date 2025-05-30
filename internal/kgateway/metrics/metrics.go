@@ -12,9 +12,9 @@ func init() {
 	metrics.Registry.MustRegister(
 		reconciliationsTotal,
 		reconcileDuration,
-		controllerResourcesManaged,
+		controllerResourceCount,
 		translationsTotal,
 		translationDuration,
-		translatorResourcesManaged,
+		translatorResourceCount,
 	)
 }

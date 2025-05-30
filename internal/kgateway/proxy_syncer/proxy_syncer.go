@@ -70,9 +70,9 @@ type ProxySyncer struct {
 	waitForSync []cache.InformerSynced
 	ready       atomic.Bool
 
-	routeStatusMetrics   *metrics.TranslatorMetrics
-	gatewayStatusMetrics *metrics.TranslatorMetrics
-	policyStatusMetrics  *metrics.TranslatorMetrics
+	routeStatusMetrics   metrics.TranslatorRecorder
+	gatewayStatusMetrics metrics.TranslatorRecorder
+	policyStatusMetrics  metrics.TranslatorRecorder
 }
 
 type GatewayXdsResources struct {
@@ -153,9 +153,9 @@ func NewProxySyncer(
 		uniqueClients:        uniqueClients,
 		translator:           translator.NewCombinedTranslator(ctx, mergedPlugins, commonCols),
 		plugins:              mergedPlugins,
-		routeStatusMetrics:   metrics.NewTranslatorMetrics("RouteStatusSyncer"),
-		gatewayStatusMetrics: metrics.NewTranslatorMetrics("GatewayStatusSyncer"),
-		policyStatusMetrics:  metrics.NewTranslatorMetrics("PolicyStatusSyncer"),
+		routeStatusMetrics:   metrics.NewTranslatorRecorder("RouteStatusSyncer"),
+		gatewayStatusMetrics: metrics.NewTranslatorRecorder("GatewayStatusSyncer"),
+		policyStatusMetrics:  metrics.NewTranslatorRecorder("PolicyStatusSyncer"),
 	}
 }
 

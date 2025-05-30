@@ -33,32 +33,41 @@ var (
 		},
 		[]string{translatorNameLabel},
 	)
-	translatorResourcesManaged = prometheus.NewGaugeVec(
+	translatorResourceCount = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: metricsNamespace,
 			Subsystem: translatorSubsystem,
-			Name:      "resources_managed",
-			Help:      "Current number of managed resources for translator",
+			Name:      "resource_count",
+			Help:      "Current number of resources managed by the translator",
 		},
 		[]string{translatorNameLabel, "namespace"},
 	)
 )
 
-// TranslatorMetrics provides metrics for translator operations.
-type TranslatorMetrics struct {
+// TranslatorRecorder defines the interface for recording translator metrics.
+type TranslatorRecorder interface {
+	TranslationStart() func(error)
+	DecResourceCount(namespace string)
+	IncResourceCount(namespace string)
+	SetResourceCount(namespace string, count int)
+	ResetResourceCounts()
+}
+
+// translatorMetrics records metrics for translator operations.
+type translatorMetrics struct {
 	translatorName      string
 	translationsTotal   *prometheus.CounterVec
 	translationDuration *prometheus.HistogramVec
-	resourcesManaged    *prometheus.GaugeVec
+	resourceCount       *prometheus.GaugeVec
 }
 
-// NewTranslatorMetrics creates a new TranslatorMetrics instance.
-func NewTranslatorMetrics(translatorName string) *TranslatorMetrics {
-	m := &TranslatorMetrics{
+// NewTranslatorRecorder creates a new recorder for translator metrics.
+func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
+	m := &translatorMetrics{
 		translatorName:      translatorName,
 		translationsTotal:   translationsTotal,
 		translationDuration: translationDuration,
-		resourcesManaged:    translatorResourcesManaged,
+		resourceCount:       translatorResourceCount,
 	}
 
 	return m
@@ -66,7 +75,7 @@ func NewTranslatorMetrics(translatorName string) *TranslatorMetrics {
 
 // TranslationStart is called at the start of a translation function to begin metrics
 // collection and returns a function called at the end to complete metrics recording.
-func (m *TranslatorMetrics) TranslationStart() func(error) {
+func (m *translatorMetrics) TranslationStart() func(error) {
 	start := time.Now()
 
 	return func(err error) {
@@ -84,21 +93,21 @@ func (m *TranslatorMetrics) TranslationStart() func(error) {
 }
 
 // SetResourceCount updates the resource count gauge.
-func (m *TranslatorMetrics) SetResourceCount(namespace string, count int) {
-	m.resourcesManaged.WithLabelValues(m.translatorName, namespace).Set(float64(count))
+func (m *translatorMetrics) SetResourceCount(namespace string, count int) {
+	m.resourceCount.WithLabelValues(m.translatorName, namespace).Set(float64(count))
 }
 
 // IncResourceCount increments the resource count gauge.
-func (m *TranslatorMetrics) IncResourceCount(namespace string) {
-	m.resourcesManaged.WithLabelValues(m.translatorName, namespace).Inc()
+func (m *translatorMetrics) IncResourceCount(namespace string) {
+	m.resourceCount.WithLabelValues(m.translatorName, namespace).Inc()
 }
 
 // DecResourceCount decrements the resource count gauge.
-func (m *TranslatorMetrics) DecResourceCount(namespace string) {
-	m.resourcesManaged.WithLabelValues(m.translatorName, namespace).Dec()
+func (m *translatorMetrics) DecResourceCount(namespace string) {
+	m.resourceCount.WithLabelValues(m.translatorName, namespace).Dec()
 }
 
 // ResetResourceCounts clears all resource counts.
-func (m *TranslatorMetrics) ResetResourceCounts() {
-	m.resourcesManaged.Reset()
+func (m *translatorMetrics) ResetResourceCounts() {
+	m.resourceCount.Reset()
 }

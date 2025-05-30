@@ -21,7 +21,7 @@ type inferencePoolReconciler struct {
 	cli      client.Client
 	scheme   *runtime.Scheme
 	deployer *deployer.Deployer
-	metrics  *metrics.ControllerMetrics
+	metrics  metrics.ControllerRecorder
 }
 
 func (r *inferencePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {

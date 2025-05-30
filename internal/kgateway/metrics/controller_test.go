@@ -13,9 +13,10 @@ func TestNewControllerMetrics(t *testing.T) {
 	setupTest()
 
 	controllerName := "test-controller"
-	m := NewControllerMetrics(controllerName)
+	m := NewControllerRecorder(controllerName)
 
-	assert.Equal(t, controllerName, m.controllerName)
+	assert.IsType(t, &controllerMetrics{}, m)
+	assert.Equal(t, controllerName, (m.(*controllerMetrics)).controllerName)
 
 	// Use the metrics to generate some data.
 	finishFunc := m.ReconcileStart()
@@ -29,7 +30,7 @@ func TestNewControllerMetrics(t *testing.T) {
 	expectedMetrics := []string{
 		"kgateway_controller_reconciliations_total",
 		"kgateway_controller_reconcile_duration_seconds",
-		"kgateway_controller_resources_managed",
+		"kgateway_controller_resource_count",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -45,7 +46,7 @@ func TestNewControllerMetrics(t *testing.T) {
 func TestReconcileStart_Success(t *testing.T) {
 	setupTest()
 
-	m := NewControllerMetrics("test-controller")
+	m := NewControllerRecorder("test-controller")
 
 	// Simulate successful reconcile.
 	finishFunc := m.ReconcileStart()
@@ -93,7 +94,7 @@ func TestReconcileStart_Success(t *testing.T) {
 func TestReconcileStart_Error(t *testing.T) {
 	setupTest()
 
-	m := NewControllerMetrics("test-controller")
+	m := NewControllerRecorder("test-controller")
 
 	// Simulate failed reconcile.
 	finishFunc := m.ReconcileStart()
@@ -125,7 +126,7 @@ func TestReconcileStart_Error(t *testing.T) {
 func TestControllerResourceCount(t *testing.T) {
 	setupTest()
 
-	m := NewControllerMetrics("test-controller")
+	m := NewControllerRecorder("test-controller")
 
 	// Test SetResourceCount.
 	m.SetResourceCount("default", 5)
@@ -137,7 +138,7 @@ func TestControllerResourceCount(t *testing.T) {
 	// Find the resource count metric.
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resources_managed" {
+		if *mf.Name == "kgateway_controller_resource_count" {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
@@ -155,7 +156,7 @@ func TestControllerResourceCount(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_controller_resources_managed metric not found")
+	assert.True(t, found, "kgateway_controller_resource_count metric not found")
 
 	// Test IncResourceCount.
 	m.IncResourceCount("default")
@@ -164,7 +165,7 @@ func TestControllerResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resources_managed" {
+		if *mf.Name == "kgateway_controller_resource_count" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(6), metric.Gauge.GetValue())
@@ -180,7 +181,7 @@ func TestControllerResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resources_managed" {
+		if *mf.Name == "kgateway_controller_resource_count" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(5), metric.Gauge.GetValue())
@@ -196,7 +197,7 @@ func TestControllerResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resources_managed" {
+		if *mf.Name == "kgateway_controller_resource_count" {
 			assert.Equal(t, 0, len(mf.Metric), "Expected no metrics after reset")
 		}
 	}

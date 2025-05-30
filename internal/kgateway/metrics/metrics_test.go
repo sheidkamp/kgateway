@@ -11,8 +11,8 @@ func TestMain(m *testing.M) {
 func setupTest() {
 	reconciliationsTotal.Reset()
 	reconcileDuration.Reset()
-	controllerResourcesManaged.Reset()
+	controllerResourceCount.Reset()
 	translationsTotal.Reset()
 	translationDuration.Reset()
-	translatorResourcesManaged.Reset()
+	translatorResourceCount.Reset()
 }

@@ -39,7 +39,7 @@ type CombinedTranslator struct {
 	endpointPlugins   []extensionsplug.EndpointPlugin
 
 	logger  *slog.Logger
-	metrics *metrics.TranslatorMetrics
+	metrics metrics.TranslatorRecorder
 }
 
 func NewCombinedTranslator(
@@ -59,7 +59,7 @@ func NewCombinedTranslator(
 		endpointPlugins: endpointPlugins,
 		logger:          logger,
 		waitForSync:     []cache.InformerSynced{extensions.HasSynced},
-		metrics:         metrics.NewTranslatorMetrics("CombinedTranslator"),
+		metrics:         metrics.NewTranslatorRecorder("CombinedTranslator"),
 	}
 }
 

@@ -33,32 +33,41 @@ var (
 		},
 		[]string{controllerNameLabel},
 	)
-	controllerResourcesManaged = prometheus.NewGaugeVec(
+	controllerResourceCount = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: metricsNamespace,
 			Subsystem: controllerSubsystem,
-			Name:      "resources_managed",
-			Help:      "Current number of managed resources for controller",
+			Name:      "resource_count",
+			Help:      "Current number of resources managed by the controller",
 		},
 		[]string{controllerNameLabel, "namespace"},
 	)
 )
 
-// ControllerMetrics provides metrics for controller operations.
-type ControllerMetrics struct {
+// ControllerRecorder defines the interface for recording controller metrics.
+type ControllerRecorder interface {
+	ReconcileStart() func(error)
+	IncResourceCount(namespace string)
+	DecResourceCount(namespace string)
+	SetResourceCount(namespace string, count int)
+	ResetResourceCounts()
+}
+
+// controllerMetrics provides metrics for controller operations.
+type controllerMetrics struct {
 	controllerName       string
 	reconciliationsTotal *prometheus.CounterVec
 	reconcileDuration    *prometheus.HistogramVec
-	resourcesManaged     *prometheus.GaugeVec
+	resourceCount        *prometheus.GaugeVec
 }
 
-// NewControllerMetrics creates a new ControllerMetrics instance.
-func NewControllerMetrics(controllerName string) *ControllerMetrics {
-	m := &ControllerMetrics{
+// NewControllerRecorder creates a new ControllerMetrics instance.
+func NewControllerRecorder(controllerName string) ControllerRecorder {
+	m := &controllerMetrics{
 		controllerName:       controllerName,
 		reconciliationsTotal: reconciliationsTotal,
 		reconcileDuration:    reconcileDuration,
-		resourcesManaged:     controllerResourcesManaged,
+		resourceCount:        controllerResourceCount,
 	}
 
 	return m
@@ -67,7 +76,7 @@ func NewControllerMetrics(controllerName string) *ControllerMetrics {
 // ReconcileStart is called at the start of a controller reconciliation function
 // to begin metrics collection and returns a function called at the end to
 // complete metrics recording.
-func (m *ControllerMetrics) ReconcileStart() func(error) {
+func (m *controllerMetrics) ReconcileStart() func(error) {
 	start := time.Now()
 
 	return func(err error) {
@@ -85,21 +94,21 @@ func (m *ControllerMetrics) ReconcileStart() func(error) {
 }
 
 // SetResourceCount updates the resource count gauge.
-func (m *ControllerMetrics) SetResourceCount(namespace string, count int) {
-	m.resourcesManaged.WithLabelValues(m.controllerName, namespace).Set(float64(count))
+func (m *controllerMetrics) SetResourceCount(namespace string, count int) {
+	m.resourceCount.WithLabelValues(m.controllerName, namespace).Set(float64(count))
 }
 
 // IncResourceCount increments the resource count gauge.
-func (m *ControllerMetrics) IncResourceCount(namespace string) {
-	m.resourcesManaged.WithLabelValues(m.controllerName, namespace).Inc()
+func (m *controllerMetrics) IncResourceCount(namespace string) {
+	m.resourceCount.WithLabelValues(m.controllerName, namespace).Inc()
 }
 
 // DecResourceCount decrements the resource count gauge.
-func (m *ControllerMetrics) DecResourceCount(namespace string) {
-	m.resourcesManaged.WithLabelValues(m.controllerName, namespace).Dec()
+func (m *controllerMetrics) DecResourceCount(namespace string) {
+	m.resourceCount.WithLabelValues(m.controllerName, namespace).Dec()
 }
 
 // ResetResourceCounts clears all resource counts.
-func (m *ControllerMetrics) ResetResourceCounts() {
-	m.resourcesManaged.Reset()
+func (m *controllerMetrics) ResetResourceCounts() {
+	m.resourceCount.Reset()
 }

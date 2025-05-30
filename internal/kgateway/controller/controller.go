@@ -318,7 +318,7 @@ func (c *controllerBuilder) watchGw(ctx context.Context) error {
 		controllerName: c.cfg.ControllerName,
 		autoProvision:  c.cfg.AutoProvision,
 		deployer:       d,
-		metrics:        metrics.NewControllerMetrics(c.cfg.ControllerName),
+		metrics:        metrics.NewControllerRecorder(c.cfg.ControllerName),
 	})
 }
 
@@ -444,7 +444,7 @@ func (c *controllerBuilder) watchInferencePool(ctx context.Context) error {
 			cli:      c.cfg.Mgr.GetClient(),
 			scheme:   c.cfg.Mgr.GetScheme(),
 			deployer: d,
-			metrics:  metrics.NewControllerMetrics(c.cfg.ControllerName),
+			metrics:  metrics.NewControllerRecorder(c.cfg.ControllerName),
 		}
 		if err := buildr.Complete(r); err != nil {
 			return err

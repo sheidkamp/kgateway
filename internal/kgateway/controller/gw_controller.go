@@ -30,7 +30,7 @@ type gatewayReconciler struct {
 
 	scheme   *runtime.Scheme
 	deployer *deployer.Deployer
-	metrics  *metrics.ControllerMetrics
+	metrics  metrics.ControllerRecorder
 }
 
 func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {

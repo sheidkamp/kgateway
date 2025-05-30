@@ -13,9 +13,10 @@ func TestNewTranslatorMetrics(t *testing.T) {
 	setupTest()
 
 	translatorName := "test-translator"
-	m := NewTranslatorMetrics(translatorName)
+	m := NewTranslatorRecorder(translatorName)
 
-	assert.Equal(t, translatorName, m.translatorName)
+	assert.IsType(t, &translatorMetrics{}, m)
+	assert.Equal(t, translatorName, (m.(*translatorMetrics)).translatorName)
 
 	// Use the metrics to generate some data.
 	finishFunc := m.TranslationStart()
@@ -29,7 +30,7 @@ func TestNewTranslatorMetrics(t *testing.T) {
 	expectedMetrics := []string{
 		"kgateway_translator_translations_total",
 		"kgateway_translator_translation_duration_seconds",
-		"kgateway_translator_resources_managed",
+		"kgateway_translator_resource_count",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -45,7 +46,7 @@ func TestNewTranslatorMetrics(t *testing.T) {
 func TestTranslationStart_Success(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorMetrics("test-translator")
+	m := NewTranslatorRecorder("test-translator")
 
 	// Simulate successful translation.
 	finishFunc := m.TranslationStart()
@@ -93,7 +94,7 @@ func TestTranslationStart_Success(t *testing.T) {
 func TestTranslationStart_Error(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorMetrics("test-translator")
+	m := NewTranslatorRecorder("test-translator")
 
 	// Simulate failed translation.
 	finishFunc := m.TranslationStart()
@@ -125,7 +126,7 @@ func TestTranslationStart_Error(t *testing.T) {
 func TestTranslatorResourceCount(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorMetrics("test-translator")
+	m := NewTranslatorRecorder("test-translator")
 
 	// Test SetResourceCount.
 	m.SetResourceCount("default", 5)
@@ -137,7 +138,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	// Find the resource count metric.
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_managed" {
+		if *mf.Name == "kgateway_translator_resource_count" {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
@@ -155,7 +156,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_translator_resources_managed metric not found")
+	assert.True(t, found, "kgateway_translator_resource_count metric not found")
 
 	// Test IncResourceCount.
 	m.IncResourceCount("default")
@@ -164,7 +165,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_managed" {
+		if *mf.Name == "kgateway_translator_resource_count" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(6), metric.Gauge.GetValue())
@@ -180,7 +181,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_managed" {
+		if *mf.Name == "kgateway_translator_resource_count" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(5), metric.Gauge.GetValue())
@@ -196,7 +197,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources_managed" {
+		if *mf.Name == "kgateway_translator_resource_count" {
 			assert.Equal(t, 0, len(mf.Metric), "Expected no metrics after reset")
 		}
 	}
