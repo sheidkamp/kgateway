@@ -21,7 +21,7 @@ func TestNewSnapshotMetrics(t *testing.T) {
 	// Use the metrics to generate some data.
 	finishFunc := m.SnapshotStart("default")
 	finishFunc(nil)
-	m.SetResourceCount("default", 5)
+	m.SetResources("default", 5)
 
 	// Verify metrics are registered by checking if we can collect them.
 	metricFamilies, err := metrics.Registry.Gather()
@@ -30,7 +30,7 @@ func TestNewSnapshotMetrics(t *testing.T) {
 	expectedMetrics := []string{
 		"kgateway_snapshot_syncs_total",
 		"kgateway_snapshot_sync_duration_seconds",
-		"kgateway_snapshot_resource_count",
+		"kgateway_snapshot_resources",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -127,14 +127,14 @@ func TestSnapshotStart_Error(t *testing.T) {
 	assert.True(t, found, "kgateway_snapshot_syncs_total metric not found")
 }
 
-func TestSnapshotResourceCount(t *testing.T) {
+func TestSnapshotResources(t *testing.T) {
 	setupTest()
 
 	m := NewSnapshotRecorder("test-snapshot")
 
-	// Test SetResourceCount.
-	m.SetResourceCount("default", 5)
-	m.SetResourceCount("kube-system", 3)
+	// Test SetResources.
+	m.SetResources("default", 5)
+	m.SetResources("kube-system", 3)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestSnapshotResourceCount(t *testing.T) {
 	// Find the resource count metric.
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_snapshot_resource_count" {
+		if *mf.Name == "kgateway_snapshot_resources" {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
@@ -162,16 +162,16 @@ func TestSnapshotResourceCount(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_snapshot_resource_count metric not found")
+	assert.True(t, found, "kgateway_snapshot_resources metric not found")
 
-	// Test IncResourceCount.
-	m.IncResourceCount("default")
+	// Test IncResources.
+	m.IncResources("default")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_snapshot_resource_count" {
+		if *mf.Name == "kgateway_snapshot_resources" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(6), metric.Gauge.GetValue())
@@ -180,14 +180,14 @@ func TestSnapshotResourceCount(t *testing.T) {
 		}
 	}
 
-	// Test DecResourceCount.
-	m.DecResourceCount("default")
+	// Test DecResources.
+	m.DecResources("default")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_snapshot_resource_count" {
+		if *mf.Name == "kgateway_snapshot_resources" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(5), metric.Gauge.GetValue())

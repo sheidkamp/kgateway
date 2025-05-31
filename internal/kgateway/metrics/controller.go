@@ -77,3 +77,19 @@ func (m *controllerMetrics) ReconcileStart() func(error) {
 		m.reconciliationsTotal.WithLabelValues(m.controllerName, result).Inc()
 	}
 }
+
+// ResetControllerMetrics resets the controller metrics.
+func ResetControllerMetrics() {
+	reconciliationsTotal.Reset()
+	reconcileDuration.Reset()
+}
+
+// GetReconciliationsTotal returns the reconciliations counter.
+func GetReconciliationsTotal() *prometheus.CounterVec {
+	return reconciliationsTotal
+}
+
+// GetReconcileDuration returns the reconcile duration histogram.
+func GetReconcileDuration() *prometheus.HistogramVec {
+	return reconcileDuration
+}

@@ -33,11 +33,11 @@ var (
 		},
 		[]string{translatorNameLabel},
 	)
-	translatorResourceCount = prometheus.NewGaugeVec(
+	translatorResources = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: metricsNamespace,
 			Subsystem: translatorSubsystem,
-			Name:      "resource_count",
+			Name:      "resources",
 			Help:      "Current number of resources managed by the translator",
 		},
 		[]string{"namespace", "resource", translatorNameLabel},
@@ -47,9 +47,9 @@ var (
 // TranslatorRecorder defines the interface for recording translator metrics.
 type TranslatorRecorder interface {
 	TranslationStart() func(error)
-	SetResourceCount(namespace, resource string, count int)
-	IncResourceCount(namespace, resource string)
-	DecResourceCount(namespace, resource string)
+	SetResources(namespace, resource string, count int)
+	IncResources(namespace, resource string)
+	DecResources(namespace, resource string)
 }
 
 // translatorMetrics records metrics for translator operations.
@@ -57,7 +57,7 @@ type translatorMetrics struct {
 	translatorName      string
 	translationsTotal   *prometheus.CounterVec
 	translationDuration *prometheus.HistogramVec
-	resourceCount       *prometheus.GaugeVec
+	resources           *prometheus.GaugeVec
 }
 
 // NewTranslatorRecorder creates a new recorder for translator metrics.
@@ -66,7 +66,7 @@ func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
 		translatorName:      translatorName,
 		translationsTotal:   translationsTotal,
 		translationDuration: translationDuration,
-		resourceCount:       translatorResourceCount,
+		resources:           translatorResources,
 	}
 
 	return m
@@ -91,17 +91,39 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 	}
 }
 
-// SetResourceCount updates the resource count gauge.
-func (m *translatorMetrics) SetResourceCount(namespace, resource string, count int) {
-	m.resourceCount.WithLabelValues(namespace, resource, m.translatorName).Set(float64(count))
+// SetResources updates the resource count gauge.
+func (m *translatorMetrics) SetResources(namespace, resource string, count int) {
+	m.resources.WithLabelValues(namespace, resource, m.translatorName).Set(float64(count))
 }
 
-// IncResourceCount increments the resource count gauge.
-func (m *translatorMetrics) IncResourceCount(namespace, resource string) {
-	m.resourceCount.WithLabelValues(namespace, resource, m.translatorName).Inc()
+// IncResources increments the resource count gauge.
+func (m *translatorMetrics) IncResources(namespace, resource string) {
+	m.resources.WithLabelValues(namespace, resource, m.translatorName).Inc()
 }
 
-// DecResourceCount decrements the resource count gauge.
-func (m *translatorMetrics) DecResourceCount(namespace, resource string) {
-	m.resourceCount.WithLabelValues(namespace, resource, m.translatorName).Dec()
+// DecResources decrements the resource count gauge.
+func (m *translatorMetrics) DecResources(namespace, resource string) {
+	m.resources.WithLabelValues(namespace, resource, m.translatorName).Dec()
+}
+
+// ResetTranslatorMetrics resets the translator metrics.
+func ResetTranslatorMetrics() {
+	translationsTotal.Reset()
+	translationDuration.Reset()
+	translatorResources.Reset()
+}
+
+// GetTranslationsTotal returns the translations counter.
+func GetTranslationsTotal() *prometheus.CounterVec {
+	return translationsTotal
+}
+
+// GetTranslationDuration returns the translation duration histogram.
+func GetTranslationDuration() *prometheus.HistogramVec {
+	return translationDuration
+}
+
+// GetTranslatorResources returns the translator resource count gauge.
+func GetTranslatorResources() *prometheus.GaugeVec {
+	return translatorResources
 }

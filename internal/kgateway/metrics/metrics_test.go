@@ -9,12 +9,7 @@ func TestMain(m *testing.M) {
 }
 
 func setupTest() {
-	reconciliationsTotal.Reset()
-	reconcileDuration.Reset()
-	translationsTotal.Reset()
-	translationDuration.Reset()
-	translatorResourceCount.Reset()
-	snapshotSyncsTotal.Reset()
-	snapshotSyncDuration.Reset()
-	snapshotResourceCount.Reset()
+	ResetControllerMetrics()
+	ResetTranslatorMetrics()
+	ResetSnapshotMetrics()
 }

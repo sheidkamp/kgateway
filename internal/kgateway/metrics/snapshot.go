@@ -33,11 +33,11 @@ var (
 		},
 		[]string{"proxy", snapshotNameLabel},
 	)
-	snapshotResourceCount = prometheus.NewGaugeVec(
+	snapshotResources = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: metricsNamespace,
 			Subsystem: snapshotSubsystem,
-			Name:      "resource_count",
+			Name:      "resources",
 			Help:      "Current number of resources contained in the snapshot",
 		},
 		[]string{"proxy", snapshotNameLabel},
@@ -47,9 +47,9 @@ var (
 // SnapshotRecorder defines the interface for recording snapshot metrics.
 type SnapshotRecorder interface {
 	SnapshotStart(proxy string) func(error)
-	SetResourceCount(proxy string, count int)
-	IncResourceCount(proxy string)
-	DecResourceCount(proxy string)
+	SetResources(proxy string, count int)
+	IncResources(proxy string)
+	DecResources(proxy string)
 }
 
 // snapshotMetrics records metrics for snapshot operations.
@@ -57,7 +57,7 @@ type snapshotMetrics struct {
 	snapshotName     string
 	snapshotsTotal   *prometheus.CounterVec
 	snapshotDuration *prometheus.HistogramVec
-	resourceCount    *prometheus.GaugeVec
+	resources        *prometheus.GaugeVec
 }
 
 // NewSnapshotRecorder creates a new recorder for snapshot metrics.
@@ -66,7 +66,7 @@ func NewSnapshotRecorder(snapshotName string) SnapshotRecorder {
 		snapshotName:     snapshotName,
 		snapshotsTotal:   snapshotSyncsTotal,
 		snapshotDuration: snapshotSyncDuration,
-		resourceCount:    snapshotResourceCount,
+		resources:        snapshotResources,
 	}
 
 	return m
@@ -91,17 +91,39 @@ func (m *snapshotMetrics) SnapshotStart(proxy string) func(error) {
 	}
 }
 
-// SetResourceCount updates the resource count gauge.
-func (m *snapshotMetrics) SetResourceCount(proxy string, count int) {
-	m.resourceCount.WithLabelValues(proxy, m.snapshotName).Set(float64(count))
+// SetResources updates the resource count gauge.
+func (m *snapshotMetrics) SetResources(proxy string, count int) {
+	m.resources.WithLabelValues(proxy, m.snapshotName).Set(float64(count))
 }
 
-// IncResourceCount increments the resource count gauge.
-func (m *snapshotMetrics) IncResourceCount(proxy string) {
-	m.resourceCount.WithLabelValues(proxy, m.snapshotName).Inc()
+// IncResources increments the resource count gauge.
+func (m *snapshotMetrics) IncResources(proxy string) {
+	m.resources.WithLabelValues(proxy, m.snapshotName).Inc()
 }
 
-// DecResourceCount decrements the resource count gauge.
-func (m *snapshotMetrics) DecResourceCount(proxy string) {
-	m.resourceCount.WithLabelValues(proxy, m.snapshotName).Dec()
+// DecResources decrements the resource count gauge.
+func (m *snapshotMetrics) DecResources(proxy string) {
+	m.resources.WithLabelValues(proxy, m.snapshotName).Dec()
+}
+
+// ResetSnapshotMetrics resets the snapshot metrics.
+func ResetSnapshotMetrics() {
+	snapshotSyncsTotal.Reset()
+	snapshotSyncDuration.Reset()
+	snapshotResources.Reset()
+}
+
+// GetSnapshotSyncsTotal returns the snapshot syncs counter.
+func GetSnapshotSyncsTotal() *prometheus.CounterVec {
+	return snapshotSyncsTotal
+}
+
+// GetSnapshotSyncDuration returns the snapshot sync duration histogram.
+func GetSnapshotSyncDuration() *prometheus.HistogramVec {
+	return snapshotSyncDuration
+}
+
+// GetSnapshotResources returns the snapshot resource count gauge.
+func GetSnapshotResources() *prometheus.GaugeVec {
+	return snapshotResources
 }
