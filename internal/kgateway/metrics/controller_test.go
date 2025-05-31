@@ -21,7 +21,6 @@ func TestNewControllerMetrics(t *testing.T) {
 	// Use the metrics to generate some data.
 	finishFunc := m.ReconcileStart()
 	finishFunc(nil)
-	m.SetResourceCount("default", 5)
 
 	// Verify metrics are registered by checking if we can collect them.
 	metricFamilies, err := metrics.Registry.Gather()
@@ -30,7 +29,6 @@ func TestNewControllerMetrics(t *testing.T) {
 	expectedMetrics := []string{
 		"kgateway_controller_reconciliations_total",
 		"kgateway_controller_reconcile_duration_seconds",
-		"kgateway_controller_resource_count",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -121,84 +119,4 @@ func TestReconcileStart_Error(t *testing.T) {
 	}
 
 	assert.True(t, found, "kgateway_controller_reconciliations_total metric not found")
-}
-
-func TestControllerResourceCount(t *testing.T) {
-	setupTest()
-
-	m := NewControllerRecorder("test-controller")
-
-	// Test SetResourceCount.
-	m.SetResourceCount("default", 5)
-	m.SetResourceCount("kube-system", 3)
-
-	metricFamilies, err := metrics.Registry.Gather()
-	require.NoError(t, err)
-
-	// Find the resource count metric.
-	var found bool
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resource_count" {
-			found = true
-			assert.Equal(t, 2, len(mf.Metric))
-
-			namespaceValues := make(map[string]float64)
-			for _, metric := range mf.Metric {
-				assert.Equal(t, 2, len(metric.Label))
-				assert.Equal(t, "controller", *metric.Label[0].Name)
-				assert.Equal(t, "test-controller", *metric.Label[0].Value)
-				assert.Equal(t, "namespace", *metric.Label[1].Name)
-				namespaceValues[*metric.Label[1].Value] = metric.Gauge.GetValue()
-			}
-
-			assert.Equal(t, float64(5), namespaceValues["default"])
-			assert.Equal(t, float64(3), namespaceValues["kube-system"])
-		}
-	}
-
-	assert.True(t, found, "kgateway_controller_resource_count metric not found")
-
-	// Test IncResourceCount.
-	m.IncResourceCount("default")
-
-	metricFamilies, err = metrics.Registry.Gather()
-	require.NoError(t, err)
-
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resource_count" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
-					assert.Equal(t, float64(6), metric.Gauge.GetValue())
-				}
-			}
-		}
-	}
-
-	// Test DecResourceCount.
-	m.DecResourceCount("default")
-
-	metricFamilies, err = metrics.Registry.Gather()
-	require.NoError(t, err)
-
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resource_count" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
-					assert.Equal(t, float64(5), metric.Gauge.GetValue())
-				}
-			}
-		}
-	}
-
-	// Test ResetResourceCounts.
-	m.ResetResourceCounts()
-
-	metricFamilies, err = metrics.Registry.Gather()
-	require.NoError(t, err)
-
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_controller_resource_count" {
-			assert.Equal(t, 0, len(mf.Metric), "Expected no metrics after reset")
-		}
-	}
 }

@@ -12,7 +12,6 @@ func init() {
 	metrics.Registry.MustRegister(
 		reconciliationsTotal,
 		reconcileDuration,
-		controllerResourceCount,
 		translationsTotal,
 		translationDuration,
 		translatorResourceCount,

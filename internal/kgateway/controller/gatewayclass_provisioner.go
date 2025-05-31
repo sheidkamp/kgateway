@@ -74,7 +74,7 @@ func (r *gatewayClassProvisioner) SetupWithManager(mgr ctrl.Manager) error {
 			gc, ok := obj.(*apiv1.GatewayClass)
 			return ok && gc.Spec.ControllerName == apiv1.GatewayController(r.controllerName)
 		})).
-		WatchesRawSource(source.Channel(r.initialReconcileCh, handler.TypedEnqueueRequestsFromMapFunc[client.Object, reconcile.Request](
+		WatchesRawSource(source.Channel(r.initialReconcileCh, handler.TypedEnqueueRequestsFromMapFunc(
 			func(ctx context.Context, o client.Object) []reconcile.Request {
 				return []reconcile.Request{{NamespacedName: client.ObjectKeyFromObject(o)}}
 			},
@@ -87,14 +87,13 @@ func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, req ctrl.Reques
 	log.Info("reconciling GatewayClasses", "controllerName", "gatewayclass-provisioner")
 	defer log.Info("finished reconciling GatewayClasses", "controllerName", "gatewayclass-provisioner")
 
-	// Start metrics collection.
 	if r.metrics != nil {
 		defer r.metrics.ReconcileStart()(rErr)
 	}
 
 	var errs []error
 	for name, config := range r.classConfigs {
-		if err := r.createGatewayClass(ctx, req.Namespace, name, config); err != nil {
+		if err := r.createGatewayClass(ctx, name, config); err != nil {
 			errs = append(errs, err)
 			continue
 		}
@@ -103,21 +102,11 @@ func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, errors.Join(errs...)
 }
 
-func (r *gatewayClassProvisioner) createGatewayClass(ctx context.Context, ns, name string, config *ClassInfo) error {
+func (r *gatewayClassProvisioner) createGatewayClass(ctx context.Context, name string, config *ClassInfo) error {
 	gc := &apiv1.GatewayClass{}
 	err := r.Get(ctx, client.ObjectKey{Name: name}, gc)
-	if err != nil {
-		if r.metrics != nil && apierrors.IsNotFound(err) {
-			r.metrics.DecResourceCount(ns)
-		}
-
-		if !apierrors.IsNotFound(err) {
-			return err
-		}
-	}
-
-	if r.metrics != nil {
-		r.metrics.IncResourceCount(ns)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
 	}
 
 	gc = &apiv1.GatewayClass{

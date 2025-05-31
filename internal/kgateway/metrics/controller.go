@@ -33,24 +33,11 @@ var (
 		},
 		[]string{controllerNameLabel},
 	)
-	controllerResourceCount = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: metricsNamespace,
-			Subsystem: controllerSubsystem,
-			Name:      "resource_count",
-			Help:      "Current number of resources managed by the controller",
-		},
-		[]string{controllerNameLabel, "namespace"},
-	)
 )
 
 // ControllerRecorder defines the interface for recording controller metrics.
 type ControllerRecorder interface {
 	ReconcileStart() func(error)
-	IncResourceCount(namespace string)
-	DecResourceCount(namespace string)
-	SetResourceCount(namespace string, count int)
-	ResetResourceCounts()
 }
 
 // controllerMetrics provides metrics for controller operations.
@@ -58,7 +45,6 @@ type controllerMetrics struct {
 	controllerName       string
 	reconciliationsTotal *prometheus.CounterVec
 	reconcileDuration    *prometheus.HistogramVec
-	resourceCount        *prometheus.GaugeVec
 }
 
 // NewControllerRecorder creates a new ControllerMetrics instance.
@@ -67,7 +53,6 @@ func NewControllerRecorder(controllerName string) ControllerRecorder {
 		controllerName:       controllerName,
 		reconciliationsTotal: reconciliationsTotal,
 		reconcileDuration:    reconcileDuration,
-		resourceCount:        controllerResourceCount,
 	}
 
 	return m
@@ -91,24 +76,4 @@ func (m *controllerMetrics) ReconcileStart() func(error) {
 
 		m.reconciliationsTotal.WithLabelValues(m.controllerName, result).Inc()
 	}
-}
-
-// SetResourceCount updates the resource count gauge.
-func (m *controllerMetrics) SetResourceCount(namespace string, count int) {
-	m.resourceCount.WithLabelValues(m.controllerName, namespace).Set(float64(count))
-}
-
-// IncResourceCount increments the resource count gauge.
-func (m *controllerMetrics) IncResourceCount(namespace string) {
-	m.resourceCount.WithLabelValues(m.controllerName, namespace).Inc()
-}
-
-// DecResourceCount decrements the resource count gauge.
-func (m *controllerMetrics) DecResourceCount(namespace string) {
-	m.resourceCount.WithLabelValues(m.controllerName, namespace).Dec()
-}
-
-// ResetResourceCounts clears all resource counts.
-func (m *controllerMetrics) ResetResourceCounts() {
-	m.resourceCount.Reset()
 }

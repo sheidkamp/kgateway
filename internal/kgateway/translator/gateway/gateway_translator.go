@@ -48,7 +48,6 @@ func (t *translator) Translate(
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)
 
-	// Start metrics collection.
 	defer t.metrics.TranslationStart()(nil)
 
 	resCount := make(map[string]int)
@@ -70,7 +69,7 @@ func (t *translator) Translate(
 		})
 	}
 
-	setAttachedRoutes(gateway, routesForGw, reporter, resCount)
+	setAttachedRoutes(gateway, routesForGw, reporter)
 
 	listeners := listener.TranslateListeners(
 		kctx,
@@ -82,9 +81,7 @@ func (t *translator) Translate(
 		t.settings.ListenerTranslatorConfig,
 	)
 
-	for ns, count := range resCount {
-		t.metrics.SetResourceCount(ns, count)
-	}
+	t.metrics.SetResourceCount(gateway.Namespace, "Listener", len(listeners))
 
 	return &ir.GatewayIR{
 		SourceObject:         gateway,
@@ -94,10 +91,8 @@ func (t *translator) Translate(
 	}
 }
 
-func setAttachedRoutes(gateway *ir.Gateway, routesForGw *query.RoutesForGwResult, reporter reports.Reporter, resCount map[string]int) {
+func setAttachedRoutes(gateway *ir.Gateway, routesForGw *query.RoutesForGwResult, reporter reports.Reporter) {
 	for _, listener := range gateway.Listeners {
-		resCount[gateway.Namespace] += 1
-
 		parentReporter := listener.GetParentReporter(reporter)
 
 		availRoutes := 0

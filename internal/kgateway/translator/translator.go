@@ -102,7 +102,6 @@ func (s *CombinedTranslator) buildProxy(kctx krt.HandlerContext, ctx context.Con
 	stopwatch := utils.NewTranslatorStopWatch("CombinedTranslator")
 	stopwatch.Start()
 
-	// Start metrics collection.
 	defer s.metrics.TranslationStart()(nil)
 
 	var gatewayTranslator extensionsplug.KGwTranslator = s.gwtranslator

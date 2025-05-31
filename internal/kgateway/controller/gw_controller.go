@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -37,7 +36,6 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (re
 	log := log.FromContext(ctx).WithValues("gw", req.NamespacedName)
 	log.V(1).Info("reconciling request", "req", req)
 
-	// Start metrics collection.
 	if r.metrics != nil {
 		defer r.metrics.ReconcileStart()(rErr)
 	}
@@ -59,13 +57,7 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (re
 
 	var gw api.Gateway
 	if err := r.cli.Get(ctx, req.NamespacedName, &gw); err != nil {
-		if r.metrics != nil && apierrors.IsNotFound(err) {
-			r.metrics.DecResourceCount(req.Namespace)
-		}
-
 		return ctrl.Result{}, client.IgnoreNotFound(err)
-	} else if r.metrics != nil {
-		r.metrics.IncResourceCount(req.Namespace)
 	}
 
 	if gw.GetDeletionTimestamp() != nil {
@@ -164,10 +156,7 @@ func getDesiredAddresses(gw *api.Gateway, svc *corev1.Service) []api.GatewayStat
 		}
 
 		for _, specAddr := range gw.Spec.Addresses {
-			addr := api.GatewayStatusAddress{
-				Type:  specAddr.Type,
-				Value: specAddr.Value,
-			}
+			addr := api.GatewayStatusAddress(specAddr)
 			if !seen.Has(addr) {
 				ret = append(ret, addr)
 			}

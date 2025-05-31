@@ -40,17 +40,16 @@ var (
 			Name:      "resource_count",
 			Help:      "Current number of resources managed by the translator",
 		},
-		[]string{translatorNameLabel, "namespace"},
+		[]string{translatorNameLabel, "namespace", "resource"},
 	)
 )
 
 // TranslatorRecorder defines the interface for recording translator metrics.
 type TranslatorRecorder interface {
 	TranslationStart() func(error)
-	DecResourceCount(namespace string)
-	IncResourceCount(namespace string)
-	SetResourceCount(namespace string, count int)
-	ResetResourceCounts()
+	SetResourceCount(namespace, resource string, count int)
+	IncResourceCount(namespace, resource string)
+	DecResourceCount(namespace, resource string)
 }
 
 // translatorMetrics records metrics for translator operations.
@@ -93,21 +92,16 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 }
 
 // SetResourceCount updates the resource count gauge.
-func (m *translatorMetrics) SetResourceCount(namespace string, count int) {
-	m.resourceCount.WithLabelValues(m.translatorName, namespace).Set(float64(count))
+func (m *translatorMetrics) SetResourceCount(namespace, resource string, count int) {
+	m.resourceCount.WithLabelValues(m.translatorName, namespace, resource).Set(float64(count))
 }
 
 // IncResourceCount increments the resource count gauge.
-func (m *translatorMetrics) IncResourceCount(namespace string) {
-	m.resourceCount.WithLabelValues(m.translatorName, namespace).Inc()
+func (m *translatorMetrics) IncResourceCount(namespace, resource string) {
+	m.resourceCount.WithLabelValues(m.translatorName, namespace, resource).Inc()
 }
 
 // DecResourceCount decrements the resource count gauge.
-func (m *translatorMetrics) DecResourceCount(namespace string) {
-	m.resourceCount.WithLabelValues(m.translatorName, namespace).Dec()
-}
-
-// ResetResourceCounts clears all resource counts.
-func (m *translatorMetrics) ResetResourceCounts() {
-	m.resourceCount.Reset()
+func (m *translatorMetrics) DecResourceCount(namespace, resource string) {
+	m.resourceCount.WithLabelValues(m.translatorName, namespace, resource).Dec()
 }

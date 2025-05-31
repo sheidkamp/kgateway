@@ -21,7 +21,7 @@ func TestNewTranslatorMetrics(t *testing.T) {
 	// Use the metrics to generate some data.
 	finishFunc := m.TranslationStart()
 	finishFunc(nil)
-	m.SetResourceCount("default", 5)
+	m.SetResourceCount("default", "route", 5)
 
 	// Verify metrics are registered by checking if we can collect them.
 	metricFamilies, err := metrics.Registry.Gather()
@@ -129,8 +129,8 @@ func TestTranslatorResourceCount(t *testing.T) {
 	m := NewTranslatorRecorder("test-translator")
 
 	// Test SetResourceCount.
-	m.SetResourceCount("default", 5)
-	m.SetResourceCount("kube-system", 3)
+	m.SetResourceCount("default", "route", 5)
+	m.SetResourceCount("kube-system", "gateway", 3)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -142,24 +142,31 @@ func TestTranslatorResourceCount(t *testing.T) {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
-			namespaceValues := make(map[string]float64)
+			resourceValues := make(map[string]map[string]float64)
+
 			for _, metric := range mf.Metric {
-				assert.Equal(t, 2, len(metric.Label))
-				assert.Equal(t, "translator", *metric.Label[1].Name)
-				assert.Equal(t, "test-translator", *metric.Label[1].Value)
+				assert.Equal(t, 3, len(metric.Label))
 				assert.Equal(t, "namespace", *metric.Label[0].Name)
-				namespaceValues[*metric.Label[0].Value] = metric.Gauge.GetValue()
+				assert.Equal(t, "resource", *metric.Label[1].Name)
+				assert.Equal(t, "translator", *metric.Label[2].Name)
+				assert.Equal(t, "test-translator", *metric.Label[2].Value)
+
+				if _, exists := resourceValues[*metric.Label[1].Value]; !exists {
+					resourceValues[*metric.Label[1].Value] = make(map[string]float64)
+				}
+
+				resourceValues[*metric.Label[1].Value][*metric.Label[0].Value] = metric.Gauge.GetValue()
 			}
 
-			assert.Equal(t, float64(5), namespaceValues["default"])
-			assert.Equal(t, float64(3), namespaceValues["kube-system"])
+			assert.Equal(t, float64(5), resourceValues["route"]["default"])
+			assert.Equal(t, float64(3), resourceValues["gateway"]["kube-system"])
 		}
 	}
 
 	assert.True(t, found, "kgateway_translator_resource_count metric not found")
 
 	// Test IncResourceCount.
-	m.IncResourceCount("default")
+	m.IncResourceCount("default", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -175,7 +182,7 @@ func TestTranslatorResourceCount(t *testing.T) {
 	}
 
 	// Test DecResourceCount.
-	m.DecResourceCount("default")
+	m.DecResourceCount("default", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -187,18 +194,6 @@ func TestTranslatorResourceCount(t *testing.T) {
 					assert.Equal(t, float64(5), metric.Gauge.GetValue())
 				}
 			}
-		}
-	}
-
-	// Test ResetResourceCounts.
-	m.ResetResourceCounts()
-
-	metricFamilies, err = metrics.Registry.Gather()
-	require.NoError(t, err)
-
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resource_count" {
-			assert.Equal(t, 0, len(mf.Metric), "Expected no metrics after reset")
 		}
 	}
 }

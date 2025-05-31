@@ -70,9 +70,10 @@ type ProxySyncer struct {
 	waitForSync []cache.InformerSynced
 	ready       atomic.Bool
 
-	routeStatusMetrics   metrics.TranslatorRecorder
-	gatewayStatusMetrics metrics.TranslatorRecorder
-	policyStatusMetrics  metrics.TranslatorRecorder
+	routeStatusMetrics    metrics.TranslatorRecorder
+	gatewayStatusMetrics  metrics.TranslatorRecorder
+	listenerStatusMetrics metrics.TranslatorRecorder
+	policyStatusMetrics   metrics.TranslatorRecorder
 }
 
 type GatewayXdsResources struct {
@@ -145,17 +146,18 @@ func NewProxySyncer(
 	xdsCache envoycache.SnapshotCache,
 ) *ProxySyncer {
 	return &ProxySyncer{
-		controllerName:       controllerName,
-		commonCols:           commonCols,
-		mgr:                  mgr,
-		istioClient:          client,
-		proxyTranslator:      NewProxyTranslator(xdsCache),
-		uniqueClients:        uniqueClients,
-		translator:           translator.NewCombinedTranslator(ctx, mergedPlugins, commonCols),
-		plugins:              mergedPlugins,
-		routeStatusMetrics:   metrics.NewTranslatorRecorder("RouteStatusSyncer"),
-		gatewayStatusMetrics: metrics.NewTranslatorRecorder("GatewayStatusSyncer"),
-		policyStatusMetrics:  metrics.NewTranslatorRecorder("PolicyStatusSyncer"),
+		controllerName:        controllerName,
+		commonCols:            commonCols,
+		mgr:                   mgr,
+		istioClient:           client,
+		proxyTranslator:       NewProxyTranslator(xdsCache),
+		uniqueClients:         uniqueClients,
+		translator:            translator.NewCombinedTranslator(ctx, mergedPlugins, commonCols),
+		plugins:               mergedPlugins,
+		routeStatusMetrics:    metrics.NewTranslatorRecorder("RouteStatusSyncer"),
+		gatewayStatusMetrics:  metrics.NewTranslatorRecorder("GatewayStatusSyncer"),
+		listenerStatusMetrics: metrics.NewTranslatorRecorder("ListenerSetStatusSyncer"),
+		policyStatusMetrics:   metrics.NewTranslatorRecorder("PolicyStatusSyncer"),
 	}
 }
 
@@ -445,10 +447,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)
 
-	// Start metrics collection.
 	defer s.routeStatusMetrics.TranslationStart()(nil)
-
-	resCount := make(map[string]int)
 
 	// Helper function to sync route status with retry
 	syncStatusWithRetry := func(
@@ -520,6 +519,8 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	}
 
 	// Sync HTTPRoute statuses
+	resCount := make(map[string]int)
+
 	for rnn := range rm.HTTPRoutes {
 		resCount[rnn.Namespace]++
 
@@ -538,7 +539,13 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
+	for ns, count := range resCount {
+		s.routeStatusMetrics.SetResourceCount(ns, "HTTPRoute", count)
+	}
+
 	// Sync TCPRoute statuses
+	resCount = make(map[string]int)
+
 	for rnn := range rm.TCPRoutes {
 		resCount[rnn.Namespace]++
 
@@ -550,9 +557,15 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
+	for ns, count := range resCount {
+		s.routeStatusMetrics.SetResourceCount(ns, "TCPRoute", count)
+	}
+
 	// Sync TLSRoute statuses
+	resCount = make(map[string]int)
+
 	for rnn := range rm.TLSRoutes {
-		resCount[rnn.Namespace]++
+		s.gatewayStatusMetrics.IncResourceCount(rnn.Namespace, "TLSRoute")
 
 		err := syncStatusWithRetry(wellknown.TLSRouteKind, rnn, func() client.Object { return new(gwv1a2.TLSRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.TLSRouteKind)
@@ -562,7 +575,13 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
+	for ns, count := range resCount {
+		s.routeStatusMetrics.SetResourceCount(ns, "TLSRoute", count)
+	}
+
 	// Sync GRPCRoute statuses
+	resCount = make(map[string]int)
+
 	for rnn := range rm.GRPCRoutes {
 		resCount[rnn.Namespace]++
 
@@ -575,7 +594,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	}
 
 	for ns, count := range resCount {
-		s.gatewayStatusMetrics.SetResourceCount(ns, count)
+		s.routeStatusMetrics.SetResourceCount(ns, "GRPCRoute", count)
 	}
 }
 
@@ -584,7 +603,6 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 	stopwatch := utils.NewTranslatorStopWatch("GatewayStatusSyncer")
 	stopwatch.Start()
 
-	// Start metrics collection.
 	defer s.gatewayStatusMetrics.TranslationStart()(nil)
 
 	var resCount map[string]int
@@ -630,7 +648,7 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 	logger.Debug("synced gw status for gateways", "count", len(rm.Gateways), "duration", duration)
 
 	for ns, count := range resCount {
-		s.gatewayStatusMetrics.SetResourceCount(ns, count)
+		s.gatewayStatusMetrics.SetResourceCount(ns, "Gateway", count)
 	}
 }
 
@@ -638,6 +656,8 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 func (s *ProxySyncer) syncListenerSetStatus(ctx context.Context, logger *slog.Logger, rm reports.ReportMap) {
 	stopwatch := utils.NewTranslatorStopWatch("ListenerSetStatusSyncer")
 	stopwatch.Start()
+
+	defer s.listenerStatusMetrics.TranslationStart()(nil)
 
 	// TODO: retry within loop per LS rathen that as a full block
 	err := retry.Do(func() error {
@@ -680,7 +700,6 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)
 
-	// Start metrics collection.
 	defer s.policyStatusMetrics.TranslationStart()(nil)
 
 	resCount := make(map[string]int)
@@ -728,7 +747,7 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 	}
 
 	for ns, count := range resCount {
-		s.gatewayStatusMetrics.SetResourceCount(ns, count)
+		s.gatewayStatusMetrics.SetResourceCount(ns, "Policy", count)
 	}
 }
 

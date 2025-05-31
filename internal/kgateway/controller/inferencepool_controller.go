@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,20 +27,13 @@ func (r *inferencePoolReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	log := log.FromContext(ctx).WithValues("inferencepool", req.NamespacedName)
 	log.V(1).Info("reconciling request", "request", req)
 
-	// Start metrics collection.
 	if r.metrics != nil {
 		defer r.metrics.ReconcileStart()(rErr)
 	}
 
 	pool := new(infextv1a2.InferencePool)
 	if err := r.cli.Get(ctx, req.NamespacedName, pool); err != nil {
-		if r.metrics != nil && apierrors.IsNotFound(err) {
-			r.metrics.DecResourceCount(req.Namespace)
-		}
-
 		return ctrl.Result{}, client.IgnoreNotFound(err)
-	} else if r.metrics != nil {
-		r.metrics.IncResourceCount(req.Namespace)
 	}
 
 	if pool.GetDeletionTimestamp() != nil {
