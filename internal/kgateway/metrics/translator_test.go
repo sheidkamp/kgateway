@@ -66,10 +66,10 @@ func TestTranslationStart_Success(t *testing.T) {
 			// Check labels and value.
 			metric := mf.Metric[0]
 			assert.Equal(t, 2, len(metric.Label))
-			assert.Equal(t, "translator", *metric.Label[1].Name)
-			assert.Equal(t, "test-translator", *metric.Label[1].Value)
 			assert.Equal(t, "result", *metric.Label[0].Name)
 			assert.Equal(t, "success", *metric.Label[0].Value)
+			assert.Equal(t, "translator", *metric.Label[1].Name)
+			assert.Equal(t, "test-translator", *metric.Label[1].Value)
 			assert.Equal(t, float64(1), metric.Counter.GetValue())
 		}
 	}
@@ -112,10 +112,10 @@ func TestTranslationStart_Error(t *testing.T) {
 			// Check labels and value.
 			metric := mf.Metric[0]
 			assert.Equal(t, 2, len(metric.Label))
-			assert.Equal(t, "translator", *metric.Label[1].Name)
-			assert.Equal(t, "test-translator", *metric.Label[1].Value)
 			assert.Equal(t, "result", *metric.Label[0].Name)
 			assert.Equal(t, "error", *metric.Label[0].Value)
+			assert.Equal(t, "translator", *metric.Label[1].Name)
+			assert.Equal(t, "test-translator", *metric.Label[1].Value)
 			assert.Equal(t, float64(1), metric.Counter.GetValue())
 		}
 	}

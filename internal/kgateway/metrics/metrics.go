@@ -15,5 +15,8 @@ func init() {
 		translationsTotal,
 		translationDuration,
 		translatorResourceCount,
+		snapshotSyncsTotal,
+		snapshotSyncDuration,
+		snapshotResourceCount,
 	)
 }

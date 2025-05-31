@@ -19,7 +19,7 @@ var (
 			Name:      "translations_total",
 			Help:      "Total translations",
 		},
-		[]string{translatorNameLabel, "result"},
+		[]string{"result", translatorNameLabel},
 	)
 	translationDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -40,7 +40,7 @@ var (
 			Name:      "resource_count",
 			Help:      "Current number of resources managed by the translator",
 		},
-		[]string{translatorNameLabel, "namespace", "resource"},
+		[]string{"namespace", "resource", translatorNameLabel},
 	)
 )
 
@@ -87,21 +87,21 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 			result = "error"
 		}
 
-		m.translationsTotal.WithLabelValues(m.translatorName, result).Inc()
+		m.translationsTotal.WithLabelValues(result, m.translatorName).Inc()
 	}
 }
 
 // SetResourceCount updates the resource count gauge.
 func (m *translatorMetrics) SetResourceCount(namespace, resource string, count int) {
-	m.resourceCount.WithLabelValues(m.translatorName, namespace, resource).Set(float64(count))
+	m.resourceCount.WithLabelValues(namespace, resource, m.translatorName).Set(float64(count))
 }
 
 // IncResourceCount increments the resource count gauge.
 func (m *translatorMetrics) IncResourceCount(namespace, resource string) {
-	m.resourceCount.WithLabelValues(m.translatorName, namespace, resource).Inc()
+	m.resourceCount.WithLabelValues(namespace, resource, m.translatorName).Inc()
 }
 
 // DecResourceCount decrements the resource count gauge.
 func (m *translatorMetrics) DecResourceCount(namespace, resource string) {
-	m.resourceCount.WithLabelValues(m.translatorName, namespace, resource).Dec()
+	m.resourceCount.WithLabelValues(namespace, resource, m.translatorName).Dec()
 }

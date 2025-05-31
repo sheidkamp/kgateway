@@ -163,11 +163,13 @@ func NewProxySyncer(
 
 type ProxyTranslator struct {
 	xdsCache envoycache.SnapshotCache
+	metrics  metrics.SnapshotRecorder
 }
 
 func NewProxyTranslator(xdsCache envoycache.SnapshotCache) ProxyTranslator {
 	return ProxyTranslator{
 		xdsCache: xdsCache,
+		metrics:  metrics.NewSnapshotRecorder("ProxyTranslator"),
 	}
 }
 
@@ -421,14 +423,32 @@ func (s *ProxySyncer) Start(ctx context.Context) error {
 
 	s.perclientSnapCollection.RegisterBatch(func(o []krt.Event[XdsSnapWrapper], initialSync bool) {
 		for _, e := range o {
+			var finish func(error)
+
+			finish = s.proxyTranslator.metrics.SnapshotStart(e.Latest().proxyKey)
+
 			if e.Event != controllers.EventDelete {
 				snapWrap := e.Latest()
 				s.proxyTranslator.syncXds(ctx, snapWrap)
+
+				count := 0
+
+				for _, r := range snapWrap.snap.Resources {
+					count += len(r.Items)
+				}
+
+				s.proxyTranslator.metrics.SetResourceCount(e.Latest().proxyKey, count)
 			} else {
 				// key := e.Latest().proxyKey
 				// if _, err := s.proxyTranslator.xdsCache.GetSnapshot(key); err == nil {
 				// 	s.proxyTranslator.xdsCache.ClearSnapshot(e.Latest().proxyKey)
 				// }
+
+				s.proxyTranslator.metrics.SetResourceCount(e.Latest().proxyKey, 0)
+			}
+
+			if finish != nil {
+				finish(nil)
 			}
 		}
 	}, true)
@@ -565,7 +585,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	resCount = make(map[string]int)
 
 	for rnn := range rm.TLSRoutes {
-		s.gatewayStatusMetrics.IncResourceCount(rnn.Namespace, "TLSRoute")
+		resCount[rnn.Namespace]++
 
 		err := syncStatusWithRetry(wellknown.TLSRouteKind, rnn, func() client.Object { return new(gwv1a2.TLSRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.TLSRouteKind)

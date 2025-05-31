@@ -14,4 +14,7 @@ func setupTest() {
 	translationsTotal.Reset()
 	translationDuration.Reset()
 	translatorResourceCount.Reset()
+	snapshotSyncsTotal.Reset()
+	snapshotSyncDuration.Reset()
+	snapshotResourceCount.Reset()
 }
