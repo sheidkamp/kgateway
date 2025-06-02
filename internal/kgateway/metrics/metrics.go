@@ -22,6 +22,11 @@ func init() {
 		panic("failed to register reconcileDuration metric: " + err.Error())
 	}
 
+	if err := metrics.Registry.Register(startupsTotal); err != nil &&
+		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
+		panic("failed to register startupsTotal metric: " + err.Error())
+	}
+
 	if err := metrics.Registry.Register(translationsTotal); err != nil &&
 		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
 		panic("failed to register translationsTotal metric: " + err.Error())

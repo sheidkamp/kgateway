@@ -88,8 +88,11 @@ func NewBaseGatewayController(ctx context.Context, cfg GatewayConfig) error {
 			cli:          cfg.Mgr.GetClient(),
 			scheme:       cfg.Mgr.GetScheme(),
 			customEvents: make(chan event.TypedGenericEvent[ir.Gateway], 1024),
+			metrics:      metrics.NewControllerRecorder(cfg.ControllerName),
 		},
 	}
+
+	controllerBuilder.reconciler.metrics.IncStartups()
 
 	return run(
 		ctx,
@@ -117,8 +120,11 @@ func NewBaseInferencePoolController(ctx context.Context, poolCfg *InferencePoolC
 			cli:          poolCfg.Mgr.GetClient(),
 			scheme:       poolCfg.Mgr.GetScheme(),
 			customEvents: make(chan event.TypedGenericEvent[ir.Gateway], 1024),
+			metrics:      metrics.NewControllerRecorder(poolCfg.ControllerName),
 		},
 	}
+
+	controllerBuilder.reconciler.metrics.IncStartups()
 
 	return run(ctx, controllerBuilder.watchInferencePool)
 }
@@ -480,10 +486,15 @@ type controllerReconciler struct {
 	cli          client.Client
 	scheme       *runtime.Scheme
 	customEvents chan event.TypedGenericEvent[ir.Gateway]
+	metrics      metrics.ControllerRecorder
 }
 
-func (r *controllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *controllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {
 	log := log.FromContext(ctx).WithValues("gwclass", req.NamespacedName)
+
+	if r.metrics != nil {
+		defer r.metrics.ReconcileStart()(rErr)
+	}
 
 	gwclass := &apiv1.GatewayClass{}
 	if err := r.cli.Get(ctx, req.NamespacedName, gwclass); err != nil {
