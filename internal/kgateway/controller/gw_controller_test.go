@@ -112,9 +112,12 @@ var _ = Describe("GwController", func() {
 
 			Eventually(func() bool {
 				if probs, err := testutil.CollectAndLint(metrics.GetReconciliationsTotal(),
-					"kgateway_controller_reconciliations_total"); err != nil || len(probs) > 0 {
+					"kgateway_controller_reconciliations_total",
+					"kgateway_controller_reconcile_duration_seconds",
+				); err != nil || len(probs) > 0 {
 					return false
 				}
+
 				return true
 			}, timeout, interval).Should(BeTrue(), "metrics not collected")
 
