@@ -43,6 +43,9 @@ spec:
             - containerPort: {{ .Values.controller.service.ports.health }}
               name: health
               protocol: TCP
+            - containerPort: {{ .Values.controller.service.ports.metrics }}
+              name: metrics
+              protocol: TCP
           readinessProbe:
             httpGet:
               path: /readyz
