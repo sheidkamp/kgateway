@@ -15,7 +15,7 @@ import (
 )
 
 func setupMetricsTest() {
-	metrics.ResetTranslatorMetrics()
+	metrics.ResetStatusSyncMetrics()
 	metrics.ResetSnapshotMetrics()
 }
 
@@ -37,10 +37,10 @@ func TestProxySyncerMetrics(t *testing.T) {
 
 func testProxySyncerMetrics(t *testing.T) {
 	proxySyncer := &ProxySyncer{
-		routeStatusMetrics:    metrics.NewTranslatorRecorder("RouteStatusSyncer"),
-		gatewayStatusMetrics:  metrics.NewTranslatorRecorder("GatewayStatusSyncer"),
-		listenerStatusMetrics: metrics.NewTranslatorRecorder("ListenerSetStatusSyncer"),
-		policyStatusMetrics:   metrics.NewTranslatorRecorder("PolicyStatusSyncer"),
+		routeStatusMetrics:    metrics.NewStatusSyncRecorder("RouteStatusSyncer"),
+		gatewayStatusMetrics:  metrics.NewStatusSyncRecorder("GatewayStatusSyncer"),
+		listenerStatusMetrics: metrics.NewStatusSyncRecorder("ListenerSetStatusSyncer"),
+		policyStatusMetrics:   metrics.NewStatusSyncRecorder("PolicyStatusSyncer"),
 	}
 
 	testRouteMetrics(t, proxySyncer)
@@ -50,7 +50,7 @@ func testProxySyncerMetrics(t *testing.T) {
 }
 
 func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	finish := proxySyncer.routeStatusMetrics.TranslationStart()
+	finish := proxySyncer.routeStatusMetrics.StatusSyncStart()
 	finish(nil)
 
 	proxySyncer.routeStatusMetrics.SetResources("default", "HTTPRoute", 5)
@@ -63,7 +63,7 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	`
 
 	err := testutil.CollectAndCompare(
-		metrics.GetTranslationsTotal(),
+		metrics.GetStatusSyncsTotal(),
 		strings.NewReader(expectedTranslationCounter),
 		"kgateway_translator_translations_total",
 	)
@@ -77,7 +77,7 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	`
 
 	err = testutil.CollectAndCompare(
-		metrics.GetTranslatorResources(),
+		metrics.GetStatusSyncResources(),
 		strings.NewReader(expectedResourceGauge),
 		"kgateway_translator_resources",
 	)
@@ -85,7 +85,7 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 }
 
 func testGatewayMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	finish := proxySyncer.gatewayStatusMetrics.TranslationStart()
+	finish := proxySyncer.gatewayStatusMetrics.StatusSyncStart()
 	finish(errors.New("gateway sync error"))
 
 	proxySyncer.gatewayStatusMetrics.SetResources("default", "Gateway", 2)
@@ -139,7 +139,7 @@ func testListenerMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 }
 
 func testPolicyMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	finish := proxySyncer.policyStatusMetrics.TranslationStart()
+	finish := proxySyncer.policyStatusMetrics.StatusSyncStart()
 	finish(nil)
 
 	proxySyncer.policyStatusMetrics.SetResources("default", "Policy", 7)
@@ -238,10 +238,10 @@ func testProxyTranslatorSnapshotMetrics(t *testing.T) {
 }
 
 func testMetricsLinting(t *testing.T) {
-	routeRecorder := metrics.NewTranslatorRecorder("TestTranslator")
+	routeRecorder := metrics.NewStatusSyncRecorder("TestTranslator")
 	snapshotRecorder := metrics.NewSnapshotRecorder("TestSnapshot")
 
-	finish := routeRecorder.TranslationStart()
+	finish := routeRecorder.StatusSyncStart()
 	finish(nil)
 
 	routeRecorder.SetResources("default", "HTTPRoute", 1)
@@ -253,9 +253,9 @@ func testMetricsLinting(t *testing.T) {
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(
-		metrics.GetTranslationsTotal(),
-		metrics.GetTranslationDuration(),
-		metrics.GetTranslatorResources(),
+		metrics.GetStatusSyncsTotal(),
+		metrics.GetStatusSyncDuration(),
+		metrics.GetStatusSyncResources(),
 		metrics.GetSnapshotSyncsTotal(),
 		metrics.GetSnapshotSyncDuration(),
 		metrics.GetSnapshotResources(),

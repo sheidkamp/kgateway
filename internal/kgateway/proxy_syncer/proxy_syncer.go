@@ -70,10 +70,10 @@ type ProxySyncer struct {
 	waitForSync []cache.InformerSynced
 	ready       atomic.Bool
 
-	routeStatusMetrics    metrics.TranslatorRecorder
-	gatewayStatusMetrics  metrics.TranslatorRecorder
-	listenerStatusMetrics metrics.TranslatorRecorder
-	policyStatusMetrics   metrics.TranslatorRecorder
+	routeStatusMetrics    metrics.StatusSyncRecorder
+	gatewayStatusMetrics  metrics.StatusSyncRecorder
+	listenerStatusMetrics metrics.StatusSyncRecorder
+	policyStatusMetrics   metrics.StatusSyncRecorder
 }
 
 type GatewayXdsResources struct {
@@ -154,10 +154,10 @@ func NewProxySyncer(
 		uniqueClients:         uniqueClients,
 		translator:            translator.NewCombinedTranslator(ctx, mergedPlugins, commonCols),
 		plugins:               mergedPlugins,
-		routeStatusMetrics:    metrics.NewTranslatorRecorder("RouteStatusSyncer"),
-		gatewayStatusMetrics:  metrics.NewTranslatorRecorder("GatewayStatusSyncer"),
-		listenerStatusMetrics: metrics.NewTranslatorRecorder("ListenerSetStatusSyncer"),
-		policyStatusMetrics:   metrics.NewTranslatorRecorder("PolicyStatusSyncer"),
+		routeStatusMetrics:    metrics.NewStatusSyncRecorder("RouteStatusSyncer"),
+		gatewayStatusMetrics:  metrics.NewStatusSyncRecorder("GatewayStatusSyncer"),
+		listenerStatusMetrics: metrics.NewStatusSyncRecorder("ListenerSetStatusSyncer"),
+		policyStatusMetrics:   metrics.NewStatusSyncRecorder("PolicyStatusSyncer"),
 	}
 }
 
@@ -465,7 +465,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)
 
-	defer s.routeStatusMetrics.TranslationStart()(nil)
+	defer s.routeStatusMetrics.StatusSyncStart()(nil)
 
 	// Helper function to sync route status with retry
 	syncStatusWithRetry := func(
@@ -629,7 +629,7 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 	stopwatch := utils.NewTranslatorStopWatch("GatewayStatusSyncer")
 	stopwatch.Start()
 
-	defer s.gatewayStatusMetrics.TranslationStart()(nil)
+	defer s.gatewayStatusMetrics.StatusSyncStart()(nil)
 
 	var resCount map[string]int
 
@@ -685,7 +685,7 @@ func (s *ProxySyncer) syncListenerSetStatus(ctx context.Context, logger *slog.Lo
 	stopwatch := utils.NewTranslatorStopWatch("ListenerSetStatusSyncer")
 	stopwatch.Start()
 
-	defer s.listenerStatusMetrics.TranslationStart()(nil)
+	defer s.listenerStatusMetrics.StatusSyncStart()(nil)
 
 	// TODO: retry within loop per LS rathen that as a full block
 	err := retry.Do(func() error {
@@ -728,7 +728,7 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)
 
-	defer s.policyStatusMetrics.TranslationStart()(nil)
+	defer s.policyStatusMetrics.StatusSyncStart()(nil)
 
 	resCount := make(map[string]int)
 

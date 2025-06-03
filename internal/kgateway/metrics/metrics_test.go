@@ -9,7 +9,9 @@ func TestMain(m *testing.M) {
 }
 
 func setupTest() {
+	ResetCollectionMetrics()
 	ResetControllerMetrics()
 	ResetTranslatorMetrics()
+	ResetStatusSyncMetrics()
 	ResetSnapshotMetrics()
 }

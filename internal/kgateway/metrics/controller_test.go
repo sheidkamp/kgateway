@@ -19,11 +19,9 @@ func TestNewControllerMetrics(t *testing.T) {
 	assert.IsType(t, &controllerMetrics{}, m)
 	assert.Equal(t, controllerName, (m.(*controllerMetrics)).controllerName)
 
-	// Use the metrics to generate some data.
 	finishFunc := m.ReconcileStart()
 	finishFunc(nil)
 
-	// Verify metrics are registered by checking if we can collect them.
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
 
@@ -47,7 +45,6 @@ func TestReconcileStart_Success(t *testing.T) {
 
 	m := NewControllerRecorder("test-controller")
 
-	// Simulate successful reconcile.
 	finishFunc := m.ReconcileStart()
 	time.Sleep(10 * time.Millisecond)
 	finishFunc(nil)
@@ -62,7 +59,6 @@ func TestReconcileStart_Success(t *testing.T) {
 			found = true
 			assert.Equal(t, 1, len(mf.Metric))
 
-			// Check labels and value.
 			metric := mf.Metric[0]
 			assert.Equal(t, 2, len(metric.Label))
 			assert.Equal(t, "controller", *metric.Label[0].Name)
@@ -75,7 +71,6 @@ func TestReconcileStart_Success(t *testing.T) {
 
 	assert.True(t, found, "kgateway_controller_reconciliations_total metric not found")
 
-	// Check that duration was recorded (should be > 0).
 	var durationFound bool
 
 	for _, mf := range metricFamilies {
@@ -95,7 +90,6 @@ func TestReconcileStart_Error(t *testing.T) {
 
 	m := NewControllerRecorder("test-controller")
 
-	// Simulate failed reconcile.
 	finishFunc := m.ReconcileStart()
 	finishFunc(assert.AnError)
 
@@ -108,7 +102,6 @@ func TestReconcileStart_Error(t *testing.T) {
 			found = true
 			assert.Equal(t, 1, len(mf.Metric))
 
-			// Check labels and value.
 			metric := mf.Metric[0]
 			assert.Equal(t, 2, len(metric.Label))
 			assert.Equal(t, "controller", *metric.Label[0].Name)

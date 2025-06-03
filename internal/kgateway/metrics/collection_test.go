@@ -1,0 +1,210 @@
+package metrics
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
+)
+
+func TestNewCollectionMetrics(t *testing.T) {
+	setupTest()
+
+	collectionName := "test-collection"
+	m := NewCollectionRecorder(collectionName)
+
+	assert.IsType(t, &collectionMetrics{}, m)
+	assert.Equal(t, collectionName, (m.(*collectionMetrics)).collectionName)
+
+	finishFunc := m.TransformStart()
+	finishFunc(nil)
+	m.SetResources("default", "test", 5)
+
+	metricFamilies, err := metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	expectedMetrics := []string{
+		"kgateway_collection_transforms_total",
+		"kgateway_collection_transform_duration_seconds",
+		"kgateway_collection_resources",
+	}
+
+	foundMetrics := make(map[string]bool)
+	for _, mf := range metricFamilies {
+		foundMetrics[*mf.Name] = true
+	}
+
+	for _, expected := range expectedMetrics {
+		assert.True(t, foundMetrics[expected], "Expected metric %s not found", expected)
+	}
+}
+
+func TestTransformStart_Success(t *testing.T) {
+	setupTest()
+
+	m := NewCollectionRecorder("test-collection")
+
+	finishFunc := m.TransformStart()
+	time.Sleep(10 * time.Millisecond)
+	finishFunc(nil)
+
+	metricFamilies, err := metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	var found bool
+
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_transforms_total" {
+			found = true
+			assert.Equal(t, 1, len(mf.Metric))
+
+			metric := mf.Metric[0]
+			assert.Equal(t, 2, len(metric.Label))
+			assert.Equal(t, "collection", *metric.Label[0].Name)
+			assert.Equal(t, "test-collection", *metric.Label[0].Value)
+			assert.Equal(t, "result", *metric.Label[1].Name)
+			assert.Equal(t, "success", *metric.Label[1].Value)
+			assert.Equal(t, float64(1), metric.Counter.GetValue())
+		}
+	}
+
+	assert.True(t, found, "kgateway_collection_transforms_total metric not found")
+
+	var durationFound bool
+
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_transform_duration_seconds" {
+			durationFound = true
+			assert.Equal(t, 1, len(mf.Metric))
+			assert.True(t, *mf.Metric[0].Histogram.SampleCount > 0)
+			assert.True(t, *mf.Metric[0].Histogram.SampleSum > 0)
+		}
+	}
+
+	assert.True(t, durationFound, "kgateway_collection_transform_duration_seconds metric not found")
+}
+
+func TestTransformStart_Error(t *testing.T) {
+	setupTest()
+
+	m := NewCollectionRecorder("test-collection")
+
+	finishFunc := m.TransformStart()
+	finishFunc(assert.AnError)
+
+	metricFamilies, err := metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	var found bool
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_transforms_total" {
+			found = true
+			assert.Equal(t, 1, len(mf.Metric))
+
+			metric := mf.Metric[0]
+			assert.Equal(t, 2, len(metric.Label))
+			assert.Equal(t, "collection", *metric.Label[0].Name)
+			assert.Equal(t, "test-collection", *metric.Label[0].Value)
+			assert.Equal(t, "result", *metric.Label[1].Name)
+			assert.Equal(t, "error", *metric.Label[1].Value)
+			assert.Equal(t, float64(1), metric.Counter.GetValue())
+		}
+	}
+
+	assert.True(t, found, "kgateway_collection_transforms_total metric not found")
+}
+
+func TestCollectionResources(t *testing.T) {
+	setupTest()
+
+	m := NewCollectionRecorder("test-collection")
+
+	// Test SetResources.
+	m.SetResources("default", "test", 5)
+	m.SetResources("kube-system", "test", 3)
+
+	metricFamilies, err := metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	var found bool
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_resources" {
+			found = true
+			assert.Equal(t, 2, len(mf.Metric))
+
+			resourceValues := make(map[string]map[string]float64)
+
+			for _, metric := range mf.Metric {
+				assert.Equal(t, 3, len(metric.Label))
+				assert.Equal(t, "collection", *metric.Label[0].Name)
+				assert.Equal(t, "name", *metric.Label[1].Name)
+				assert.Equal(t, "namespace", *metric.Label[2].Name)
+
+				if _, exists := resourceValues[*metric.Label[2].Value]; !exists {
+					resourceValues[*metric.Label[2].Value] = make(map[string]float64)
+				}
+
+				resourceValues[*metric.Label[2].Value][*metric.Label[1].Value] = metric.Gauge.GetValue()
+			}
+
+			assert.Equal(t, float64(5), resourceValues["default"]["test"])
+			assert.Equal(t, float64(3), resourceValues["kube-system"]["test"])
+		}
+	}
+
+	assert.True(t, found, "kgateway_collection_resources metric not found")
+
+	// Test IncResources.
+	m.IncResources("default", "test")
+
+	metricFamilies, err = metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_resources" {
+			for _, metric := range mf.Metric {
+				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
+					assert.Equal(t, float64(6), metric.Gauge.GetValue())
+				}
+			}
+		}
+	}
+
+	// Test DecResources.
+	m.DecResources("default", "test")
+
+	metricFamilies, err = metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_resources" {
+			for _, metric := range mf.Metric {
+				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
+					assert.Equal(t, float64(5), metric.Gauge.GetValue())
+				}
+			}
+		}
+	}
+
+	// Test ResetResources.
+	m.ResetResources("default", "test")
+
+	metricFamilies, err = metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	found = false
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_resources" {
+			found = true
+			for _, metric := range mf.Metric {
+				if len(metric.Label) > 0 && *metric.Label[1].Value == "route" {
+					assert.Equal(t, float64(0), metric.Gauge.GetValue())
+				}
+			}
+		}
+	}
+
+	require.True(t, found, "kgateway_collection_resources metric not found after reset")
+}

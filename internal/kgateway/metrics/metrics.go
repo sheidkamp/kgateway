@@ -10,46 +10,35 @@ import (
 
 const metricsNamespace = "kgateway"
 
+var (
+	metricsToRegister = map[string]prometheus.Collector{
+		"transformsTotal":      transformsTotal,
+		"transformDuration":    transformDuration,
+		"collectionResources":  collectionResources,
+		"reconciliationsTotal": reconciliationsTotal,
+		"reconcileDuration":    reconcileDuration,
+		"startupsTotal":        startupsTotal,
+		"statusSyncsTotal":     statusSyncsTotal,
+		"statusSyncDuration":   statusSyncDuration,
+		"statusSyncResources":  statusSyncResources,
+		"translationsTotal":    translationsTotal,
+		"translationDuration":  translationDuration,
+		"translatorResources":  translatorResources,
+		"snapshotSyncsTotal":   snapshotSyncsTotal,
+		"snapshotSyncDuration": snapshotSyncDuration,
+		"snapshotResources":    snapshotResources,
+	}
+)
+
+func registerMetrics() {
+	for name, metric := range metricsToRegister {
+		if err := metrics.Registry.Register(metric); err != nil &&
+			!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
+			panic("failed to register " + name + " metric: " + err.Error())
+		}
+	}
+}
+
 func init() {
-	// Register the metrics with the global registry.
-	if err := metrics.Registry.Register(reconciliationsTotal); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register reconciliationsTotal metric: " + err.Error())
-	}
-
-	if err := metrics.Registry.Register(reconcileDuration); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register reconcileDuration metric: " + err.Error())
-	}
-
-	if err := metrics.Registry.Register(startupsTotal); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register startupsTotal metric: " + err.Error())
-	}
-
-	if err := metrics.Registry.Register(translationsTotal); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register translationsTotal metric: " + err.Error())
-	}
-
-	if err := metrics.Registry.Register(translationDuration); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register translationDuration metric: " + err.Error())
-	}
-	if err := metrics.Registry.Register(translatorResources); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register translatorResources metric: " + err.Error())
-	}
-	if err := metrics.Registry.Register(snapshotSyncsTotal); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register snapshotSyncsTotal metric: " + err.Error())
-	}
-	if err := metrics.Registry.Register(snapshotSyncDuration); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register snapshotSyncDuration metric: " + err.Error())
-	}
-	if err := metrics.Registry.Register(snapshotResources); err != nil &&
-		!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
-		panic("failed to register snapshotResources metric: " + err.Error())
-	}
+	registerMetrics()
 }

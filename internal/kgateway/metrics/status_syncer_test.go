@@ -9,26 +9,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-func TestNewTranslatorMetrics(t *testing.T) {
+func TestNewStatusSyncerMetrics(t *testing.T) {
 	setupTest()
 
-	translatorName := "test-translator"
-	m := NewTranslatorRecorder(translatorName)
+	syncerName := "test-syncer"
+	m := NewStatusSyncRecorder(syncerName)
 
-	assert.IsType(t, &translatorMetrics{}, m)
-	assert.Equal(t, translatorName, (m.(*translatorMetrics)).translatorName)
+	assert.IsType(t, &statusSyncMetrics{}, m)
+	assert.Equal(t, syncerName, (m.(*statusSyncMetrics)).syncerName)
 
-	finishFunc := m.TranslationStart()
+	finishFunc := m.StatusSyncStart()
 	finishFunc(nil)
-	m.SetResources("default", "test", "route", 5)
+	m.SetResources("default", "route", 5)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	expectedMetrics := []string{
-		"kgateway_translator_translations_total",
-		"kgateway_translator_translation_duration_seconds",
-		"kgateway_translator_resources",
+		"kgateway_status_syncer_status_syncs_total",
+		"kgateway_status_syncer_status_sync_duration_seconds",
+		"kgateway_status_syncer_resources",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -41,12 +41,12 @@ func TestNewTranslatorMetrics(t *testing.T) {
 	}
 }
 
-func TestTranslationStart_Success(t *testing.T) {
+func TestStatusSyncStart_Success(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorRecorder("test-translator")
+	m := NewStatusSyncRecorder("test-syncer")
 
-	finishFunc := m.TranslationStart()
+	finishFunc := m.StatusSyncStart()
 	time.Sleep(10 * time.Millisecond)
 	finishFunc(nil)
 
@@ -56,7 +56,7 @@ func TestTranslationStart_Success(t *testing.T) {
 	var found bool
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_translations_total" {
+		if *mf.Name == "kgateway_status_syncer_status_syncs_total" {
 			found = true
 			assert.Equal(t, 1, len(mf.Metric))
 
@@ -64,18 +64,18 @@ func TestTranslationStart_Success(t *testing.T) {
 			assert.Equal(t, 2, len(metric.Label))
 			assert.Equal(t, "result", *metric.Label[0].Name)
 			assert.Equal(t, "success", *metric.Label[0].Value)
-			assert.Equal(t, "translator", *metric.Label[1].Name)
-			assert.Equal(t, "test-translator", *metric.Label[1].Value)
+			assert.Equal(t, "syncer", *metric.Label[1].Name)
+			assert.Equal(t, "test-syncer", *metric.Label[1].Value)
 			assert.Equal(t, float64(1), metric.Counter.GetValue())
 		}
 	}
 
-	assert.True(t, found, "kgateway_translator_translations_total metric not found")
+	assert.True(t, found, "kgateway_status_syncer_status_syncs_total metric not found")
 
 	var durationFound bool
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_translation_duration_seconds" {
+		if *mf.Name == "kgateway_status_syncer_status_sync_duration_seconds" {
 			durationFound = true
 			assert.Equal(t, 1, len(mf.Metric))
 			assert.True(t, *mf.Metric[0].Histogram.SampleCount > 0)
@@ -83,15 +83,15 @@ func TestTranslationStart_Success(t *testing.T) {
 		}
 	}
 
-	assert.True(t, durationFound, "kgateway_translator_translation_duration_seconds metric not found")
+	assert.True(t, durationFound, "kgateway_status_syncer_status_sync_duration_seconds metric not found")
 }
 
-func TestTranslationStart_Error(t *testing.T) {
+func TesStatusSyncStart_Error(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorRecorder("test-translator")
+	m := NewStatusSyncRecorder("test-syncer")
 
-	finishFunc := m.TranslationStart()
+	finishFunc := m.StatusSyncStart()
 	finishFunc(assert.AnError)
 
 	metricFamilies, err := metrics.Registry.Gather()
@@ -99,7 +99,7 @@ func TestTranslationStart_Error(t *testing.T) {
 
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_translations_total" {
+		if *mf.Name == "kgateway_status_syncer_status_syncs_total" {
 			found = true
 			assert.Equal(t, 1, len(mf.Metric))
 
@@ -107,68 +107,64 @@ func TestTranslationStart_Error(t *testing.T) {
 			assert.Equal(t, 2, len(metric.Label))
 			assert.Equal(t, "result", *metric.Label[0].Name)
 			assert.Equal(t, "error", *metric.Label[0].Value)
-			assert.Equal(t, "translator", *metric.Label[1].Name)
-			assert.Equal(t, "test-translator", *metric.Label[1].Value)
+			assert.Equal(t, "syncer", *metric.Label[1].Name)
+			assert.Equal(t, "test-syncer", *metric.Label[1].Value)
 			assert.Equal(t, float64(1), metric.Counter.GetValue())
 		}
 	}
 
-	assert.True(t, found, "kgateway_translator_translations_total metric not found")
+	assert.True(t, found, "kgateway_status_syncer_status_syncs_total metric not found")
 }
 
-func TestTranslatorResources(t *testing.T) {
+func TestStatusSyncerResources(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorRecorder("test-translator")
+	m := NewStatusSyncRecorder("test-syncer")
 
 	// Test SetResources.
-	m.SetResources("default", "test", "route", 5)
-	m.SetResources("kube-system", "test", "gateway", 3)
+	m.SetResources("default", "route", 5)
+	m.SetResources("kube-system", "gateway", 3)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources" {
+		if *mf.Name == "kgateway_status_syncer_resources" {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
-			resourceValues := make(map[string]map[string]map[string]float64)
+			resourceValues := make(map[string]map[string]float64)
 
 			for _, metric := range mf.Metric {
-				assert.Equal(t, 4, len(metric.Label))
-				assert.Equal(t, "name", *metric.Label[0].Name)
-				assert.Equal(t, "namespace", *metric.Label[1].Name)
-				assert.Equal(t, "resource", *metric.Label[2].Name)
-				assert.Equal(t, "translator", *metric.Label[3].Name)
+				assert.Equal(t, 3, len(metric.Label))
+				assert.Equal(t, "namespace", *metric.Label[0].Name)
+				assert.Equal(t, "resource", *metric.Label[1].Name)
+				assert.Equal(t, "syncer", *metric.Label[2].Name)
+				assert.Equal(t, "test-syncer", *metric.Label[2].Value)
 
 				if _, exists := resourceValues[*metric.Label[1].Value]; !exists {
-					resourceValues[*metric.Label[1].Value] = make(map[string]map[string]float64)
+					resourceValues[*metric.Label[1].Value] = make(map[string]float64)
 				}
 
-				if _, exists := resourceValues[*metric.Label[1].Value][*metric.Label[0].Value]; !exists {
-					resourceValues[*metric.Label[1].Value][*metric.Label[0].Value] = make(map[string]float64)
-				}
-
-				resourceValues[*metric.Label[1].Value][*metric.Label[0].Value][*metric.Label[2].Value] = metric.Gauge.GetValue()
+				resourceValues[*metric.Label[1].Value][*metric.Label[0].Value] = metric.Gauge.GetValue()
 			}
 
-			assert.Equal(t, float64(5), resourceValues["default"]["test"]["route"])
-			assert.Equal(t, float64(3), resourceValues["kube-system"]["test"]["gateway"])
+			assert.Equal(t, float64(5), resourceValues["route"]["default"])
+			assert.Equal(t, float64(3), resourceValues["gateway"]["kube-system"])
 		}
 	}
 
-	assert.True(t, found, "kgateway_translator_resources metric not found")
+	assert.True(t, found, "kgateway_status_syncer_resources metric not found")
 
 	// Test IncResources.
-	m.IncResources("default", "test", "route")
+	m.IncResources("default", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources" {
+		if *mf.Name == "kgateway_status_syncer_resources" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(6), metric.Gauge.GetValue())
@@ -178,13 +174,13 @@ func TestTranslatorResources(t *testing.T) {
 	}
 
 	// Test DecResources.
-	m.DecResources("default", "test", "route")
+	m.DecResources("default", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources" {
+		if *mf.Name == "kgateway_status_syncer_resources" {
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[0].Value == "default" {
 					assert.Equal(t, float64(5), metric.Gauge.GetValue())
@@ -194,14 +190,14 @@ func TestTranslatorResources(t *testing.T) {
 	}
 
 	// Test ResetResources.
-	m.ResetResources("default", "test")
+	m.ResetResources("route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	found = false
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_resources" {
+		if *mf.Name == "kgateway_status_syncer_resources" {
 			found = true
 			for _, metric := range mf.Metric {
 				if len(metric.Label) > 0 && *metric.Label[1].Value == "route" {
@@ -211,5 +207,5 @@ func TestTranslatorResources(t *testing.T) {
 		}
 	}
 
-	require.True(t, found, "kgateway_translator_resources metric not found after reset")
+	require.True(t, found, "kgateway_status_syncer_resources metric not found after reset")
 }

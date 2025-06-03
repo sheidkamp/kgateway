@@ -79,7 +79,7 @@ func (t *translator) Translate(
 		t.settings.ListenerTranslatorConfig,
 	)
 
-	t.metrics.SetResources(gateway.Namespace, "Listener", len(listeners))
+	t.metrics.SetResources(gateway.Namespace, gateway.Name, "Listener", len(listeners))
 
 	return &ir.GatewayIR{
 		SourceObject:         gateway,

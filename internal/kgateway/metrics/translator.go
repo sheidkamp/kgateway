@@ -41,17 +41,17 @@ var (
 			Name:      "resources",
 			Help:      "Current number of resources managed by the translator",
 		},
-		[]string{"namespace", "resource", translatorNameLabel},
+		[]string{"name", "namespace", "resource", translatorNameLabel},
 	)
 )
 
 // TranslatorRecorder defines the interface for recording translator metrics.
 type TranslatorRecorder interface {
 	TranslationStart() func(error)
-	ResetResources(resource string)
-	SetResources(namespace, resource string, count int)
-	IncResources(namespace, resource string)
-	DecResources(namespace, resource string)
+	ResetResources(namespace, name string)
+	SetResources(namespace, name, resource string, count int)
+	IncResources(namespace, name, resource string)
+	DecResources(namespace, name, resource string)
 }
 
 // translatorMetrics records metrics for translator operations.
@@ -60,7 +60,7 @@ type translatorMetrics struct {
 	translationsTotal   *prometheus.CounterVec
 	translationDuration *prometheus.HistogramVec
 	resources           *prometheus.GaugeVec
-	resourceNamespaces  map[string]map[string]struct{}
+	resourceNames       map[string]map[string]map[string]struct{}
 	resourcesLock       sync.Mutex
 }
 
@@ -71,7 +71,7 @@ func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
 		translationsTotal:   translationsTotal,
 		translationDuration: translationDuration,
 		resources:           translatorResources,
-		resourceNamespaces:  make(map[string]map[string]struct{}),
+		resourceNames:       make(map[string]map[string]map[string]struct{}),
 		resourcesLock:       sync.Mutex{},
 	}
 
@@ -98,38 +98,55 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 }
 
 // ResetResources resets the resource count gauge for a specified resource.
-func (m *translatorMetrics) ResetResources(resource string) {
+func (m *translatorMetrics) ResetResources(namespace, name string) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	for namespace := range m.resourceNamespaces[resource] {
-		m.resources.WithLabelValues(namespace, resource, m.translatorName).Set(0)
+	if _, exists := m.resourceNames[namespace]; !exists {
+		return
 	}
 
-	m.resourceNamespaces[resource] = make(map[string]struct{})
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		return
+	}
+
+	for resource := range m.resourceNames[namespace][name] {
+		m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Set(0)
+	}
+
+	delete(m.resourceNames[namespace], name)
+
+	if len(m.resourceNames[namespace]) == 0 {
+		delete(m.resourceNames, namespace)
+	}
 }
 
 // SetResources updates the resource count gauge.
-func (m *translatorMetrics) SetResources(namespace, resource string, count int) {
+func (m *translatorMetrics) SetResources(namespace, name, resource string, count int) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	if _, exists := m.resourceNamespaces[resource]; !exists {
-		m.resourceNamespaces[resource] = make(map[string]struct{})
+	if _, exists := m.resourceNames[namespace]; !exists {
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
 	}
 
-	m.resourceNamespaces[resource][namespace] = struct{}{}
-	m.resources.WithLabelValues(namespace, resource, m.translatorName).Set(float64(count))
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
+
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
+	m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Set(float64(count))
 }
 
 // IncResources increments the resource count gauge.
-func (m *translatorMetrics) IncResources(namespace, resource string) {
-	m.resources.WithLabelValues(namespace, resource, m.translatorName).Inc()
+func (m *translatorMetrics) IncResources(namespace, name, resource string) {
+	m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Inc()
 }
 
 // DecResources decrements the resource count gauge.
-func (m *translatorMetrics) DecResources(namespace, resource string) {
-	m.resources.WithLabelValues(namespace, resource, m.translatorName).Dec()
+func (m *translatorMetrics) DecResources(namespace, name, resource string) {
+	m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Dec()
 }
 
 // ResetTranslatorMetrics resets the translator metrics.
