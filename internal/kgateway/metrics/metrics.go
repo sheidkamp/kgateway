@@ -27,6 +27,8 @@ var (
 		"snapshotSyncsTotal":   snapshotSyncsTotal,
 		"snapshotSyncDuration": snapshotSyncDuration,
 		"snapshotResources":    snapshotResources,
+		"routeListenerCounts":  routeListenerCounts,
+		"routeDomainCounts":    routeDomainCounts,
 	}
 )
 

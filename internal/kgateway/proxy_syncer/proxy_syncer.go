@@ -74,6 +74,7 @@ type ProxySyncer struct {
 	gatewayStatusMetrics  metrics.StatusSyncRecorder
 	listenerStatusMetrics metrics.StatusSyncRecorder
 	policyStatusMetrics   metrics.StatusSyncRecorder
+	routeMetrics          metrics.RouteMetrics
 }
 
 type GatewayXdsResources struct {
@@ -158,6 +159,7 @@ func NewProxySyncer(
 		gatewayStatusMetrics:  metrics.NewStatusSyncRecorder("GatewayStatusSyncer"),
 		listenerStatusMetrics: metrics.NewStatusSyncRecorder("ListenerSetStatusSyncer"),
 		policyStatusMetrics:   metrics.NewStatusSyncRecorder("PolicyStatusSyncer"),
+		routeMetrics:          metrics.NewRouteRecorder(),
 	}
 }
 
@@ -499,30 +501,40 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		)
 	}
 
+	getStatusAndSetMetrics := func(route client.Object, routeType string) *gwv1.RouteStatus {
+		listenerCount := 0
+		status := rm.BuildRouteStatus(ctx, route, s.controllerName)
+		if status != nil {
+			listenerCount = len(status.Parents)
+		}
+		s.routeMetrics.SetListenerCount(route, routeType, listenerCount)
+		return status
+	}
+
 	// Helper function to build route status and update if needed
 	buildAndUpdateStatus := func(route client.Object, routeType string) error {
 		var status *gwv1.RouteStatus
 		switch r := route.(type) {
 		case *gwv1.HTTPRoute:
-			status = rm.BuildRouteStatus(ctx, r, s.controllerName)
+			status = getStatusAndSetMetrics(r, routeType)
 			if status == nil || isRouteStatusEqual(&r.Status.RouteStatus, status) {
 				return nil
 			}
 			r.Status.RouteStatus = *status
 		case *gwv1a2.TCPRoute:
-			status = rm.BuildRouteStatus(ctx, r, s.controllerName)
+			status = getStatusAndSetMetrics(r, routeType)
 			if status == nil || isRouteStatusEqual(&r.Status.RouteStatus, status) {
 				return nil
 			}
 			r.Status.RouteStatus = *status
 		case *gwv1a2.TLSRoute:
-			status = rm.BuildRouteStatus(ctx, r, s.controllerName)
+			status = getStatusAndSetMetrics(r, routeType)
 			if status == nil || isRouteStatusEqual(&r.Status.RouteStatus, status) {
 				return nil
 			}
 			r.Status.RouteStatus = *status
 		case *gwv1.GRPCRoute:
-			status = rm.BuildRouteStatus(ctx, r, s.controllerName)
+			status = getStatusAndSetMetrics(r, routeType)
 			if status == nil || isRouteStatusEqual(&r.Status.RouteStatus, status) {
 				return nil
 			}

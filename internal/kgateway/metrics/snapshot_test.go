@@ -1,4 +1,4 @@
-package metrics
+package metrics_test
 
 import (
 	"testing"
@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 func TestNewSnapshotMetrics(t *testing.T) {
@@ -14,9 +16,6 @@ func TestNewSnapshotMetrics(t *testing.T) {
 
 	snapshotName := "test-snapshot"
 	m := NewSnapshotRecorder(snapshotName)
-
-	assert.IsType(t, &snapshotMetrics{}, m)
-	assert.Equal(t, snapshotName, (m.(*snapshotMetrics)).snapshotName)
 
 	// Use the metrics to generate some data.
 	finishFunc := m.SnapshotStart("default")
