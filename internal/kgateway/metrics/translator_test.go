@@ -196,4 +196,24 @@ func TestTranslatorResources(t *testing.T) {
 			}
 		}
 	}
+
+	// Test ResetResources.
+	m.ResetResources("route")
+
+	metricFamilies, err = metrics.Registry.Gather()
+	require.NoError(t, err)
+
+	found = false
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_translator_resources" {
+			found = true
+			for _, metric := range mf.Metric {
+				if len(metric.Label) > 0 && *metric.Label[1].Value == "route" {
+					assert.Equal(t, float64(0), metric.Gauge.GetValue())
+				}
+			}
+		}
+	}
+
+	require.True(t, found, "kgateway_translator_resources metric not found after reset")
 }

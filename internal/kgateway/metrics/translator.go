@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -47,6 +48,7 @@ var (
 // TranslatorRecorder defines the interface for recording translator metrics.
 type TranslatorRecorder interface {
 	TranslationStart() func(error)
+	ResetResources(resource string)
 	SetResources(namespace, resource string, count int)
 	IncResources(namespace, resource string)
 	DecResources(namespace, resource string)
@@ -58,6 +60,8 @@ type translatorMetrics struct {
 	translationsTotal   *prometheus.CounterVec
 	translationDuration *prometheus.HistogramVec
 	resources           *prometheus.GaugeVec
+	resourceNamespaces  map[string]map[string]struct{}
+	resourcesLock       sync.Mutex
 }
 
 // NewTranslatorRecorder creates a new recorder for translator metrics.
@@ -67,6 +71,8 @@ func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
 		translationsTotal:   translationsTotal,
 		translationDuration: translationDuration,
 		resources:           translatorResources,
+		resourceNamespaces:  make(map[string]map[string]struct{}),
+		resourcesLock:       sync.Mutex{},
 	}
 
 	return m
@@ -91,8 +97,28 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 	}
 }
 
+// ResetResources resets the resource count gauge for a specified resource.
+func (m *translatorMetrics) ResetResources(resource string) {
+	m.resourcesLock.Lock()
+	defer m.resourcesLock.Unlock()
+
+	for namespace := range m.resourceNamespaces[resource] {
+		m.resources.WithLabelValues(namespace, resource, m.translatorName).Set(0)
+	}
+
+	m.resourceNamespaces[resource] = make(map[string]struct{})
+}
+
 // SetResources updates the resource count gauge.
 func (m *translatorMetrics) SetResources(namespace, resource string, count int) {
+	m.resourcesLock.Lock()
+	defer m.resourcesLock.Unlock()
+
+	if _, exists := m.resourceNamespaces[resource]; !exists {
+		m.resourceNamespaces[resource] = make(map[string]struct{})
+	}
+
+	m.resourceNamespaces[resource][namespace] = struct{}{}
 	m.resources.WithLabelValues(namespace, resource, m.translatorName).Set(float64(count))
 }
 

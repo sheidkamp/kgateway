@@ -557,6 +557,8 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
+	s.routeStatusMetrics.ResetResources("HTTPRoute")
+
 	for ns, count := range resCount {
 		s.routeStatusMetrics.SetResources(ns, "HTTPRoute", count)
 	}
@@ -574,6 +576,8 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 			logger.Error("all attempts failed at updating TCPRoute status", "error", err, "route", rnn)
 		}
 	}
+
+	s.routeStatusMetrics.ResetResources("TCPRoute")
 
 	for ns, count := range resCount {
 		s.routeStatusMetrics.SetResources(ns, "TCPRoute", count)
@@ -593,6 +597,8 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
+	s.routeStatusMetrics.ResetResources("TLSRoute")
+
 	for ns, count := range resCount {
 		s.routeStatusMetrics.SetResources(ns, "TLSRoute", count)
 	}
@@ -610,6 +616,8 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 			logger.Error("all attempts failed at updating GRPCRoute status", "error", err, "route", rnn)
 		}
 	}
+
+	s.routeStatusMetrics.ResetResources("GRPCRoute")
 
 	for ns, count := range resCount {
 		s.routeStatusMetrics.SetResources(ns, "GRPCRoute", count)
@@ -664,6 +672,8 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 	}
 	duration := stopwatch.Stop(ctx)
 	logger.Debug("synced gw status for gateways", "count", len(rm.Gateways), "duration", duration)
+
+	s.gatewayStatusMetrics.ResetResources("Gateway")
 
 	for ns, count := range resCount {
 		s.gatewayStatusMetrics.SetResources(ns, "Gateway", count)
@@ -763,6 +773,8 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 			logger.Error("error updating policy status", "error", err, "group_kind", gk, "resource_ref", nsName)
 		}
 	}
+
+	s.gatewayStatusMetrics.ResetResources("Policy")
 
 	for ns, count := range resCount {
 		s.gatewayStatusMetrics.SetResources(ns, "Policy", count)
