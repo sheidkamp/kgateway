@@ -24,9 +24,6 @@ var (
 		"translationsTotal":    translationsTotal,
 		"translationDuration":  translationDuration,
 		"translatorResources":  translatorResources,
-		"snapshotSyncsTotal":   snapshotSyncsTotal,
-		"snapshotSyncDuration": snapshotSyncDuration,
-		"snapshotResources":    snapshotResources,
 	}
 )
 

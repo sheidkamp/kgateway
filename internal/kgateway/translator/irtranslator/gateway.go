@@ -40,7 +40,7 @@ type TranslationResult struct {
 // Translate IR to gateway. IR is self contained, so no need for krt context
 func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) TranslationResult {
 	if t.metrics == nil {
-		t.metrics = metrics.NewTranslatorRecorder("TranslateIR")
+		t.metrics = metrics.NewTranslatorRecorder("TranslateGatewayIR")
 	}
 
 	defer t.metrics.TranslationStart()(nil)
@@ -62,7 +62,6 @@ func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) Trans
 		}
 	}
 
-	t.metrics.SetResources(gw.SourceObject.GetNamespace(), gw.SourceObject.GetName(), "Gateway", 1)
 	t.metrics.SetResources(gw.SourceObject.GetNamespace(), gw.SourceObject.GetName(), "RouteConfiguration", len(res.Routes))
 	t.metrics.SetResources(gw.SourceObject.GetNamespace(), gw.SourceObject.GetName(), "Listener", len(res.Listeners))
 	t.metrics.SetResources(gw.SourceObject.GetNamespace(), gw.SourceObject.GetName(), "ExtraClusters", len(res.ExtraClusters))

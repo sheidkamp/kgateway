@@ -41,17 +41,17 @@ var (
 			Name:      "resources",
 			Help:      "Current number of resources managed by the collection",
 		},
-		[]string{collectionNameLabel, "name", "namespace"},
+		[]string{collectionNameLabel, "name", "namespace", "resource"},
 	)
 )
 
 // CollectionRecorder defines the interface for recording collection metrics.
 type CollectionRecorder interface {
 	TransformStart() func(error)
-	ResetResources(namespace, name string)
-	SetResources(namespace, name string, count int)
-	IncResources(namespace, name string)
-	DecResources(namespace, name string)
+	ResetResources(resource string)
+	SetResources(namespace, name, resource string, count int)
+	IncResources(namespace, name, resource string)
+	DecResources(namespace, name, resource string)
 }
 
 // collectionMetrics records metrics for collection operations.
@@ -60,7 +60,7 @@ type collectionMetrics struct {
 	transformsTotal   *prometheus.CounterVec
 	transformDuration *prometheus.HistogramVec
 	resources         *prometheus.GaugeVec
-	resourceNames     map[string]map[string]struct{}
+	resourceNames     map[string]map[string]map[string]struct{}
 	resourcesLock     sync.Mutex
 }
 
@@ -71,7 +71,7 @@ func NewCollectionRecorder(collectionName string) CollectionRecorder {
 		transformsTotal:   transformsTotal,
 		transformDuration: transformDuration,
 		resources:         collectionResources,
-		resourceNames:     make(map[string]map[string]struct{}),
+		resourceNames:     make(map[string]map[string]map[string]struct{}),
 		resourcesLock:     sync.Mutex{},
 	}
 
@@ -98,65 +98,82 @@ func (m *collectionMetrics) TransformStart() func(error) {
 }
 
 // ResetResources resets the resource count gauge for a specified resource.
-func (m *collectionMetrics) ResetResources(namespace, name string) {
+func (m *collectionMetrics) ResetResources(resource string) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	if _, exists := m.resourceNames[namespace]; !exists {
-		return
-	}
+	for namespace, resources := range m.resourceNames {
+		for name, resourceMap := range resources {
+			if _, exists := resourceMap[resource]; !exists {
+				continue
+			}
 
-	for name := range m.resourceNames[namespace] {
-		m.resources.WithLabelValues(m.collectionName, name, namespace).Set(0)
-	}
+			m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Set(0)
 
-	delete(m.resourceNames[namespace], name)
+			delete(m.resourceNames[namespace][name], resource)
+			if len(m.resourceNames[namespace][name]) == 0 {
+				delete(m.resourceNames[namespace], name)
+			}
+		}
 
-	if len(m.resourceNames[namespace]) == 0 {
-		delete(m.resourceNames, namespace)
+		if len(m.resourceNames[namespace]) == 0 {
+			delete(m.resourceNames, namespace)
+		}
 	}
 }
 
 // SetResources updates the resource count gauge.
-func (m *collectionMetrics) SetResources(namespace, name string, count int) {
+func (m *collectionMetrics) SetResources(namespace, name, resource string, count int) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
 	if _, exists := m.resourceNames[namespace]; !exists {
-		m.resourceNames[namespace] = make(map[string]struct{})
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
 	}
 
-	m.resourceNames[namespace][name] = struct{}{}
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
 
-	m.resources.WithLabelValues(m.collectionName, name, namespace).Set(float64(count))
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
+	m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Set(float64(count))
 }
 
 // IncResources increments the resource count gauge.
-func (m *collectionMetrics) IncResources(namespace, name string) {
+func (m *collectionMetrics) IncResources(namespace, name, resource string) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
 	if _, exists := m.resourceNames[namespace]; !exists {
-		m.resourceNames[namespace] = make(map[string]struct{})
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
 	}
 
-	m.resourceNames[namespace][name] = struct{}{}
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
 
-	m.resources.WithLabelValues(m.collectionName, name, namespace).Inc()
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
+	m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Inc()
 }
 
 // DecResources decrements the resource count gauge.
-func (m *collectionMetrics) DecResources(namespace, name string) {
+func (m *collectionMetrics) DecResources(namespace, name, resource string) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
 	if _, exists := m.resourceNames[namespace]; !exists {
-		m.resourceNames[namespace] = make(map[string]struct{})
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
 	}
 
-	m.resourceNames[namespace][name] = struct{}{}
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
 
-	m.resources.WithLabelValues(m.collectionName, name, namespace).Dec()
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
+	m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Dec()
 }
 
 // ResetCollectionMetrics resets the collection metrics.

@@ -41,7 +41,7 @@ var (
 			Name:      "resources",
 			Help:      "Current number of resources managed by the status syncer",
 		},
-		[]string{"namespace", "resource", syncerNameLabel},
+		[]string{"name", "namespace", "resource", syncerNameLabel},
 	)
 )
 
@@ -49,9 +49,9 @@ var (
 type StatusSyncRecorder interface {
 	StatusSyncStart() func(error)
 	ResetResources(resource string)
-	SetResources(namespace, resource string, count int)
-	IncResources(namespace, resource string)
-	DecResources(namespace, resource string)
+	SetResources(namespace, name, resource string, count int)
+	IncResources(namespace, name, resource string)
+	DecResources(namespace, name, resource string)
 }
 
 // statusSyncMetrics records metrics for status syncer operations.
@@ -60,7 +60,7 @@ type statusSyncMetrics struct {
 	statusSyncsTotal   *prometheus.CounterVec
 	statusSyncDuration *prometheus.HistogramVec
 	resources          *prometheus.GaugeVec
-	resourceNamespaces map[string]map[string]struct{}
+	resourceNames      map[string]map[string]map[string]struct{}
 	resourcesLock      sync.Mutex
 }
 
@@ -71,7 +71,7 @@ func NewStatusSyncRecorder(syncerName string) StatusSyncRecorder {
 		statusSyncsTotal:   statusSyncsTotal,
 		statusSyncDuration: statusSyncDuration,
 		resources:          statusSyncResources,
-		resourceNamespaces: make(map[string]map[string]struct{}),
+		resourceNames:      make(map[string]map[string]map[string]struct{}),
 		resourcesLock:      sync.Mutex{},
 	}
 
@@ -102,34 +102,78 @@ func (m *statusSyncMetrics) ResetResources(resource string) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	for namespace := range m.resourceNamespaces[resource] {
-		m.resources.WithLabelValues(namespace, resource, m.syncerName).Set(0)
-	}
+	for namespace, resources := range m.resourceNames {
+		for name, resourceMap := range resources {
+			if _, exists := resourceMap[resource]; !exists {
+				continue
+			}
 
-	m.resourceNamespaces[resource] = make(map[string]struct{})
+			m.resources.WithLabelValues(name, namespace, resource, m.syncerName).Set(0)
+
+			delete(m.resourceNames[namespace][name], resource)
+			if len(m.resourceNames[namespace][name]) == 0 {
+				delete(m.resourceNames[namespace], name)
+			}
+		}
+
+		if len(m.resourceNames[namespace]) == 0 {
+			delete(m.resourceNames, namespace)
+		}
+	}
 }
 
 // SetResources updates the resource count gauge.
-func (m *statusSyncMetrics) SetResources(namespace, resource string, count int) {
+func (m *statusSyncMetrics) SetResources(namespace, name, resource string, count int) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	if _, exists := m.resourceNamespaces[resource]; !exists {
-		m.resourceNamespaces[resource] = make(map[string]struct{})
+	if _, exists := m.resourceNames[namespace]; !exists {
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
 	}
 
-	m.resourceNamespaces[resource][namespace] = struct{}{}
-	m.resources.WithLabelValues(namespace, resource, m.syncerName).Set(float64(count))
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
+
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
+	m.resources.WithLabelValues(name, namespace, resource, m.syncerName).Set(float64(count))
 }
 
 // IncResources increments the resource count gauge.
-func (m *statusSyncMetrics) IncResources(namespace, resource string) {
-	m.resources.WithLabelValues(namespace, resource, m.syncerName).Inc()
+func (m *statusSyncMetrics) IncResources(namespace, name, resource string) {
+	m.resourcesLock.Lock()
+	defer m.resourcesLock.Unlock()
+
+	if _, exists := m.resourceNames[namespace]; !exists {
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
+	}
+
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
+
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
+	m.resources.WithLabelValues(name, namespace, resource, m.syncerName).Inc()
 }
 
 // DecResources decrements the resource count gauge.
-func (m *statusSyncMetrics) DecResources(namespace, resource string) {
-	m.resources.WithLabelValues(namespace, resource, m.syncerName).Dec()
+func (m *statusSyncMetrics) DecResources(namespace, name, resource string) {
+	m.resourcesLock.Lock()
+	defer m.resourcesLock.Unlock()
+
+	if _, exists := m.resourceNames[namespace]; !exists {
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
+	}
+
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
+
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
+	m.resources.WithLabelValues(name, namespace, resource, m.syncerName).Dec()
 }
 
 // ResetStatusSyncMetrics resets the status syncer metrics.

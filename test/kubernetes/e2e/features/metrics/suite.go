@@ -99,11 +99,9 @@ func (s *testingSuite) TestMetrics() {
 			StatusCode: http.StatusOK,
 			Body: gomega.And(
 				gomega.MatchRegexp(`kgateway_controller_startups_total\{controller=\"kgateway\.dev\/kgateway\",start_time=\".*\"\} 1`),
-				gomega.MatchRegexp(`kgateway_translator_translation_duration_seconds_count\{translator=\"TranslateIR\"\} 2`),
-				gomega.MatchRegexp(`kgateway_translator_translations_total\{result=\"success\",translator=\"TranslateIR\"\} 2`),
-				gomega.MatchRegexp(`kgateway_translator_resources\{name=\"gw\",namespace=\"default\",resource=\"Gateway\",translator=\"TranslateIR\"\} 1`),
-				gomega.MatchRegexp(`kgateway_snapshot_syncs_total\{proxy=\"kgateway-.*\",result=\"success\",snapshot=\"ProxyTranslator\"\} 2`),
-				gomega.MatchRegexp(`kgateway_snapshot_sync_duration_seconds_count\{proxy=\"kgateway-.*\",snapshot=\"ProxyTranslator\"\} 2`),
+				gomega.MatchRegexp(`kgateway_translator_translation_duration_seconds_count\{translator=\"TranslateGatewayIR\"\} 2`),
+				gomega.MatchRegexp(`kgateway_translator_translations_total\{result=\"success\",translator=\"TranslateGatewayIR\"\} 2`),
+				gomega.MatchRegexp(`kgateway_translator_resources\{name=\"gw\",namespace=\"default\",resource=\"Listener\",translator=\"TranslateGatewayIR\"\} 1`),
 			),
 		})
 }

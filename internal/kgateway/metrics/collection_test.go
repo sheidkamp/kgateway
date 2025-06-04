@@ -20,7 +20,7 @@ func TestNewCollectionMetrics(t *testing.T) {
 
 	finishFunc := m.TransformStart()
 	finishFunc(nil)
-	m.SetResources("default", "test", 5)
+	m.SetResources("default", "test", "route", 5)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -122,8 +122,8 @@ func TestCollectionResources(t *testing.T) {
 	m := NewCollectionRecorder("test-collection")
 
 	// Test SetResources.
-	m.SetResources("default", "test", 5)
-	m.SetResources("kube-system", "test", 3)
+	m.SetResources("default", "test", "route", 5)
+	m.SetResources("kube-system", "test", "gateway", 3)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -134,30 +134,35 @@ func TestCollectionResources(t *testing.T) {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
-			resourceValues := make(map[string]map[string]float64)
+			resourceValues := make(map[string]map[string]map[string]float64)
 
 			for _, metric := range mf.Metric {
-				assert.Equal(t, 3, len(metric.Label))
+				assert.Equal(t, 4, len(metric.Label))
 				assert.Equal(t, "collection", *metric.Label[0].Name)
 				assert.Equal(t, "name", *metric.Label[1].Name)
 				assert.Equal(t, "namespace", *metric.Label[2].Name)
+				assert.Equal(t, "resource", *metric.Label[3].Name)
 
 				if _, exists := resourceValues[*metric.Label[2].Value]; !exists {
-					resourceValues[*metric.Label[2].Value] = make(map[string]float64)
+					resourceValues[*metric.Label[2].Value] = make(map[string]map[string]float64)
 				}
 
-				resourceValues[*metric.Label[2].Value][*metric.Label[1].Value] = metric.Gauge.GetValue()
+				if _, exists := resourceValues[*metric.Label[2].Value][*metric.Label[1].Value]; !exists {
+					resourceValues[*metric.Label[2].Value][*metric.Label[1].Value] = make(map[string]float64)
+				}
+
+				resourceValues[*metric.Label[2].Value][*metric.Label[1].Value][*metric.Label[3].Value] = metric.Gauge.GetValue()
 			}
 
-			assert.Equal(t, float64(5), resourceValues["default"]["test"])
-			assert.Equal(t, float64(3), resourceValues["kube-system"]["test"])
+			assert.Equal(t, float64(5), resourceValues["default"]["test"]["route"])
+			assert.Equal(t, float64(3), resourceValues["kube-system"]["test"]["gateway"])
 		}
 	}
 
 	assert.True(t, found, "kgateway_collection_resources metric not found")
 
 	// Test IncResources.
-	m.IncResources("default", "test")
+	m.IncResources("default", "test", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -173,7 +178,7 @@ func TestCollectionResources(t *testing.T) {
 	}
 
 	// Test DecResources.
-	m.DecResources("default", "test")
+	m.DecResources("default", "test", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -189,7 +194,7 @@ func TestCollectionResources(t *testing.T) {
 	}
 
 	// Test ResetResources.
-	m.ResetResources("default", "test")
+	m.ResetResources("test")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)

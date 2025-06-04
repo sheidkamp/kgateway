@@ -21,6 +21,7 @@ import (
 	apilabels "github.com/kgateway-dev/kgateway/v2/api/labels"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/backendref"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/utils"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
@@ -283,7 +284,11 @@ func NewGatewayIndex(
 		}}
 	})
 
+	metrics := metrics.NewCollectionRecorder("Gateways")
+
 	h.Gateways = krt.NewCollection(gws, func(kctx krt.HandlerContext, i *gwv1.Gateway) *ir.Gateway {
+		defer metrics.TransformStart()(nil)
+
 		// only care about gateways use a class controlled by us
 		gwClass := ptr.Flatten(krt.FetchOne(kctx, gwClasses, krt.FilterKey(string(i.Spec.GatewayClassName))))
 		if gwClass == nil || controllerName != string(gwClass.Spec.ControllerName) {
@@ -375,7 +380,11 @@ func NewGatewayIndex(
 
 			out.AllowedListenerSets = append(out.AllowedListenerSets, lsIR)
 			out.Listeners = append(out.Listeners, lsIR.Listeners...)
+
 		}
+
+		metrics.SetResources(out.GetNamespace(), out.GetName(), "Gateway", 1)
+		metrics.SetResources(out.GetNamespace(), out.GetName(), "Listeners", len(out.Listeners))
 
 		slices.SortFunc(out.AllowedListenerSets, func(a, b ir.ListenerSet) int {
 			return a.Obj.GetCreationTimestamp().Compare(b.Obj.GetCreationTimestamp().Time)
@@ -763,10 +772,7 @@ func (r *RefGrantIndex) ReferenceAllowed(kctx krt.HandlerContext, fromgk schema.
 	}
 	// try with name:
 	key.ToName = to.Name
-	if len(krt.Fetch(kctx, r.refgrants, krt.FilterIndex(r.refGrantIndex, key))) != 0 {
-		return true
-	}
-	return false
+	return len(krt.Fetch(kctx, r.refgrants, krt.FilterIndex(r.refGrantIndex, key))) != 0
 }
 
 type RouteWrapper struct {

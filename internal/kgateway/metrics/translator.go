@@ -48,7 +48,7 @@ var (
 // TranslatorRecorder defines the interface for recording translator metrics.
 type TranslatorRecorder interface {
 	TranslationStart() func(error)
-	ResetResources(namespace, name string)
+	ResetResources(resource string)
 	SetResources(namespace, name, resource string, count int)
 	IncResources(namespace, name, resource string)
 	DecResources(namespace, name, resource string)
@@ -98,26 +98,27 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 }
 
 // ResetResources resets the resource count gauge for a specified resource.
-func (m *translatorMetrics) ResetResources(namespace, name string) {
+func (m *translatorMetrics) ResetResources(resource string) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	if _, exists := m.resourceNames[namespace]; !exists {
-		return
-	}
+	for namespace, resources := range m.resourceNames {
+		for name, resourceMap := range resources {
+			if _, exists := resourceMap[resource]; !exists {
+				continue
+			}
 
-	if _, exists := m.resourceNames[namespace][name]; !exists {
-		return
-	}
+			m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Set(0)
 
-	for resource := range m.resourceNames[namespace][name] {
-		m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Set(0)
-	}
+			delete(m.resourceNames[namespace][name], resource)
+			if len(m.resourceNames[namespace][name]) == 0 {
+				delete(m.resourceNames[namespace], name)
+			}
+		}
 
-	delete(m.resourceNames[namespace], name)
-
-	if len(m.resourceNames[namespace]) == 0 {
-		delete(m.resourceNames, namespace)
+		if len(m.resourceNames[namespace]) == 0 {
+			delete(m.resourceNames, namespace)
+		}
 	}
 }
 
@@ -141,11 +142,37 @@ func (m *translatorMetrics) SetResources(namespace, name, resource string, count
 
 // IncResources increments the resource count gauge.
 func (m *translatorMetrics) IncResources(namespace, name, resource string) {
+	m.resourcesLock.Lock()
+	defer m.resourcesLock.Unlock()
+
+	if _, exists := m.resourceNames[namespace]; !exists {
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
+	}
+
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
+
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
 	m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Inc()
 }
 
 // DecResources decrements the resource count gauge.
 func (m *translatorMetrics) DecResources(namespace, name, resource string) {
+	m.resourcesLock.Lock()
+	defer m.resourcesLock.Unlock()
+
+	if _, exists := m.resourceNames[namespace]; !exists {
+		m.resourceNames[namespace] = make(map[string]map[string]struct{})
+	}
+
+	if _, exists := m.resourceNames[namespace][name]; !exists {
+		m.resourceNames[namespace][name] = make(map[string]struct{})
+	}
+
+	m.resourceNames[namespace][name][resource] = struct{}{}
+
 	m.resources.WithLabelValues(name, namespace, resource, m.translatorName).Dec()
 }
 

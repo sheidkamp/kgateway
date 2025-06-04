@@ -163,13 +163,11 @@ func NewProxySyncer(
 
 type ProxyTranslator struct {
 	xdsCache envoycache.SnapshotCache
-	metrics  metrics.SnapshotRecorder
 }
 
 func NewProxyTranslator(xdsCache envoycache.SnapshotCache) ProxyTranslator {
 	return ProxyTranslator{
 		xdsCache: xdsCache,
-		metrics:  metrics.NewSnapshotRecorder("ProxyTranslator"),
 	}
 }
 
@@ -423,8 +421,6 @@ func (s *ProxySyncer) Start(ctx context.Context) error {
 
 	s.perclientSnapCollection.RegisterBatch(func(o []krt.Event[XdsSnapWrapper], initialSync bool) {
 		for _, e := range o {
-			finish := s.proxyTranslator.metrics.SnapshotStart(e.Latest().proxyKey)
-
 			if e.Event != controllers.EventDelete {
 				snapWrap := e.Latest()
 				s.proxyTranslator.syncXds(ctx, snapWrap)
@@ -434,19 +430,11 @@ func (s *ProxySyncer) Start(ctx context.Context) error {
 				for _, r := range snapWrap.snap.Resources {
 					count += len(r.Items)
 				}
-
-				s.proxyTranslator.metrics.SetResources(e.Latest().proxyKey, count)
 			} else {
 				// key := e.Latest().proxyKey
 				// if _, err := s.proxyTranslator.xdsCache.GetSnapshot(key); err == nil {
 				// 	s.proxyTranslator.xdsCache.ClearSnapshot(e.Latest().proxyKey)
 				// }
-
-				s.proxyTranslator.metrics.SetResources(e.Latest().proxyKey, 0)
-			}
-
-			if finish != nil {
-				finish(nil)
 			}
 		}
 	}, true)
@@ -537,10 +525,10 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	}
 
 	// Sync HTTPRoute statuses
-	resCount := make(map[string]int)
+	s.routeStatusMetrics.ResetResources("HTTPRoute")
 
 	for rnn := range rm.HTTPRoutes {
-		resCount[rnn.Namespace]++
+		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "HTTPRoute")
 
 		err := syncStatusWithRetry(
 			wellknown.HTTPRouteKind,
@@ -557,17 +545,11 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
-	s.routeStatusMetrics.ResetResources("HTTPRoute")
-
-	for ns, count := range resCount {
-		s.routeStatusMetrics.SetResources(ns, "HTTPRoute", count)
-	}
-
 	// Sync TCPRoute statuses
-	resCount = make(map[string]int)
+	s.routeStatusMetrics.ResetResources("TCPRoute")
 
 	for rnn := range rm.TCPRoutes {
-		resCount[rnn.Namespace]++
+		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "TCPRoute")
 
 		err := syncStatusWithRetry(wellknown.TCPRouteKind, rnn, func() client.Object { return new(gwv1a2.TCPRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.TCPRouteKind)
@@ -577,17 +559,11 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
-	s.routeStatusMetrics.ResetResources("TCPRoute")
-
-	for ns, count := range resCount {
-		s.routeStatusMetrics.SetResources(ns, "TCPRoute", count)
-	}
-
 	// Sync TLSRoute statuses
-	resCount = make(map[string]int)
+	s.routeStatusMetrics.ResetResources("TLSRoute")
 
 	for rnn := range rm.TLSRoutes {
-		resCount[rnn.Namespace]++
+		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "TLSRoute")
 
 		err := syncStatusWithRetry(wellknown.TLSRouteKind, rnn, func() client.Object { return new(gwv1a2.TLSRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.TLSRouteKind)
@@ -597,17 +573,11 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		}
 	}
 
-	s.routeStatusMetrics.ResetResources("TLSRoute")
-
-	for ns, count := range resCount {
-		s.routeStatusMetrics.SetResources(ns, "TLSRoute", count)
-	}
-
 	// Sync GRPCRoute statuses
-	resCount = make(map[string]int)
+	s.routeStatusMetrics.ResetResources("GRPCRoute")
 
 	for rnn := range rm.GRPCRoutes {
-		resCount[rnn.Namespace]++
+		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "GRPCRoute")
 
 		err := syncStatusWithRetry(wellknown.GRPCRouteKind, rnn, func() client.Object { return new(gwv1.GRPCRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.GRPCRouteKind)
@@ -615,12 +585,6 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 		if err != nil {
 			logger.Error("all attempts failed at updating GRPCRoute status", "error", err, "route", rnn)
 		}
-	}
-
-	s.routeStatusMetrics.ResetResources("GRPCRoute")
-
-	for ns, count := range resCount {
-		s.routeStatusMetrics.SetResources(ns, "GRPCRoute", count)
 	}
 }
 
@@ -631,11 +595,10 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 
 	defer s.gatewayStatusMetrics.StatusSyncStart()(nil)
 
-	var resCount map[string]int
-
 	// TODO: retry within loop per GW rather that as a full block
 	err := retry.Do(func() error {
-		resCount = make(map[string]int)
+		s.gatewayStatusMetrics.ResetResources("Gateway")
+
 		for gwnn := range rm.Gateways {
 			gw := gwv1.Gateway{}
 			err := s.mgr.GetClient().Get(ctx, gwnn, &gw)
@@ -644,7 +607,7 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 				return err
 			}
 
-			resCount[gwnn.Namespace]++
+			s.gatewayStatusMetrics.IncResources(gwnn.Namespace, gwnn.Name, "Gateway")
 
 			gwStatusWithoutAddress := gw.Status
 			gwStatusWithoutAddress.Addresses = nil
@@ -672,12 +635,6 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 	}
 	duration := stopwatch.Stop(ctx)
 	logger.Debug("synced gw status for gateways", "count", len(rm.Gateways), "duration", duration)
-
-	s.gatewayStatusMetrics.ResetResources("Gateway")
-
-	for ns, count := range resCount {
-		s.gatewayStatusMetrics.SetResources(ns, "Gateway", count)
-	}
 }
 
 // syncListenerSetStatus will build and update status for all Listener Sets in a reportMap
@@ -730,14 +687,14 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 
 	defer s.policyStatusMetrics.StatusSyncStart()(nil)
 
-	resCount := make(map[string]int)
+	s.gatewayStatusMetrics.ResetResources("Policy")
 
 	// Sync Policy statuses
 	for key := range rm.Policies {
 		gk := schema.GroupKind{Group: key.Group, Kind: key.Kind}
 		nsName := types.NamespacedName{Namespace: key.Namespace, Name: key.Name}
 
-		resCount[nsName.Namespace]++
+		s.gatewayStatusMetrics.IncResources(nsName.Namespace, nsName.Name, "Policy")
 
 		plugin, ok := s.plugins.ContributesPolicies[gk]
 		if !ok {
@@ -772,12 +729,6 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 		if err != nil {
 			logger.Error("error updating policy status", "error", err, "group_kind", gk, "resource_ref", nsName)
 		}
-	}
-
-	s.gatewayStatusMetrics.ResetResources("Policy")
-
-	for ns, count := range resCount {
-		s.gatewayStatusMetrics.SetResources(ns, "Policy", count)
 	}
 }
 

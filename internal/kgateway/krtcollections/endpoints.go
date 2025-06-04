@@ -208,7 +208,7 @@ func transformK8sEndpoints(ctx context.Context, inputs EndpointsInputs) func(kct
 			}
 		}
 
-		metrics.SetResources(backend.Namespace, backend.Name, len(ret.LbEps))
+		metrics.SetResources(backend.Namespace, backend.Name, "Endpoints", len(ret.LbEps))
 		kubeSvcLogger.Debug("created endpoint", "total_endpoints", len(ret.LbEps))
 
 		return ret
@@ -297,6 +297,9 @@ func findPortInEndpointSlice(endpointSlice *discoveryv1.EndpointSlice, singlePor
 			port = uint32(*p.Port)
 		case p.Name != nil && *p.Name == kubeServicePort.Name:
 			port = uint32(*p.Port)
+		}
+
+		if port != 0 {
 			break
 		}
 	}

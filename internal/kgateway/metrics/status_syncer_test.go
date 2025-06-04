@@ -20,7 +20,7 @@ func TestNewStatusSyncerMetrics(t *testing.T) {
 
 	finishFunc := m.StatusSyncStart()
 	finishFunc(nil)
-	m.SetResources("default", "route", 5)
+	m.SetResources("default", "test", "route", 5)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -116,14 +116,14 @@ func TesStatusSyncStart_Error(t *testing.T) {
 	assert.True(t, found, "kgateway_status_syncer_status_syncs_total metric not found")
 }
 
-func TestStatusSyncerResources(t *testing.T) {
+func TestStatusSyncResources(t *testing.T) {
 	setupTest()
 
-	m := NewStatusSyncRecorder("test-syncer")
+	m := NewStatusSyncRecorder("test-statusSync")
 
 	// Test SetResources.
-	m.SetResources("default", "route", 5)
-	m.SetResources("kube-system", "gateway", 3)
+	m.SetResources("default", "test", "route", 5)
+	m.SetResources("kube-system", "test", "gateway", 3)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -134,31 +134,35 @@ func TestStatusSyncerResources(t *testing.T) {
 			found = true
 			assert.Equal(t, 2, len(mf.Metric))
 
-			resourceValues := make(map[string]map[string]float64)
+			resourceValues := make(map[string]map[string]map[string]float64)
 
 			for _, metric := range mf.Metric {
-				assert.Equal(t, 3, len(metric.Label))
-				assert.Equal(t, "namespace", *metric.Label[0].Name)
-				assert.Equal(t, "resource", *metric.Label[1].Name)
-				assert.Equal(t, "syncer", *metric.Label[2].Name)
-				assert.Equal(t, "test-syncer", *metric.Label[2].Value)
+				assert.Equal(t, 4, len(metric.Label))
+				assert.Equal(t, "name", *metric.Label[0].Name)
+				assert.Equal(t, "namespace", *metric.Label[1].Name)
+				assert.Equal(t, "resource", *metric.Label[2].Name)
+				assert.Equal(t, "syncer", *metric.Label[3].Name)
 
 				if _, exists := resourceValues[*metric.Label[1].Value]; !exists {
-					resourceValues[*metric.Label[1].Value] = make(map[string]float64)
+					resourceValues[*metric.Label[1].Value] = make(map[string]map[string]float64)
 				}
 
-				resourceValues[*metric.Label[1].Value][*metric.Label[0].Value] = metric.Gauge.GetValue()
+				if _, exists := resourceValues[*metric.Label[1].Value][*metric.Label[0].Value]; !exists {
+					resourceValues[*metric.Label[1].Value][*metric.Label[0].Value] = make(map[string]float64)
+				}
+
+				resourceValues[*metric.Label[1].Value][*metric.Label[0].Value][*metric.Label[2].Value] = metric.Gauge.GetValue()
 			}
 
-			assert.Equal(t, float64(5), resourceValues["route"]["default"])
-			assert.Equal(t, float64(3), resourceValues["gateway"]["kube-system"])
+			assert.Equal(t, float64(5), resourceValues["default"]["test"]["route"])
+			assert.Equal(t, float64(3), resourceValues["kube-system"]["test"]["gateway"])
 		}
 	}
 
 	assert.True(t, found, "kgateway_status_syncer_resources metric not found")
 
 	// Test IncResources.
-	m.IncResources("default", "route")
+	m.IncResources("default", "test", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -174,7 +178,7 @@ func TestStatusSyncerResources(t *testing.T) {
 	}
 
 	// Test DecResources.
-	m.DecResources("default", "route")
+	m.DecResources("default", "test", "route")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -190,7 +194,7 @@ func TestStatusSyncerResources(t *testing.T) {
 	}
 
 	// Test ResetResources.
-	m.ResetResources("route")
+	m.ResetResources("test")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)

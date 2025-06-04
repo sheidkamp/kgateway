@@ -194,7 +194,7 @@ func TestTranslatorResources(t *testing.T) {
 	}
 
 	// Test ResetResources.
-	m.ResetResources("default", "test")
+	m.ResetResources("test")
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)

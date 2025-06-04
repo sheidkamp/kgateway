@@ -13,5 +13,4 @@ func setupTest() {
 	ResetControllerMetrics()
 	ResetTranslatorMetrics()
 	ResetStatusSyncMetrics()
-	ResetSnapshotMetrics()
 }
