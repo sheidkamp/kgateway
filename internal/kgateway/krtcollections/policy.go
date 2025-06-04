@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"istio.io/istio/pkg/config/labels"
+	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -383,23 +384,46 @@ func NewGatewayIndex(
 
 		}
 
-		metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
-			Namespace: out.GetNamespace(),
-			Name:      out.GetName(),
-			Resource:  "Gateway",
-		}, 1)
-		metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
-			Namespace: out.GetNamespace(),
-			Name:      out.GetName(),
-			Resource:  "Listeners",
-		}, len(out.Listeners))
-
 		slices.SortFunc(out.AllowedListenerSets, func(a, b ir.ListenerSet) int {
 			return a.Obj.GetCreationTimestamp().Compare(b.Obj.GetCreationTimestamp().Time)
 		})
 
 		return &out
 	}, krtopts.ToOptions("gateways")...)
+
+	h.Gateways.Register(func(o krt.Event[ir.Gateway]) {
+		switch o.Event {
+		case controllers.EventDelete:
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Gateway",
+			}, 0)
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Listeners",
+			}, 0)
+		case controllers.EventAdd:
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Gateway",
+			}, 1)
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Listeners",
+			}, len(o.Latest().Obj.Spec.Listeners))
+		case controllers.EventUpdate:
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Listeners",
+			}, len(o.Latest().Obj.Spec.Listeners))
+		}
+	})
+
 	return h
 }
 
