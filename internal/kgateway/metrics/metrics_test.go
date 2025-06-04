@@ -1,7 +1,9 @@
-package metrics
+package metrics_test
 
 import (
 	"testing"
+
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 func TestMain(m *testing.M) {
