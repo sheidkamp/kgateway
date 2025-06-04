@@ -1,6 +1,6 @@
 //go:build ignore
 
-package envoy_metrics
+package proxy_metrics
 
 import (
 	"context"
