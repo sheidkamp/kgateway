@@ -19,7 +19,7 @@ var (
 func TestNewRouteMetrics(t *testing.T) {
 	setupTest()
 
-	m := NewRouteRecorder()
+	m := NewRoutingRecorder()
 
 	m.SetDomainPerListener(DomainPerListenerLabels{
 		Namespace:   namespace,
@@ -47,7 +47,7 @@ func TestNewRouteMetrics(t *testing.T) {
 func TestSetDomainPerListener(t *testing.T) {
 	setupTest()
 
-	m := NewRouteRecorder()
+	m := NewRoutingRecorder()
 
 	m.SetDomainPerListener(DomainPerListenerLabels{
 		Namespace:   namespace,

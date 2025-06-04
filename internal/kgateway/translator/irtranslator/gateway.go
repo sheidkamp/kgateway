@@ -28,7 +28,7 @@ var logger = logging.New("translator/ir")
 type Translator struct {
 	ContributedPolicies map[schema.GroupKind]extensionsplug.PolicyPlugin
 	metrics             metrics.TranslatorRecorder
-	routeMetrics        metrics.RouteRecorder
+	routeMetrics        metrics.RoutingRecorder
 }
 
 type TranslationPassPlugins map[schema.GroupKind]*TranslationPass

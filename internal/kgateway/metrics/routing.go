@@ -5,20 +5,31 @@ import (
 )
 
 const (
-	routeSubsystem = "route"
+	routingSubsystem = "routing"
 )
 
 var (
 	domainsPerListener = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: metricsNamespace,
-			Subsystem: routeSubsystem,
+			Subsystem: routingSubsystem,
 			Name:      "domains",
 			Help:      "Number of domains per listener",
 		},
 		[]string{"namespace", "gatewayName", "port"},
 	)
 )
+
+type RoutingRecorder interface {
+	SetDomainPerListener(labels DomainPerListenerLabels, domains int)
+}
+
+var _ RoutingRecorder = &routingMetrics{}
+
+// TranslatorMetrics provides metrics for translator operations.
+type routingMetrics struct {
+	domainsPerListener *prometheus.GaugeVec
+}
 
 // DomainPerListenerLabels is used as an argument to SetDomainPerListener
 type DomainPerListenerLabels struct {
@@ -31,24 +42,18 @@ func (r DomainPerListenerLabels) toMetricsLabels() []string {
 	return []string{r.Namespace, r.GatewayName, r.Port}
 }
 
-type RouteRecorder interface {
-	SetDomainPerListener(labels DomainPerListenerLabels, domains int)
-}
-
-var _ RouteRecorder = &routeMetrics{}
-
-// TranslatorMetrics provides metrics for translator operations.
-type routeMetrics struct {
-	domainsPerListener *prometheus.GaugeVec
-}
-
 // NewRouteRecorder creates a new RouteRecorder
-func NewRouteRecorder() RouteRecorder {
-	return &routeMetrics{
+func NewRoutingRecorder() RoutingRecorder {
+	return &routingMetrics{
 		domainsPerListener: domainsPerListener,
 	}
 }
 
-func (m *routeMetrics) SetDomainPerListener(labels DomainPerListenerLabels, domains int) {
+func (m *routingMetrics) SetDomainPerListener(labels DomainPerListenerLabels, domains int) {
 	m.domainsPerListener.WithLabelValues(labels.toMetricsLabels()...).Set(float64(domains))
+}
+
+// ResetRoutingMetrics resets the routing metrics.
+func ResetRoutingMetrics() {
+	domainsPerListener.Reset()
 }

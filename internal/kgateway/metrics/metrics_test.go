@@ -15,4 +15,5 @@ func setupTest() {
 	ResetControllerMetrics()
 	ResetTranslatorMetrics()
 	ResetStatusSyncMetrics()
+	ResetRoutingMetrics()
 }
