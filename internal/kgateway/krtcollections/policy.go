@@ -284,10 +284,10 @@ func NewGatewayIndex(
 		}}
 	})
 
-	metrics := metrics.NewCollectionRecorder("Gateways")
+	metricsRecorder := metrics.NewCollectionRecorder("Gateways")
 
 	h.Gateways = krt.NewCollection(gws, func(kctx krt.HandlerContext, i *gwv1.Gateway) *ir.Gateway {
-		defer metrics.TransformStart()(nil)
+		defer metricsRecorder.TransformStart()(nil)
 
 		// only care about gateways use a class controlled by us
 		gwClass := ptr.Flatten(krt.FetchOne(kctx, gwClasses, krt.FilterKey(string(i.Spec.GatewayClassName))))
@@ -383,8 +383,16 @@ func NewGatewayIndex(
 
 		}
 
-		metrics.SetResources(out.GetNamespace(), out.GetName(), "Gateway", 1)
-		metrics.SetResources(out.GetNamespace(), out.GetName(), "Listeners", len(out.Listeners))
+		metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			Namespace: out.GetNamespace(),
+			Name:      out.GetName(),
+			Resource:  "Gateway",
+		}, 1)
+		metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			Namespace: out.GetNamespace(),
+			Name:      out.GetName(),
+			Resource:  "Listeners",
+		}, len(out.Listeners))
 
 		slices.SortFunc(out.AllowedListenerSets, func(a, b ir.ListenerSet) int {
 			return a.Obj.GetCreationTimestamp().Compare(b.Obj.GetCreationTimestamp().Time)

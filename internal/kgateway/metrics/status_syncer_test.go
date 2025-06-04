@@ -19,7 +19,7 @@ func TestNewStatusSyncerMetrics(t *testing.T) {
 
 	finishFunc := m.StatusSyncStart()
 	finishFunc(nil)
-	m.SetResources("default", "test", "route", 5)
+	m.SetResources(StatusSyncResourcesLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -121,8 +121,8 @@ func TestStatusSyncResources(t *testing.T) {
 	m := NewStatusSyncRecorder("test-statusSync")
 
 	// Test SetResources.
-	m.SetResources("default", "test", "route", 5)
-	m.SetResources("kube-system", "test", "gateway", 3)
+	m.SetResources(StatusSyncResourcesLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
+	m.SetResources(StatusSyncResourcesLabels{Namespace: "kube-system", Name: "test", Resource: "gateway"}, 3)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestStatusSyncResources(t *testing.T) {
 	assert.True(t, found, "kgateway_status_syncer_resources metric not found")
 
 	// Test IncResources.
-	m.IncResources("default", "test", "route")
+	m.IncResources(StatusSyncResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestStatusSyncResources(t *testing.T) {
 	}
 
 	// Test DecResources.
-	m.DecResources("default", "test", "route")
+	m.DecResources(StatusSyncResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)

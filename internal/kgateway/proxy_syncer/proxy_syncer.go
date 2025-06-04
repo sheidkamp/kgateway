@@ -528,7 +528,11 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("HTTPRoute")
 
 	for rnn := range rm.HTTPRoutes {
-		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "HTTPRoute")
+		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+			Namespace: rnn.Namespace,
+			Name:      rnn.Name,
+			Resource:  "HTTPRoute",
+		})
 
 		err := syncStatusWithRetry(
 			wellknown.HTTPRouteKind,
@@ -549,7 +553,11 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("TCPRoute")
 
 	for rnn := range rm.TCPRoutes {
-		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "TCPRoute")
+		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+			Namespace: rnn.Namespace,
+			Name:      rnn.Name,
+			Resource:  "TCPRoute",
+		})
 
 		err := syncStatusWithRetry(wellknown.TCPRouteKind, rnn, func() client.Object { return new(gwv1a2.TCPRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.TCPRouteKind)
@@ -563,7 +571,11 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("TLSRoute")
 
 	for rnn := range rm.TLSRoutes {
-		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "TLSRoute")
+		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+			Namespace: rnn.Namespace,
+			Name:      rnn.Name,
+			Resource:  "TLSRoute",
+		})
 
 		err := syncStatusWithRetry(wellknown.TLSRouteKind, rnn, func() client.Object { return new(gwv1a2.TLSRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.TLSRouteKind)
@@ -577,7 +589,11 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("GRPCRoute")
 
 	for rnn := range rm.GRPCRoutes {
-		s.routeStatusMetrics.IncResources(rnn.Namespace, rnn.Name, "GRPCRoute")
+		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+			Namespace: rnn.Namespace,
+			Name:      rnn.Name,
+			Resource:  "GRPCRoute",
+		})
 
 		err := syncStatusWithRetry(wellknown.GRPCRouteKind, rnn, func() client.Object { return new(gwv1.GRPCRoute) }, func(route client.Object) error {
 			return buildAndUpdateStatus(route, wellknown.GRPCRouteKind)
@@ -607,7 +623,11 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 				return err
 			}
 
-			s.gatewayStatusMetrics.IncResources(gwnn.Namespace, gwnn.Name, "Gateway")
+			s.gatewayStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+				Namespace: gwnn.Namespace,
+				Name:      gwnn.Name,
+				Resource:  "Gateway",
+			})
 
 			gwStatusWithoutAddress := gw.Status
 			gwStatusWithoutAddress.Addresses = nil
@@ -694,7 +714,11 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 		gk := schema.GroupKind{Group: key.Group, Kind: key.Kind}
 		nsName := types.NamespacedName{Namespace: key.Namespace, Name: key.Name}
 
-		s.gatewayStatusMetrics.IncResources(nsName.Namespace, nsName.Name, "Policy")
+		s.gatewayStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+			Namespace: nsName.Namespace,
+			Name:      nsName.Name,
+			Resource:  "Policy",
+		})
 
 		plugin, ok := s.plugins.ContributesPolicies[gk]
 		if !ok {

@@ -90,10 +90,10 @@ func NewK8sEndpoints(ctx context.Context, inputs EndpointsInputs) krt.Collection
 
 func transformK8sEndpoints(ctx context.Context, inputs EndpointsInputs) func(kctx krt.HandlerContext, backend ir.BackendObjectIR) *ir.EndpointsForBackend {
 	augmentedPods := inputs.Pods
-	metrics := metrics.NewCollectionRecorder("K8sEndpoints")
+	metricsRecorder := metrics.NewCollectionRecorder("K8sEndpoints")
 
 	return func(kctx krt.HandlerContext, backend ir.BackendObjectIR) *ir.EndpointsForBackend {
-		defer metrics.TransformStart()(nil)
+		defer metricsRecorder.TransformStart()(nil)
 
 		var warnsToLog []string
 		defer func() {
@@ -208,7 +208,12 @@ func transformK8sEndpoints(ctx context.Context, inputs EndpointsInputs) func(kct
 			}
 		}
 
-		metrics.SetResources(backend.Namespace, backend.Name, "Endpoints", len(ret.LbEps))
+		metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			Namespace: backend.Namespace,
+			Name:      backend.Name,
+			Resource:  "Endpoints",
+		}, len(ret.LbEps))
+
 		kubeSvcLogger.Debug("created endpoint", "total_endpoints", len(ret.LbEps))
 
 		return ret

@@ -45,13 +45,24 @@ var (
 	)
 )
 
+// CollectionResourcesLabels defines the labels for the collection resources metric.
+type CollectionResourcesLabels struct {
+	Name      string
+	Namespace string
+	Resource  string
+}
+
+func (r CollectionResourcesLabels) toMetricsLabels(collection string) []string {
+	return []string{collection, r.Name, r.Namespace, r.Resource}
+}
+
 // CollectionRecorder defines the interface for recording collection metrics.
 type CollectionRecorder interface {
 	TransformStart() func(error)
 	ResetResources(resource string)
-	SetResources(namespace, name, resource string, count int)
-	IncResources(namespace, name, resource string)
-	DecResources(namespace, name, resource string)
+	SetResources(labels CollectionResourcesLabels, count int)
+	IncResources(labels CollectionResourcesLabels)
+	DecResources(labels CollectionResourcesLabels)
 }
 
 // collectionMetrics records metrics for collection operations.
@@ -123,57 +134,57 @@ func (m *collectionMetrics) ResetResources(resource string) {
 }
 
 // SetResources updates the resource count gauge.
-func (m *collectionMetrics) SetResources(namespace, name, resource string, count int) {
+func (m *collectionMetrics) SetResources(labels CollectionResourcesLabels, count int) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	if _, exists := m.resourceNames[namespace]; !exists {
-		m.resourceNames[namespace] = make(map[string]map[string]struct{})
+	if _, exists := m.resourceNames[labels.Namespace]; !exists {
+		m.resourceNames[labels.Namespace] = make(map[string]map[string]struct{})
 	}
 
-	if _, exists := m.resourceNames[namespace][name]; !exists {
-		m.resourceNames[namespace][name] = make(map[string]struct{})
+	if _, exists := m.resourceNames[labels.Namespace][labels.Name]; !exists {
+		m.resourceNames[labels.Namespace][labels.Name] = make(map[string]struct{})
 	}
 
-	m.resourceNames[namespace][name][resource] = struct{}{}
+	m.resourceNames[labels.Namespace][labels.Name][labels.Resource] = struct{}{}
 
-	m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Set(float64(count))
+	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Set(float64(count))
 }
 
 // IncResources increments the resource count gauge.
-func (m *collectionMetrics) IncResources(namespace, name, resource string) {
+func (m *collectionMetrics) IncResources(labels CollectionResourcesLabels) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	if _, exists := m.resourceNames[namespace]; !exists {
-		m.resourceNames[namespace] = make(map[string]map[string]struct{})
+	if _, exists := m.resourceNames[labels.Namespace]; !exists {
+		m.resourceNames[labels.Namespace] = make(map[string]map[string]struct{})
 	}
 
-	if _, exists := m.resourceNames[namespace][name]; !exists {
-		m.resourceNames[namespace][name] = make(map[string]struct{})
+	if _, exists := m.resourceNames[labels.Namespace][labels.Name]; !exists {
+		m.resourceNames[labels.Namespace][labels.Name] = make(map[string]struct{})
 	}
 
-	m.resourceNames[namespace][name][resource] = struct{}{}
+	m.resourceNames[labels.Namespace][labels.Name][labels.Resource] = struct{}{}
 
-	m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Inc()
+	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Inc()
 }
 
 // DecResources decrements the resource count gauge.
-func (m *collectionMetrics) DecResources(namespace, name, resource string) {
+func (m *collectionMetrics) DecResources(labels CollectionResourcesLabels) {
 	m.resourcesLock.Lock()
 	defer m.resourcesLock.Unlock()
 
-	if _, exists := m.resourceNames[namespace]; !exists {
-		m.resourceNames[namespace] = make(map[string]map[string]struct{})
+	if _, exists := m.resourceNames[labels.Namespace]; !exists {
+		m.resourceNames[labels.Namespace] = make(map[string]map[string]struct{})
 	}
 
-	if _, exists := m.resourceNames[namespace][name]; !exists {
-		m.resourceNames[namespace][name] = make(map[string]struct{})
+	if _, exists := m.resourceNames[labels.Namespace][labels.Name]; !exists {
+		m.resourceNames[labels.Namespace][labels.Name] = make(map[string]struct{})
 	}
 
-	m.resourceNames[namespace][name][resource] = struct{}{}
+	m.resourceNames[labels.Namespace][labels.Name][labels.Resource] = struct{}{}
 
-	m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Dec()
+	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Dec()
 }
 
 // ResetCollectionMetrics resets the collection metrics.

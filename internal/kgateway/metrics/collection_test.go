@@ -19,7 +19,7 @@ func TestNewCollectionMetrics(t *testing.T) {
 
 	finishFunc := m.TransformStart()
 	finishFunc(nil)
-	m.SetResources("default", "test", "route", 5)
+	m.SetResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -121,8 +121,8 @@ func TestCollectionResources(t *testing.T) {
 	m := NewCollectionRecorder("test-collection")
 
 	// Test SetResources.
-	m.SetResources("default", "test", "route", 5)
-	m.SetResources("kube-system", "test", "gateway", 3)
+	m.SetResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
+	m.SetResources(CollectionResourcesLabels{Namespace: "kube-system", Name: "test", Resource: "gateway"}, 3)
 
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestCollectionResources(t *testing.T) {
 	assert.True(t, found, "kgateway_collection_resources metric not found")
 
 	// Test IncResources.
-	m.IncResources("default", "test", "route")
+	m.IncResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestCollectionResources(t *testing.T) {
 	}
 
 	// Test DecResources.
-	m.DecResources("default", "test", "route")
+	m.DecResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	metricFamilies, err = metrics.Registry.Gather()
 	require.NoError(t, err)

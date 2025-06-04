@@ -48,8 +48,16 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	finish := proxySyncer.routeStatusMetrics.StatusSyncStart()
 	finish(nil)
 
-	proxySyncer.routeStatusMetrics.SetResources("default", "test", "HTTPRoute", 5)
-	proxySyncer.routeStatusMetrics.SetResources("kube-system", "test", "TCPRoute", 3)
+	proxySyncer.routeStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "HTTPRoute",
+	}, 5)
+	proxySyncer.routeStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "kube-system",
+		Name:      "test",
+		Resource:  "TCPRoute",
+	}, 3)
 
 	expectedTranslationCounter := `
 		# HELP kgateway_status_syncer_status_syncs_total Total translations
@@ -83,7 +91,11 @@ func testGatewayMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	finish := proxySyncer.gatewayStatusMetrics.StatusSyncStart()
 	finish(errors.New("gateway sync error"))
 
-	proxySyncer.gatewayStatusMetrics.SetResources("default", "test", "Gateway", 2)
+	proxySyncer.gatewayStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "Gateway",
+	}, 2)
 
 	metricFamilies, err := crmetrics.Registry.Gather()
 	require.NoError(t, err)
@@ -107,9 +119,21 @@ func testGatewayMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 }
 
 func testListenerMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	proxySyncer.listenerStatusMetrics.IncResources("default", "test", "ListenerSet")
-	proxySyncer.listenerStatusMetrics.IncResources("default", "test", "ListenerSet")
-	proxySyncer.listenerStatusMetrics.DecResources("default", "test", "ListenerSet")
+	proxySyncer.listenerStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "ListenerSet",
+	})
+	proxySyncer.listenerStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "ListenerSet",
+	})
+	proxySyncer.listenerStatusMetrics.DecResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "ListenerSet",
+	})
 
 	metricFamilies, err := crmetrics.Registry.Gather()
 	require.NoError(t, err)
@@ -138,7 +162,11 @@ func testPolicyMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	finish := proxySyncer.policyStatusMetrics.StatusSyncStart()
 	finish(nil)
 
-	proxySyncer.policyStatusMetrics.SetResources("default", "test", "Policy", 7)
+	proxySyncer.policyStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "Policy",
+	}, 7)
 
 	metricFamilies, err := crmetrics.Registry.Gather()
 	require.NoError(t, err)
@@ -182,7 +210,11 @@ func testMetricsLinting(t *testing.T) {
 	finish := routeRecorder.StatusSyncStart()
 	finish(nil)
 
-	routeRecorder.SetResources("default", "test", "HTTPRoute", 1)
+	routeRecorder.SetResources(metrics.StatusSyncResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "HTTPRoute",
+	}, 1)
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(
