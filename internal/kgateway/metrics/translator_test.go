@@ -1,4 +1,4 @@
-package metrics
+package metrics_test
 
 import (
 	"testing"
@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 func TestNewTranslatorMetrics(t *testing.T) {
@@ -14,9 +16,6 @@ func TestNewTranslatorMetrics(t *testing.T) {
 
 	translatorName := "test-translator"
 	m := NewTranslatorRecorder(translatorName)
-
-	assert.IsType(t, &translatorMetrics{}, m)
-	assert.Equal(t, translatorName, (m.(*translatorMetrics)).translatorName)
 
 	finishFunc := m.TranslationStart()
 	finishFunc(nil)

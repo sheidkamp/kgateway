@@ -1,4 +1,4 @@
-package metrics
+package metrics_test
 
 import (
 	"testing"
@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 func TestNewCollectionMetrics(t *testing.T) {
@@ -14,9 +16,6 @@ func TestNewCollectionMetrics(t *testing.T) {
 
 	collectionName := "test-collection"
 	m := NewCollectionRecorder(collectionName)
-
-	assert.IsType(t, &collectionMetrics{}, m)
-	assert.Equal(t, collectionName, (m.(*collectionMetrics)).collectionName)
 
 	finishFunc := m.TransformStart()
 	finishFunc(nil)
