@@ -1,4 +1,4 @@
-package metrics
+package metrics_test
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 func TestNewControllerMetrics(t *testing.T) {
@@ -15,9 +17,6 @@ func TestNewControllerMetrics(t *testing.T) {
 
 	controllerName := "test-controller"
 	m := NewControllerRecorder(controllerName)
-
-	assert.IsType(t, &controllerMetrics{}, m)
-	assert.Equal(t, controllerName, (m.(*controllerMetrics)).controllerName)
 
 	finishFunc := m.ReconcileStart()
 	finishFunc(nil)

@@ -1,4 +1,4 @@
-package metrics
+package metrics_test
 
 import (
 	"testing"
@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 func TestNewStatusSyncerMetrics(t *testing.T) {
@@ -14,9 +16,6 @@ func TestNewStatusSyncerMetrics(t *testing.T) {
 
 	syncerName := "test-syncer"
 	m := NewStatusSyncRecorder(syncerName)
-
-	assert.IsType(t, &statusSyncMetrics{}, m)
-	assert.Equal(t, syncerName, (m.(*statusSyncMetrics)).syncerName)
 
 	finishFunc := m.StatusSyncStart()
 	finishFunc(nil)
