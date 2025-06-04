@@ -16,6 +16,7 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
@@ -89,8 +90,11 @@ func NewK8sEndpoints(ctx context.Context, inputs EndpointsInputs) krt.Collection
 
 func transformK8sEndpoints(ctx context.Context, inputs EndpointsInputs) func(kctx krt.HandlerContext, backend ir.BackendObjectIR) *ir.EndpointsForBackend {
 	augmentedPods := inputs.Pods
+	metrics := metrics.NewCollectionRecorder("K8sEndpoints")
 
 	return func(kctx krt.HandlerContext, backend ir.BackendObjectIR) *ir.EndpointsForBackend {
+		defer metrics.TransformStart()(nil)
+
 		var warnsToLog []string
 		defer func() {
 			for _, warn := range warnsToLog {
@@ -203,7 +207,10 @@ func transformK8sEndpoints(ctx context.Context, inputs EndpointsInputs) func(kct
 				}
 			}
 		}
+
+		metrics.SetResources(backend.Namespace, backend.Name, "Endpoints", len(ret.LbEps))
 		kubeSvcLogger.Debug("created endpoint", "total_endpoints", len(ret.LbEps))
+
 		return ret
 	}
 }
@@ -290,6 +297,9 @@ func findPortInEndpointSlice(endpointSlice *discoveryv1.EndpointSlice, singlePor
 			port = uint32(*p.Port)
 		case p.Name != nil && *p.Name == kubeServicePort.Name:
 			port = uint32(*p.Port)
+		}
+
+		if port != 0 {
 			break
 		}
 	}

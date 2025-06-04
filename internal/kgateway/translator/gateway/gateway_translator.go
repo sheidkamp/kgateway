@@ -10,6 +10,7 @@ import (
 
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/listener"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils"
@@ -27,12 +28,14 @@ func NewTranslator(queries query.GatewayQueries, settings TranslatorConfig) exte
 	return &translator{
 		queries:  queries,
 		settings: settings,
+		metrics:  metrics.NewTranslatorRecorder("TranslateGatewayProxy"),
 	}
 }
 
 type translator struct {
 	queries  query.GatewayQueries
 	settings TranslatorConfig
+	metrics  metrics.TranslatorRecorder
 }
 
 func (t *translator) Translate(
@@ -44,6 +47,8 @@ func (t *translator) Translate(
 	stopwatch := utils.NewTranslatorStopWatch("TranslateProxy")
 	stopwatch.Start()
 	defer stopwatch.Stop(ctx)
+
+	defer t.metrics.TranslationStart()(nil)
 
 	routesForGw, err := t.queries.GetRoutesForGateway(kctx, ctx, gateway)
 	if err != nil {
@@ -73,6 +78,8 @@ func (t *translator) Translate(
 		reporter,
 		t.settings.ListenerTranslatorConfig,
 	)
+
+	t.metrics.SetResources(gateway.Namespace, gateway.Name, "Listener", len(listeners))
 
 	return &ir.GatewayIR{
 		SourceObject:         gateway,

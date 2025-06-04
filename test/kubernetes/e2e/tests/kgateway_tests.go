@@ -13,6 +13,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/extproc"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/lambda"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/local_rate_limit"
+	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/metrics"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/policyselector"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/rate_limit"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/route_delegation"
@@ -54,6 +55,7 @@ func KubeGatewaySuiteRunner() e2e.SuiteRunner {
 	kubeGatewaySuiteRunner.Register("PolicySelector", policyselector.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("Cors", cors.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("BackendConfigPolicy", backendconfigpolicy.NewTestingSuite)
+	kubeGatewaySuiteRunner.Register("Metrics", metrics.NewTestingSuite)
 
 	// kubeGatewaySuiteRunner.Register("HttpListenerOptions", http_listener_options.NewTestingSuite)
 	// kubeGatewaySuiteRunner.Register("ListenerOptions", listener_options.NewTestingSuite)
@@ -64,7 +66,7 @@ func KubeGatewaySuiteRunner() e2e.SuiteRunner {
 	// kubeGatewaySuiteRunner.Register("GlooAdminServer", admin_server.NewTestingSuite)
 	// kubeGatewaySuiteRunner.Register("DirectResponse", directresponse.NewTestingSuite)
 	// kubeGatewaySuiteRunner.Register("CRDCategories", crd_categories.NewTestingSuite)
-	// kubeGatewaySuiteRunner.Register("Metrics", metrics.NewTestingSuite)
+	// kubeGatewaySuiteRunner.Register("EnvoyMetrics", proxy_metrics.NewTestingSuite)
 
 	return kubeGatewaySuiteRunner
 }

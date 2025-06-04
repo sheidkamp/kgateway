@@ -12,6 +12,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/deployer"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 )
 
@@ -19,11 +20,16 @@ type inferencePoolReconciler struct {
 	cli      client.Client
 	scheme   *runtime.Scheme
 	deployer *deployer.Deployer
+	metrics  metrics.ControllerRecorder
 }
 
-func (r *inferencePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *inferencePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {
 	log := log.FromContext(ctx).WithValues("inferencepool", req.NamespacedName)
 	log.V(1).Info("reconciling request", "request", req)
+
+	if r.metrics != nil {
+		defer r.metrics.ReconcileStart()(rErr)
+	}
 
 	pool := new(infextv1a2.InferencePool)
 	if err := r.cli.Get(ctx, req.NamespacedName, pool); err != nil {

@@ -14,6 +14,7 @@ import (
 
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/reports"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
@@ -25,6 +26,7 @@ var logger = logging.New("translator/ir")
 
 type Translator struct {
 	ContributedPolicies map[schema.GroupKind]extensionsplug.PolicyPlugin
+	metrics             metrics.TranslatorRecorder
 }
 
 type TranslationPassPlugins map[schema.GroupKind]*TranslationPass
@@ -37,6 +39,12 @@ type TranslationResult struct {
 
 // Translate IR to gateway. IR is self contained, so no need for krt context
 func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) TranslationResult {
+	if t.metrics == nil {
+		t.metrics = metrics.NewTranslatorRecorder("TranslateGatewayIR")
+	}
+
+	defer t.metrics.TranslationStart()(nil)
+
 	pass := t.newPass(reporter)
 	var res TranslationResult
 
@@ -53,6 +61,10 @@ func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) Trans
 			res.ExtraClusters = append(res.ExtraClusters, r.Clusters...)
 		}
 	}
+
+	t.metrics.SetResources(gw.SourceObject.GetNamespace(), gw.SourceObject.GetName(), "RouteConfiguration", len(res.Routes))
+	t.metrics.SetResources(gw.SourceObject.GetNamespace(), gw.SourceObject.GetName(), "Listener", len(res.Listeners))
+	t.metrics.SetResources(gw.SourceObject.GetNamespace(), gw.SourceObject.GetName(), "ExtraClusters", len(res.ExtraClusters))
 
 	return res
 }

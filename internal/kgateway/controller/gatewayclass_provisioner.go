@@ -19,6 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	apiv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 // gatewayClassProvisioner reconciles the provisioned GatewayClass objects
@@ -33,6 +35,7 @@ type gatewayClassProvisioner struct {
 	// initialReconcileCh is a channel that is used to trigger initial reconciliation when
 	// no GatewayClass objects exist in the cluster.
 	initialReconcileCh chan event.TypedGenericEvent[client.Object]
+	metrics            metrics.ControllerRecorder
 }
 
 var _ reconcile.TypedReconciler[reconcile.Request] = &gatewayClassProvisioner{}
@@ -51,6 +54,7 @@ func NewGatewayClassProvisioner(mgr ctrl.Manager, controllerName string, classCo
 		controllerName:     controllerName,
 		classConfigs:       classConfigs,
 		initialReconcileCh: initialReconcileCh,
+		metrics:            metrics.NewControllerRecorder(controllerName + "-gatewayclass-provisioner"),
 	}
 	if err := provisioner.SetupWithManager(mgr); err != nil {
 		return err
@@ -70,7 +74,7 @@ func (r *gatewayClassProvisioner) SetupWithManager(mgr ctrl.Manager) error {
 			gc, ok := obj.(*apiv1.GatewayClass)
 			return ok && gc.Spec.ControllerName == apiv1.GatewayController(r.controllerName)
 		})).
-		WatchesRawSource(source.Channel(r.initialReconcileCh, handler.TypedEnqueueRequestsFromMapFunc[client.Object, reconcile.Request](
+		WatchesRawSource(source.Channel(r.initialReconcileCh, handler.TypedEnqueueRequestsFromMapFunc(
 			func(ctx context.Context, o client.Object) []reconcile.Request {
 				return []reconcile.Request{{NamespacedName: client.ObjectKeyFromObject(o)}}
 			},
@@ -78,10 +82,14 @@ func (r *gatewayClassProvisioner) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {
 	log := log.FromContext(ctx)
 	log.Info("reconciling GatewayClasses", "controllerName", "gatewayclass-provisioner")
 	defer log.Info("finished reconciling GatewayClasses", "controllerName", "gatewayclass-provisioner")
+
+	if r.metrics != nil {
+		defer r.metrics.ReconcileStart()(rErr)
+	}
 
 	var errs []error
 	for name, config := range r.classConfigs {

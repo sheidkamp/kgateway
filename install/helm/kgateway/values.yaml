@@ -57,6 +57,7 @@ controller:
     ports:
       grpc: 9977
       health: 9093
+      metrics: 9092
   extraEnv: {}
 
 image:
