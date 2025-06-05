@@ -4,6 +4,7 @@ import (
 	"context"
 
 	xdsserver "github.com/envoyproxy/go-control-plane/pkg/server/v3"
+
 	core "github.com/kgateway-dev/kgateway/v2/internal/kgateway/setup"
 	sdk "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk"
 	common "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"

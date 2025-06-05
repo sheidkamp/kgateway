@@ -1,10 +1,10 @@
 # Metrics Package
 
-The purpose of this packgage is to encapsulate the implementation of the control plane metrics.
+The purpose of this package is to encapsulate the implementation of the control plane metrics.
 
 - All metrics are defined and initialized at package level and not exported.
 - The package currently uses "github.com/prometheus/client_golang" as the metrics backend.
-- All metrics are initialized and registered with the controller-runtime regsistry with the init process in [metrics.go](metrics.go).
+- All metrics are initialized and registered with the controller-runtime registry with the init process in [metrics.go](metrics.go).
 - Constants are used to ensure metric naming conventions are followed for namespaces and subsystems. And, the following naming conventions are used for metrics and labels: https://prometheus.io/docs/practices/naming/.
 - Metrics recorder interfaces are exported, with functions to create them.
 - These interfaces are the way metrics are computed or interacted with in any code outside of this package.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -12,6 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	api "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 var _ = Describe("GwController", func() {
