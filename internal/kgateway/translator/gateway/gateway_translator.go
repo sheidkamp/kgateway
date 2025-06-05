@@ -79,12 +79,6 @@ func (t *translator) Translate(
 		t.settings.ListenerTranslatorConfig,
 	)
 
-	t.metrics.SetResources(metrics.TranslatorResourcesLabels{
-		Name:      gateway.Name,
-		Namespace: gateway.Namespace,
-		Resource:  "Listener",
-	}, len(listeners))
-
 	return &ir.GatewayIR{
 		SourceObject:         gateway,
 		Listeners:            listeners,

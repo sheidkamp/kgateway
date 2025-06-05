@@ -62,22 +62,6 @@ func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) Trans
 		}
 	}
 
-	t.metrics.SetResources(metrics.TranslatorResourcesLabels{
-		Namespace: gw.SourceObject.GetNamespace(),
-		Name:      gw.SourceObject.GetName(),
-		Resource:  "RouteConfiguration",
-	}, len(res.Routes))
-	t.metrics.SetResources(metrics.TranslatorResourcesLabels{
-		Namespace: gw.SourceObject.GetNamespace(),
-		Name:      gw.SourceObject.GetName(),
-		Resource:  "Listener",
-	}, len(res.Listeners))
-	t.metrics.SetResources(metrics.TranslatorResourcesLabels{
-		Namespace: gw.SourceObject.GetNamespace(),
-		Name:      gw.SourceObject.GetName(),
-		Resource:  "ExtraClusters",
-	}, len(res.ExtraClusters))
-
 	return res
 }
 
