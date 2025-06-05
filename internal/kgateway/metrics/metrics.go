@@ -10,8 +10,11 @@ import (
 
 const metricsNamespace = "kgateway"
 
+// MetricsRegistry stores registered metrics indexed by name.
+type MetricsRegistry map[string]prometheus.Collector
+
 var (
-	metricsToRegister = map[string]prometheus.Collector{
+	metricsToRegister = MetricsRegistry{
 		"transformsTotal":      transformsTotal,
 		"transformDuration":    transformDuration,
 		"collectionResources":  collectionResources,
@@ -27,15 +30,16 @@ var (
 	}
 )
 
-func registerMetrics() {
-	for name, metric := range metricsToRegister {
+func init() {
+	RegisterMetrics(metricsToRegister)
+}
+
+// RegisterMetrics registers a map of metrics with the controller-runtime metrics registry.
+func RegisterMetrics(registry MetricsRegistry) {
+	for name, metric := range registry {
 		if err := metrics.Registry.Register(metric); err != nil &&
 			!errors.Is(err, &prometheus.AlreadyRegisteredError{}) {
 			panic("failed to register " + name + " metric: " + err.Error())
 		}
 	}
-}
-
-func init() {
-	registerMetrics()
 }

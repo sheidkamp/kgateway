@@ -36,8 +36,15 @@ func WithExtraPlugins(extraPlugins func(ctx context.Context, commoncol *common.C
 	}
 }
 
+func WithExtraXDSCallbacks(extraXDSCallbacks xdsserver.Callbacks) func(*setup) {
+	return func(s *setup) {
+		s.extraXDSCallbacks = extraXDSCallbacks
+	}
+}
+
 type setup struct {
-	extraPlugins func(ctx context.Context, commoncol *common.CommonCollections) []sdk.Plugin
+	extraPlugins      func(ctx context.Context, commoncol *common.CommonCollections) []sdk.Plugin
+	extraXDSCallbacks xdsserver.Callbacks
 }
 
 var _ Server = &setup{}
@@ -51,12 +58,13 @@ func New(opts ...func(*setup)) *setup {
 }
 
 func (s *setup) Start(ctx context.Context) error {
-	return StartKgateway(ctx, s.extraPlugins)
+	return StartKgateway(ctx, s.extraPlugins, s.extraXDSCallbacks)
 }
 
 func StartKgateway(
 	ctx context.Context,
 	extraPlugins func(ctx context.Context, commoncol *common.CommonCollections) []sdk.Plugin,
+	extraXDSCallbacks xdsserver.Callbacks,
 ) error {
 	// load global settings
 	st, err := settings.BuildSettings()
@@ -67,7 +75,7 @@ func StartKgateway(
 	setupLogging(st.LogLevel)
 	slog.Info("global settings loaded", "settings", *st)
 
-	uniqueClientCallbacks, uccBuilder := krtcollections.NewUniquelyConnectedClients()
+	uniqueClientCallbacks, uccBuilder := krtcollections.NewUniquelyConnectedClients(extraXDSCallbacks)
 	cache, err := startControlPlane(ctx, st.XdsServicePort, uniqueClientCallbacks)
 	if err != nil {
 		return err
