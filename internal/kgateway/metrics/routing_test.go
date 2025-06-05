@@ -3,10 +3,6 @@ package metrics_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
-
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
@@ -27,21 +23,16 @@ func TestNewRouteMetrics(t *testing.T) {
 		Port:        port,
 	}, 5)
 
-	metricFamilies, err := metrics.Registry.Gather()
-	require.NoError(t, err)
-
 	expectedMetrics := []string{
 		"kgateway_routing_domains",
 	}
 
-	foundMetrics := make(map[string]bool)
-	for _, mf := range metricFamilies {
-		foundMetrics[*mf.Name] = true
-	}
+	currentMetrics := mustGatherMetrics(t)
 
 	for _, expected := range expectedMetrics {
-		assert.True(t, foundMetrics[expected], "Expected metric %s not found", expected)
+		currentMetrics.assertMetricExists(expected)
 	}
+
 }
 
 func TestSetDomainPerListener(t *testing.T) {
@@ -55,20 +46,12 @@ func TestSetDomainPerListener(t *testing.T) {
 		Port:        port,
 	}, 5)
 
-	metricFamilies, err := metrics.Registry.Gather()
-	require.NoError(t, err)
+	currentMetrics := mustGatherMetrics(t)
 
-	var found bool
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_routing_domains" {
-			found = true
-			assert.Equal(t, 1, len(mf.Metric))
-			assert.Equal(t, gateway, *mf.Metric[0].Label[0].Value)
-			assert.Equal(t, namespace, *mf.Metric[0].Label[1].Value)
-			assert.Equal(t, port, *mf.Metric[0].Label[2].Value)
-			assert.Equal(t, float64(5), mf.Metric[0].Gauge.GetValue())
-		}
-	}
-
-	assert.True(t, found, "kgateway_routing_domains metric not found")
+	currentMetrics.assertMetricLabels("kgateway_routing_domains", []*metricLabel{
+		{name: "gatewayName", value: gateway},
+		{name: "namespace", value: namespace},
+		{name: "port", value: port},
+	})
+	currentMetrics.assertMetricGaugeValue("kgateway_routing_domains", 5)
 }

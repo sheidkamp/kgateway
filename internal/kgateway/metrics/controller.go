@@ -40,6 +40,8 @@ type ControllerRecorder interface {
 	ReconcileStart() func(error)
 }
 
+type nowFunc func() time.Time
+
 // controllerMetrics provides metrics for controller operations.
 type controllerMetrics struct {
 	controllerName       string
@@ -58,11 +60,16 @@ func NewControllerRecorder(controllerName string) ControllerRecorder {
 	return m
 }
 
+func (m *controllerMetrics) WithNowFunc(now nowFunc) ControllerRecorder {
+	m.now = now
+	return m
+}
+
 // ReconcileStart is called at the start of a controller reconciliation function
 // to begin metrics collection and returns a function called at the end to
 // complete metrics recording.
 func (m *controllerMetrics) ReconcileStart() func(error) {
-	start := time.Now()
+	start := m.now()
 
 	return func(err error) {
 		duration := time.Since(start)

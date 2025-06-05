@@ -25,6 +25,7 @@ var (
 		"statusSyncResources":  statusSyncResources,
 		"translationsTotal":    translationsTotal,
 		"translationDuration":  translationDuration,
+		"translationsRunning":  translationsRunning,
 		"domainsPerListener":   domainsPerListener,
 	}
 )
