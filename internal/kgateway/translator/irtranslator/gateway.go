@@ -130,11 +130,13 @@ func (t *Translator) ComputeListener(
 				domainsOnListener += len(vhost.Domains)
 			}
 
-			t.routingMetrics.SetDomainPerListener(metrics.DomainPerListenerLabels{
-				Namespace:   hr.gw.SourceObject.GetNamespace(),
-				GatewayName: hr.gw.SourceObject.GetName(),
-				Port:        strconv.Itoa(int(lis.BindPort)),
-			}, domainsOnListener)
+			if t.routingMetrics != nil {
+				t.routingMetrics.SetDomainPerListener(metrics.DomainPerListenerLabels{
+					Namespace:   hr.gw.SourceObject.GetNamespace(),
+					GatewayName: hr.gw.SourceObject.GetName(),
+					Port:        strconv.Itoa(int(lis.BindPort)),
+				}, domainsOnListener)
+			}
 		}
 
 		// compute chains

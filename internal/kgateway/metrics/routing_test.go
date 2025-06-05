@@ -31,7 +31,7 @@ func TestNewRouteMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedMetrics := []string{
-		"kgateway_route_domains",
+		"kgateway_routing_domains",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -60,7 +60,7 @@ func TestSetDomainPerListener(t *testing.T) {
 
 	var found bool
 	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_route_domains" {
+		if *mf.Name == "kgateway_routing_domains" {
 			found = true
 			assert.Equal(t, 1, len(mf.Metric))
 			assert.Equal(t, gateway, *mf.Metric[0].Label[0].Value)
@@ -70,5 +70,5 @@ func TestSetDomainPerListener(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "kgateway_route_domains metric not found")
+	assert.True(t, found, "kgateway_routing_domains metric not found")
 }
