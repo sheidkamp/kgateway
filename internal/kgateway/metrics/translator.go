@@ -33,6 +33,15 @@ var (
 		},
 		[]string{translatorNameLabel},
 	)
+	translationsRunning = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: metricsNamespace,
+			Subsystem: translatorSubsystem,
+			Name:      "translations_running",
+			Help:      "Number of translations currently running",
+		},
+		[]string{translatorNameLabel},
+	)
 )
 
 // TranslatorRecorder defines the interface for recording translator metrics.
@@ -45,6 +54,7 @@ type translatorMetrics struct {
 	translatorName      string
 	translationsTotal   *prometheus.CounterVec
 	translationDuration *prometheus.HistogramVec
+	translationsRunning *prometheus.GaugeVec
 }
 
 // NewTranslatorRecorder creates a new recorder for translator metrics.
@@ -53,6 +63,7 @@ func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
 		translatorName:      translatorName,
 		translationsTotal:   translationsTotal,
 		translationDuration: translationDuration,
+		translationsRunning: translationsRunning,
 	}
 
 	return m
@@ -62,6 +73,7 @@ func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
 // collection and returns a function called at the end to complete metrics recording.
 func (m *translatorMetrics) TranslationStart() func(error) {
 	start := time.Now()
+	m.translationsRunning.WithLabelValues(m.translatorName).Inc()
 
 	return func(err error) {
 		duration := time.Since(start)
@@ -74,6 +86,7 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 		}
 
 		m.translationsTotal.WithLabelValues(m.translatorName, result).Inc()
+		m.translationsRunning.WithLabelValues(m.translatorName).Dec()
 	}
 }
 
@@ -81,6 +94,7 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 func ResetTranslatorMetrics() {
 	translationsTotal.Reset()
 	translationDuration.Reset()
+	translationsRunning.Reset()
 }
 
 // GetTranslationsTotal returns the translations counter.
@@ -91,4 +105,9 @@ func GetTranslationsTotal() *prometheus.CounterVec {
 // GetTranslationDuration returns the translation duration histogram.
 func GetTranslationDuration() *prometheus.HistogramVec {
 	return translationDuration
+}
+
+// GetTranslationsRunning returns the translations running gauge.
+func GetTranslationsRunning() *prometheus.GaugeVec {
+	return translationsRunning
 }
