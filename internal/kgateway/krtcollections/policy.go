@@ -381,7 +381,6 @@ func NewGatewayIndex(
 
 			out.AllowedListenerSets = append(out.AllowedListenerSets, lsIR)
 			out.Listeners = append(out.Listeners, lsIR.Listeners...)
-
 		}
 
 		slices.SortFunc(out.AllowedListenerSets, func(a, b ir.ListenerSet) int {
