@@ -2,6 +2,7 @@ package irtranslator
 
 import (
 	"sort"
+	"strconv"
 
 	envoy_config_cluster_v3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	envoy_config_listener_v3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -27,6 +28,7 @@ var logger = logging.New("translator/ir")
 type Translator struct {
 	ContributedPolicies map[schema.GroupKind]extensionsplug.PolicyPlugin
 	metrics             metrics.TranslatorRecorder
+	routingMetrics      metrics.RoutingRecorder
 }
 
 type TranslationPassPlugins map[schema.GroupKind]*TranslationPass
@@ -41,6 +43,10 @@ type TranslationResult struct {
 func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) TranslationResult {
 	if t.metrics == nil {
 		t.metrics = metrics.NewTranslatorRecorder("TranslateGatewayIR")
+	}
+
+	if t.routingMetrics == nil {
+		t.routingMetrics = metrics.NewRoutingRecorder()
 	}
 
 	defer t.metrics.TranslationStart()(nil)
@@ -115,6 +121,20 @@ func (t *Translator) ComputeListener(
 		rc := hr.ComputeRouteConfiguration(ctx, hfc.Vhosts)
 		if rc != nil {
 			routes = append(routes, rc)
+
+			// Record metrics for the number of domains per listener.
+			// Only one domain per virtual host is supported currently, but that may change in the future,
+			//so loop through the virtual hosts and count the domains.
+			domainsOnListener := 0
+			for _, vhost := range rc.VirtualHosts {
+				domainsOnListener += len(vhost.Domains)
+			}
+
+			t.routingMetrics.SetDomainPerListener(metrics.DomainPerListenerLabels{
+				Namespace:   hr.gw.SourceObject.GetNamespace(),
+				GatewayName: hr.gw.SourceObject.GetName(),
+				Port:        strconv.Itoa(int(lis.BindPort)),
+			}, domainsOnListener)
 		}
 
 		// compute chains
