@@ -22,20 +22,10 @@ func setupTest() {
 	ResetRoutingMetrics()
 }
 
+// Generic metric structs
 type metricLabel struct {
 	name  string
 	value string
-}
-
-type testMetric interface {
-	GetLabels() []*metricLabel
-	GetCounterValue() float64
-	GetGaugeValue() float64
-	GetHistogramValue() *histogramMetricOutput
-}
-
-type prometheusMetric struct {
-	metric *dto.Metric
 }
 
 type histogramMetricOutput struct {
@@ -43,70 +33,89 @@ type histogramMetricOutput struct {
 	sampleSum   float64
 }
 
-func (m *prometheusMetric) GetLabels() []*metricLabel {
-	labels := make([]*metricLabel, len(m.metric.Label))
-	for i, label := range m.metric.Label {
-		labels[i] = &metricLabel{
-			name:  *label.Name,
-			value: *label.Value,
-		}
-	}
-	return labels
+// Gathered metrics interface
+type gatheredMetrics interface {
+	assertMetricLabels(name string, expectedLabels []*metricLabel)
+	assertMetricCounterValue(name string, expectedValue float64)
+	assertMetricGaugeValue(name string, expectedValue float64)
+	assertMetricHistogramValue(name string, expectedValue *histogramMetricOutput)
+	assertHistogramPopulated(name string)
+	assertMetricExists(name string)
 }
 
-func (m *prometheusMetric) GetGaugeValue() float64 {
-	return m.metric.Gauge.GetValue()
+var _ gatheredMetrics = &prometheusGatheredMetrics{}
+
+// gathered metrics implementation for prometheus
+type prometheusGatheredMetrics struct {
+	metrics map[string][]*dto.Metric
+	t       *testing.T
 }
 
-func (m *prometheusMetric) GetHistogramValue() *histogramMetricOutput {
-	return &histogramMetricOutput{
-		sampleCount: *m.metric.Histogram.SampleCount,
-		sampleSum:   *m.metric.Histogram.SampleSum,
-	}
-}
-
-func (m *prometheusMetric) GetCounterValue() float64 {
-	return m.metric.Counter.GetValue()
-}
-
-type gatheredMetrics struct {
-	metrics map[string][]testMetric
-}
-
-func (g *gatheredMetrics) mustGetMetric(t *testing.T, name string) testMetric {
+func (g *prometheusGatheredMetrics) mustGetMetric(name string) *dto.Metric {
 	m, ok := g.metrics[name]
-	require.True(t, ok, "Metric %s not found", name)
-	require.Equal(t, 1, len(m), "Expected 1 metric for %s", name)
+	require.True(g.t, ok, "Metric %s not found", name)
+	require.Equal(g.t, 1, len(m), "Expected 1 metric for %s", name)
 	return m[0]
 }
 
+func (g *prometheusGatheredMetrics) assertMetricLabels(name string, expectedLabels []*metricLabel) {
+	metric := g.mustGetMetric(name)
+
+	assert.Equal(g.t, len(expectedLabels), len(metric.Label), "Expected %d labels, got %d", len(expectedLabels), len(metric.Label))
+	for i, label := range expectedLabels {
+		assert.Equal(g.t, label.name, *metric.Label[i].Name, "Label %d name mismatch - expected %s, got %s", i, label.name, *metric.Label[i].Name)
+		assert.Equal(g.t, label.value, *metric.Label[i].Value, "Label %d value mismatch - expected %s, got %s", i, label.value, *metric.Label[i].Value)
+	}
+}
+
+func (g *prometheusGatheredMetrics) assertMetricCounterValue(name string, expectedValue float64) {
+	metric := g.mustGetMetric(name)
+	assert.Equal(g.t, expectedValue, metric.Counter.GetValue())
+}
+
+func (g *prometheusGatheredMetrics) assertMetricGaugeValue(name string, expectedValue float64) {
+	metric := g.mustGetMetric(name)
+	assert.Equal(g.t, expectedValue, metric.Gauge.GetValue())
+}
+
+func (g *prometheusGatheredMetrics) assertMetricHistogramValue(name string, expectedValue *histogramMetricOutput) {
+	metric := g.mustGetMetric(name)
+	assert.Equal(g.t, expectedValue, &histogramMetricOutput{
+		sampleCount: *metric.Histogram.SampleCount,
+		sampleSum:   *metric.Histogram.SampleSum,
+	})
+}
+
+func (g *prometheusGatheredMetrics) assertHistogramPopulated(name string) {
+	metric := g.mustGetMetric(name)
+	assert.True(g.t, *metric.Histogram.SampleCount > 0, "Histogram %s is not populated", name)
+	assert.True(g.t, *metric.Histogram.SampleSum > 0, "Histogram %s is not populated", name)
+}
+
+func (g *prometheusGatheredMetrics) assertMetricExists(name string) {
+	_, ok := g.metrics[name]
+	assert.True(g.t, ok, "Metric %s not found", name)
+}
+
 func mustGatherPrometheusMetrics(t *testing.T) gatheredMetrics {
-	gathered := gatheredMetrics{
-		metrics: make(map[string][]testMetric),
+	gathered := prometheusGatheredMetrics{
+		metrics: make(map[string][]*dto.Metric),
+		t:       t,
 	}
 	metricFamilies, err := metrics.Registry.Gather()
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		metrics := make([]testMetric, len(mf.Metric))
+		metrics := make([]*dto.Metric, len(mf.Metric))
 		for i, m := range mf.Metric {
-			metrics[i] = &prometheusMetric{metric: m}
+			metrics[i] = m
 		}
 		gathered.metrics[*mf.Name] = metrics
 	}
 
-	return gathered
+	return &gathered
 }
 
 func mustGatherMetrics(t *testing.T) gatheredMetrics {
 	return mustGatherPrometheusMetrics(t)
-}
-
-func assertMetricLabels(t *testing.T, metric testMetric, expectedLabels []*metricLabel) {
-	labels := metric.GetLabels()
-	assert.Equal(t, len(expectedLabels), len(labels), "Expected %d labels, got %d", len(expectedLabels), len(labels))
-	for i, label := range expectedLabels {
-		assert.Equal(t, label.name, labels[i].name, "Label %d name mismatch - expected %s, got %s", i, label.name, labels[i].name)
-		assert.Equal(t, label.value, labels[i].value, "Label %d value mismatch - expected %s, got %s", i, label.value, labels[i].value)
-	}
 }
