@@ -5,10 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/utils/ptr"
 
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
-	dto "github.com/prometheus/client_model/go"
 )
 
 func TestNewTranslatorMetrics(t *testing.T) {
@@ -32,12 +30,12 @@ func TestNewTranslatorMetrics(t *testing.T) {
 	}
 }
 
-func checkTranslationsRunning(t *testing.T, currentMetrics gatheredMetrics, translatorName string, count int) {
+func assertTranslationsRunning(t *testing.T, currentMetrics gatheredMetrics, translatorName string, count int) {
 	translationsRunning := currentMetrics.mustGetMetric(t, "kgateway_translator_translations_running")
-	assertMetricLabels(t, translationsRunning, []*dto.LabelPair{
-		{Name: ptr.To("translator"), Value: ptr.To(translatorName)},
+	assertMetricLabels(t, translationsRunning, []*metricLabel{
+		{name: "translator", value: translatorName},
 	})
-	assert.Equal(t, count, int(translationsRunning.Gauge.GetValue()))
+	assert.Equal(t, count, int(translationsRunning.GetGaugeValue()))
 }
 
 func TestTranslationStart_Success(t *testing.T) {
@@ -51,7 +49,7 @@ func TestTranslationStart_Success(t *testing.T) {
 
 	// Check that the translations_running metric is 1
 	currentMetrics := mustGatherMetrics(t)
-	checkTranslationsRunning(t, currentMetrics, "test-translator", 1)
+	assertTranslationsRunning(t, currentMetrics, "test-translator", 1)
 
 	// Finish translation
 	finishFunc(nil)
@@ -59,23 +57,23 @@ func TestTranslationStart_Success(t *testing.T) {
 	currentMetrics = mustGatherMetrics(t)
 
 	// Check the translations_running metric
-	checkTranslationsRunning(t, currentMetrics, "test-translator", 0)
+	assertTranslationsRunning(t, currentMetrics, "test-translator", 0)
 
 	// Check the translations_total metric
 	translationsTotal := currentMetrics.mustGetMetric(t, "kgateway_translator_translations_total")
-	assertMetricLabels(t, translationsTotal, []*dto.LabelPair{
-		{Name: ptr.To("result"), Value: ptr.To("success")},
-		{Name: ptr.To("translator"), Value: ptr.To("test-translator")},
+	assertMetricLabels(t, translationsTotal, []*metricLabel{
+		{name: "result", value: "success"},
+		{name: "translator", value: "test-translator"},
 	})
-	assert.Equal(t, float64(1), translationsTotal.Counter.GetValue())
+	assert.Equal(t, float64(1), translationsTotal.GetCounterValue())
 
 	// Check the translation_duration_seconds metric
 	translationDuration := currentMetrics.mustGetMetric(t, "kgateway_translator_translation_duration_seconds")
-	assertMetricLabels(t, translationDuration, []*dto.LabelPair{
-		{Name: ptr.To("translator"), Value: ptr.To("test-translator")},
+	assertMetricLabels(t, translationDuration, []*metricLabel{
+		{name: "translator", value: "test-translator"},
 	})
-	assert.True(t, *translationDuration.Histogram.SampleCount > 0)
-	assert.True(t, *translationDuration.Histogram.SampleSum > 0)
+	assert.True(t, translationDuration.GetHistogramValue().sampleCount > 0)
+	assert.True(t, translationDuration.GetHistogramValue().sampleSum > 0)
 
 }
 
@@ -86,17 +84,17 @@ func TestTranslationStart_Error(t *testing.T) {
 
 	finishFunc := m.TranslationStart()
 	currentMetrics := mustGatherMetrics(t)
-	checkTranslationsRunning(t, currentMetrics, "test-translator", 1)
+	assertTranslationsRunning(t, currentMetrics, "test-translator", 1)
 
 	finishFunc(assert.AnError)
 	currentMetrics = mustGatherMetrics(t)
-	checkTranslationsRunning(t, currentMetrics, "test-translator", 0)
+	assertTranslationsRunning(t, currentMetrics, "test-translator", 0)
 
 	translationsTotal := currentMetrics.mustGetMetric(t, "kgateway_translator_translations_total")
-	assertMetricLabels(t, translationsTotal, []*dto.LabelPair{
-		{Name: ptr.To("result"), Value: ptr.To("error")},
-		{Name: ptr.To("translator"), Value: ptr.To("test-translator")},
+	assertMetricLabels(t, translationsTotal, []*metricLabel{
+		{name: "result", value: "error"},
+		{name: "translator", value: "test-translator"},
 	})
-	assert.Equal(t, float64(1), translationsTotal.Counter.GetValue())
+	assert.Equal(t, float64(1), translationsTotal.GetCounterValue())
 
 }
