@@ -74,6 +74,7 @@ type ProxySyncer struct {
 	gatewayStatusMetrics  metrics.StatusSyncRecorder
 	listenerStatusMetrics metrics.StatusSyncRecorder
 	policyStatusMetrics   metrics.StatusSyncRecorder
+	xdsSnapshotsMetrics   metrics.CollectionRecorder
 }
 
 type GatewayXdsResources struct {
@@ -158,6 +159,7 @@ func NewProxySyncer(
 		gatewayStatusMetrics:  metrics.NewStatusSyncRecorder("GatewayStatusSyncer"),
 		listenerStatusMetrics: metrics.NewStatusSyncRecorder("ListenerSetStatusSyncer"),
 		policyStatusMetrics:   metrics.NewStatusSyncRecorder("PolicyStatusSyncer"),
+		xdsSnapshotsMetrics:   metrics.NewCollectionRecorder("ClientXDSSnapshots"),
 	}
 }
 
@@ -248,6 +250,7 @@ func (s *ProxySyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) {
 		s.mostXdsSnapshots,
 		epPerClient,
 		clustersPerClient,
+		s.xdsSnapshotsMetrics,
 	)
 
 	s.backendPolicyReport = krt.NewSingleton(func(kctx krt.HandlerContext) *report {

@@ -2,12 +2,15 @@ package proxy_syncer
 
 import (
 	"fmt"
+	"strings"
 
 	envoycachetypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 )
 
@@ -17,8 +20,11 @@ func snapshotPerClient(
 	mostXdsSnapshots krt.Collection[GatewayXdsResources],
 	endpoints PerClientEnvoyEndpoints,
 	clusters PerClientEnvoyClusters,
+	metricsRecorder metrics.CollectionRecorder,
 ) krt.Collection[XdsSnapWrapper] {
 	xdsSnapshotsForUcc := krt.NewCollection(uccCol, func(kctx krt.HandlerContext, ucc ir.UniqlyConnectedClient) *XdsSnapWrapper {
+		defer metricsRecorder.TransformStart()(nil)
+
 		maybeMostlySnap := krt.FetchOne(kctx, mostXdsSnapshots, krt.FilterKey(ucc.Role))
 		if maybeMostlySnap == nil {
 			logger.Debug("snapshot missing", "proxy_key", ucc.Role)
@@ -90,5 +96,71 @@ func snapshotPerClient(
 
 		return &snap
 	}, krtopts.ToOptions("PerClientXdsSnapshots")...)
+
+	xdsSnapshotsForUcc.Register(func(o krt.Event[XdsSnapWrapper]) {
+		namespace := o.Latest().ResourceName()
+
+		pks := strings.SplitN(namespace, "~", 5)
+		if len(pks) > 1 {
+			namespace = pks[1]
+		}
+
+		name := o.Latest().ResourceName()
+		if len(pks) > 2 {
+			name = pks[2]
+		}
+
+		switch o.Event {
+		case controllers.EventDelete:
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Cluster",
+			}, 0)
+
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Endpoint",
+			}, 0)
+
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Route",
+			}, 0)
+
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Listener",
+			}, 0)
+		case controllers.EventAdd, controllers.EventUpdate:
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Cluster",
+			}, len(o.Latest().snap.Resources[envoycachetypes.Cluster].Items))
+
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Endpoint",
+			}, len(o.Latest().snap.Resources[envoycachetypes.Endpoint].Items))
+
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Route",
+			}, len(o.Latest().snap.Resources[envoycachetypes.Route].Items))
+
+			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+				Namespace: namespace,
+				Name:      name,
+				Resource:  "Listener",
+			}, len(o.Latest().snap.Resources[envoycachetypes.Listener].Items))
+		}
+	})
+
 	return xdsSnapshotsForUcc
 }

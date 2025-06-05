@@ -404,18 +404,12 @@ func NewGatewayIndex(
 				Name:      o.Latest().Name,
 				Resource:  "Listeners",
 			}, 0)
-		case controllers.EventAdd:
+		case controllers.EventAdd, controllers.EventUpdate:
 			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
 				Namespace: o.Latest().Namespace,
 				Name:      o.Latest().Name,
 				Resource:  "Gateway",
 			}, 1)
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
-				Namespace: o.Latest().Namespace,
-				Name:      o.Latest().Name,
-				Resource:  "Listeners",
-			}, len(o.Latest().Obj.Spec.Listeners))
-		case controllers.EventUpdate:
 			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
 				Namespace: o.Latest().Namespace,
 				Name:      o.Latest().Name,

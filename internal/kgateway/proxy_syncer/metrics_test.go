@@ -36,12 +36,14 @@ func testProxySyncerMetrics(t *testing.T) {
 		gatewayStatusMetrics:  metrics.NewStatusSyncRecorder("GatewayStatusSyncer"),
 		listenerStatusMetrics: metrics.NewStatusSyncRecorder("ListenerSetStatusSyncer"),
 		policyStatusMetrics:   metrics.NewStatusSyncRecorder("PolicyStatusSyncer"),
+		xdsSnapshotsMetrics:   metrics.NewCollectionRecorder("ClientXDSSnapshots"),
 	}
 
 	testRouteMetrics(t, proxySyncer)
 	testGatewayMetrics(t, proxySyncer)
 	testListenerMetrics(t, proxySyncer)
 	testPolicyMetrics(t, proxySyncer)
+	testXDSSnapshotMetrics(t, proxySyncer)
 }
 
 func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
@@ -204,6 +206,52 @@ func testPolicyMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	assert.True(t, foundResource, "Policy status resource metric not found")
 }
 
+func testXDSSnapshotMetrics(t *testing.T, proxySyncer *ProxySyncer) {
+	finish := proxySyncer.xdsSnapshotsMetrics.TransformStart()
+	finish(nil)
+
+	proxySyncer.xdsSnapshotsMetrics.SetResources(metrics.CollectionResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "Cluster",
+	}, 7)
+
+	metricFamilies, err := crmetrics.Registry.Gather()
+	require.NoError(t, err)
+
+	foundTransforms := false
+	foundResources := false
+
+	for _, mf := range metricFamilies {
+		if *mf.Name == "kgateway_collection_transforms_total" {
+			for _, metric := range mf.Metric {
+				if len(metric.Label) >= 2 &&
+					*metric.Label[0].Value == "ClientXDSSnapshots" &&
+					*metric.Label[1].Value == "success" {
+					foundTransforms = true
+					assert.Equal(t, float64(1), metric.Counter.GetValue())
+				}
+			}
+		}
+
+		if *mf.Name == "kgateway_collection_resources" {
+			for _, metric := range mf.Metric {
+				if len(metric.Label) == 4 &&
+					*metric.Label[0].Value == "ClientXDSSnapshots" &&
+					*metric.Label[1].Value == "test" &&
+					*metric.Label[2].Value == "default" &&
+					*metric.Label[3].Value == "Cluster" {
+					foundResources = true
+					assert.Equal(t, float64(7), metric.Gauge.GetValue())
+				}
+			}
+		}
+	}
+
+	assert.True(t, foundTransforms, "XDS snapshot transforms metric not found")
+	assert.True(t, foundResources, "XDS snapshot resources metric not found")
+}
+
 func testMetricsLinting(t *testing.T) {
 	routeRecorder := metrics.NewStatusSyncRecorder("TestSyncer")
 
@@ -216,11 +264,25 @@ func testMetricsLinting(t *testing.T) {
 		Resource:  "HTTPRoute",
 	}, 1)
 
+	xdsSnapshotRecorder := metrics.NewCollectionRecorder("TestXDSSnapshots")
+
+	finish = xdsSnapshotRecorder.TransformStart()
+	finish(nil)
+
+	xdsSnapshotRecorder.SetResources(metrics.CollectionResourcesLabels{
+		Namespace: "default",
+		Name:      "test",
+		Resource:  "Cluster",
+	}, 2)
+
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(
 		metrics.GetStatusSyncsTotal(),
 		metrics.GetStatusSyncDuration(),
 		metrics.GetStatusSyncResources(),
+		metrics.GetTransformsTotal(),
+		metrics.GetTransformDuration(),
+		metrics.GetCollectionResources(),
 	)
 
 	problems, err := testutil.GatherAndLint(reg)
@@ -242,6 +304,9 @@ func testMetricsLinting(t *testing.T) {
 		"kgateway_status_syncer_status_syncs_total",
 		"kgateway_status_syncer_status_sync_duration_seconds",
 		"kgateway_status_syncer_resources",
+		"kgateway_collection_transforms_total",
+		"kgateway_collection_transform_duration_seconds",
+		"kgateway_collection_resources",
 	}
 
 	for _, expected := range expectedMetrics {
