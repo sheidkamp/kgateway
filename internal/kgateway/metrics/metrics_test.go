@@ -15,11 +15,17 @@ func TestMain(m *testing.M) {
 }
 
 func setupTest() {
-	ResetCollectionMetrics()
-	ResetControllerMetrics()
-	ResetTranslatorMetrics()
-	ResetStatusSyncMetrics()
-	ResetRoutingMetrics()
+	GetTransformDuration().Reset()
+	GetTransformsTotal().Reset()
+	GetCollectionResources().Reset()
+	GetReconcileDuration().Reset()
+	GetReconciliationsTotal().Reset()
+	GetStatusSyncDuration().Reset()
+	GetStatusSyncsTotal().Reset()
+	GetStatusSyncResources().Reset()
+	GetTranslationDuration().Reset()
+	GetTranslationsTotal().Reset()
+	GetDomainsPerListener().Reset()
 }
 
 // Generic metric structs
@@ -27,8 +33,6 @@ type metricLabel struct {
 	name  string
 	value string
 }
-
-func assertLabelExists(value string) {}
 
 type histogramMetricOutput struct {
 	sampleCount uint64
@@ -70,9 +74,7 @@ func mustGatherPrometheusMetrics(t *testing.T) gatheredMetrics {
 
 	for _, mf := range metricFamilies {
 		metrics := make([]*dto.Metric, len(mf.Metric))
-		for i, m := range mf.Metric {
-			metrics[i] = m
-		}
+		copy(metrics, mf.Metric)
 		gathered.metrics[*mf.Name] = metrics
 	}
 

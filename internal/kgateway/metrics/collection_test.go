@@ -124,5 +124,4 @@ func TestCollectionResources(t *testing.T) {
 	currentMetrics = mustGatherMetrics(t)
 	currentMetrics.assertMetricsLabels("kgateway_collection_resources", expectedLabels)
 	currentMetrics.assertMetricGaugeValues("kgateway_collection_resources", []float64{0, 3})
-
 }

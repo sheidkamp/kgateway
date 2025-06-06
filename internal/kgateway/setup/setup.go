@@ -58,11 +58,21 @@ func New(opts ...func(*setup)) *setup {
 }
 
 func (s *setup) Start(ctx context.Context) error {
-	return StartKgateway(ctx, s.extraPlugins, s.extraXDSCallbacks)
+	if s.extraXDSCallbacks != nil {
+		return StartKgatewayWithXDSCallbacks(ctx, s.extraPlugins, s.extraXDSCallbacks)
+	}
+
+	return StartKgateway(ctx, s.extraPlugins)
 }
 
 func StartKgateway(
 	ctx context.Context,
+	extraPlugins func(ctx context.Context, commoncol *common.CommonCollections) []sdk.Plugin,
+) error {
+	return StartKgatewayWithXDSCallbacks(ctx, extraPlugins, nil)
+}
+
+func StartKgatewayWithXDSCallbacks(ctx context.Context,
 	extraPlugins func(ctx context.Context, commoncol *common.CommonCollections) []sdk.Plugin,
 	extraXDSCallbacks xdsserver.Callbacks,
 ) error {

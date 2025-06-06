@@ -90,24 +90,20 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 	}
 }
 
-// ResetTranslatorMetrics resets the translator metrics.
-func ResetTranslatorMetrics() {
-	translationsTotal.Reset()
-	translationDuration.Reset()
-	translationsRunning.Reset()
-}
-
 // GetTranslationsTotal returns the translations counter.
+// This is provided for testing purposes.
 func GetTranslationsTotal() *prometheus.CounterVec {
 	return translationsTotal
 }
 
 // GetTranslationDuration returns the translation duration histogram.
+// This is provided for testing purposes.
 func GetTranslationDuration() *prometheus.HistogramVec {
 	return translationDuration
 }
 
 // GetTranslationsRunning returns the translations running gauge.
+// This is provided for testing purposes.
 func GetTranslationsRunning() *prometheus.GaugeVec {
 	return translationsRunning
 }

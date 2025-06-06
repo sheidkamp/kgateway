@@ -187,24 +187,20 @@ func (m *collectionMetrics) DecResources(labels CollectionResourcesLabels) {
 	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Dec()
 }
 
-// ResetCollectionMetrics resets the collection metrics.
-func ResetCollectionMetrics() {
-	transformsTotal.Reset()
-	transformDuration.Reset()
-	collectionResources.Reset()
-}
-
 // GetTransformsTotal returns the transforms counter.
+// This is provided for testing purposes.
 func GetTransformsTotal() *prometheus.CounterVec {
 	return transformsTotal
 }
 
 // GetTransformDuration returns the transform duration histogram.
+// This is provided for testing purposes.
 func GetTransformDuration() *prometheus.HistogramVec {
 	return transformDuration
 }
 
 // GetCollectionResources returns the collection resource count gauge.
+// This is provided for testing purposes.
 func GetCollectionResources() *prometheus.GaugeVec {
 	return collectionResources
 }

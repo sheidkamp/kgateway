@@ -32,7 +32,6 @@ func TestNewRouteMetrics(t *testing.T) {
 	for _, expected := range expectedMetrics {
 		currentMetrics.assertMetricExists(expected)
 	}
-
 }
 
 func TestSetDomainPerListener(t *testing.T) {

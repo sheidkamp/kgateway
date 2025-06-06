@@ -241,5 +241,5 @@ func main() {
 	// This demonstrates how to start Kgateway with a custom plugin.
 	// This binary is the control plane. normally it would be packaged in a docker image and run
 	// in a k8s cluster.
-	setup.StartKgateway(context.Background(), pluginFactory, nil)
+	setup.StartKgateway(context.Background(), pluginFactory)
 }

@@ -50,7 +50,6 @@ func TestReconcileStart_Success(t *testing.T) {
 		{name: "controller", value: "test-controller"},
 	})
 	currentMetrics.assertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
-
 }
 
 func TestReconcileStart_Error(t *testing.T) {
@@ -73,9 +72,4 @@ func TestReconcileStart_Error(t *testing.T) {
 		{name: "controller", value: "test-controller"},
 	})
 	currentMetrics.assertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
-
-}
-
-func mockNow() time.Time {
-	return time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
 }

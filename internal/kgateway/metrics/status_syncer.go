@@ -187,24 +187,20 @@ func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesLabels) {
 	m.resources.WithLabelValues(labels.toMetricsLabels(m.syncerName)...).Dec()
 }
 
-// ResetStatusSyncMetrics resets the status syncer metrics.
-func ResetStatusSyncMetrics() {
-	statusSyncsTotal.Reset()
-	statusSyncDuration.Reset()
-	statusSyncResources.Reset()
-}
-
 // GetStatusSyncsTotal returns the status syncs counter.
+// This is provided for testing purposes.
 func GetStatusSyncsTotal() *prometheus.CounterVec {
 	return statusSyncsTotal
 }
 
 // GetStatusSyncDuration returns the status sync duration histogram.
+// This is provided for testing purposes.
 func GetStatusSyncDuration() *prometheus.HistogramVec {
 	return statusSyncDuration
 }
 
 // GetStatusSyncResources returns the status syncer resource count gauge.
+// This is provided for testing purposes.
 func GetStatusSyncResources() *prometheus.GaugeVec {
 	return statusSyncResources
 }

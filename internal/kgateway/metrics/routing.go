@@ -53,7 +53,8 @@ func (m *routingMetrics) SetDomainPerListener(labels DomainPerListenerLabels, do
 	m.domainsPerListener.WithLabelValues(labels.toMetricsLabels()...).Set(float64(domains))
 }
 
-// ResetRoutingMetrics resets the routing metrics.
-func ResetRoutingMetrics() {
-	domainsPerListener.Reset()
+// GetDomainsPerListener returns the domains per listener gauge.
+// This is provided for testing purposes.
+func GetDomainsPerListener() *prometheus.GaugeVec {
+	return domainsPerListener
 }

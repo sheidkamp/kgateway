@@ -70,7 +70,6 @@ func TestTranslationStart_Success(t *testing.T) {
 		{name: "translator", value: "test-translator"},
 	})
 	currentMetrics.assertHistogramPopulated("kgateway_translator_translation_duration_seconds")
-
 }
 
 func TestTranslationStart_Error(t *testing.T) {
@@ -91,5 +90,4 @@ func TestTranslationStart_Error(t *testing.T) {
 		{name: "translator", value: "test-translator"},
 	})
 	currentMetrics.assertMetricCounterValue("kgateway_translator_translations_total", 1)
-
 }

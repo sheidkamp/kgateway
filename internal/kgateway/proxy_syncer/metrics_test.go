@@ -15,7 +15,9 @@ import (
 )
 
 func setupMetricsTest() {
-	metrics.ResetStatusSyncMetrics()
+	metrics.GetStatusSyncDuration().Reset()
+	metrics.GetStatusSyncsTotal().Reset()
+	metrics.GetStatusSyncResources().Reset()
 }
 
 func TestProxySyncerMetrics(t *testing.T) {
