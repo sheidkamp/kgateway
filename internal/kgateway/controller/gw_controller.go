@@ -14,7 +14,6 @@ import (
 	api "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/deployer"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 const (
@@ -29,16 +28,14 @@ type gatewayReconciler struct {
 
 	scheme   *runtime.Scheme
 	deployer *deployer.Deployer
-	metrics  metrics.ControllerRecorder
+	metrics  *ControllerRecorder
 }
 
 func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {
 	log := log.FromContext(ctx).WithValues("gw", req.NamespacedName)
 	log.V(1).Info("reconciling request", "req", req)
 
-	if r.metrics != nil {
-		defer r.metrics.ReconcileStart()(rErr)
-	}
+	defer r.metrics.ReconcileStart()(rErr)
 
 	// check if we need to auto deploy the gateway
 	ns := req.Namespace

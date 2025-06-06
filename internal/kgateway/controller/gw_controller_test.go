@@ -112,7 +112,7 @@ var _ = Describe("GwController", func() {
 			Expect(gw.Status.Addresses[0].Value).To(Equal("127.0.0.1"))
 
 			Eventually(func() bool {
-				if probs, err := testutil.CollectAndLint(metrics.GetReconciliationsTotal(),
+				if probs, err := testutil.CollectAndLint(=.GetReconciliationsTotal(),
 					"kgateway_controller_reconciliations_total",
 					"kgateway_controller_reconcile_duration_seconds",
 				); err != nil || len(probs) > 0 {

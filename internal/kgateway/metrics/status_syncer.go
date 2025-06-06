@@ -7,41 +7,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	statusSubsystem = "status_syncer"
-	syncerNameLabel = "syncer"
-)
-
 var (
 	statusSyncsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: metricsNamespace,
-			Subsystem: statusSubsystem,
+			Namespace: string(MetricsNamespaceKGateway),
+			Subsystem: string(MetricsSubsystemStatusSyncer),
 			Name:      "status_syncs_total",
 			Help:      "Total status syncs",
 		},
-		[]string{syncerNameLabel, "result"},
+		[]string{string(MetricsLabelStatusSyncer), "result"},
 	)
 	statusSyncDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace:                       metricsNamespace,
-			Subsystem:                       statusSubsystem,
+			Namespace:                       string(MetricsNamespaceKGateway),
+			Subsystem:                       string(MetricsSubsystemStatusSyncer),
 			Name:                            "status_sync_duration_seconds",
 			Help:                            "Status sync duration",
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,
 		},
-		[]string{syncerNameLabel},
+		[]string{string(MetricsLabelStatusSyncer)},
 	)
 	statusSyncResources = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: metricsNamespace,
-			Subsystem: statusSubsystem,
+			Namespace: string(MetricsNamespaceKGateway),
+			Subsystem: string(MetricsSubsystemStatusSyncer),
 			Name:      "resources",
 			Help:      "Current number of resources managed by the status syncer",
 		},
-		[]string{syncerNameLabel, "name", "namespace", "resource"},
+		[]string{string(MetricsLabelStatusSyncer), "name", "namespace", "resource"},
 	)
 )
 

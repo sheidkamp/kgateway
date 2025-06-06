@@ -4,15 +4,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	routingSubsystem = "routing"
-)
-
 var (
 	domainsPerListener = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: metricsNamespace,
-			Subsystem: routingSubsystem,
+			Namespace: string(MetricsNamespaceKGateway),
+			Subsystem: string(MetricsSubsystemRouting),
 			Name:      "domains",
 			Help:      "Number of domains per listener",
 		},

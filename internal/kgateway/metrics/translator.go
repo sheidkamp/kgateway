@@ -6,41 +6,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	translatorSubsystem = "translator"
-	translatorNameLabel = "translator"
-)
-
 var (
 	translationsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: metricsNamespace,
-			Subsystem: translatorSubsystem,
+			Namespace: string(MetricsNamespaceKGateway),
+			Subsystem: string(MetricsSubsystemTranslator),
 			Name:      "translations_total",
 			Help:      "Total translations",
 		},
-		[]string{translatorNameLabel, "result"},
+		[]string{string(MetricsLabelTranslator), "result"},
 	)
 	translationDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace:                       metricsNamespace,
-			Subsystem:                       translatorSubsystem,
+			Namespace:                       string(MetricsNamespaceKGateway),
+			Subsystem:                       string(MetricsSubsystemTranslator),
 			Name:                            "translation_duration_seconds",
 			Help:                            "Translation duration",
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,
 		},
-		[]string{translatorNameLabel},
+		[]string{string(MetricsLabelTranslator)},
 	)
 	translationsRunning = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: metricsNamespace,
-			Subsystem: translatorSubsystem,
+			Namespace: string(MetricsNamespaceKGateway),
+			Subsystem: string(MetricsSubsystemTranslator),
 			Name:      "translations_running",
 			Help:      "Number of translations currently running",
 		},
-		[]string{translatorNameLabel},
+		[]string{string(MetricsLabelTranslator)},
 	)
 )
 

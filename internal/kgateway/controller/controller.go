@@ -28,7 +28,6 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/deployer"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	common "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"
 )
@@ -88,7 +87,7 @@ func NewBaseGatewayController(ctx context.Context, cfg GatewayConfig) error {
 			cli:          cfg.Mgr.GetClient(),
 			scheme:       cfg.Mgr.GetScheme(),
 			customEvents: make(chan event.TypedGenericEvent[ir.Gateway], 1024),
-			metrics:      metrics.NewControllerRecorder(cfg.ControllerName),
+			metrics:      NewControllerRecorder(cfg.ControllerName),
 		},
 	}
 
@@ -118,7 +117,7 @@ func NewBaseInferencePoolController(ctx context.Context, poolCfg *InferencePoolC
 			cli:          poolCfg.Mgr.GetClient(),
 			scheme:       poolCfg.Mgr.GetScheme(),
 			customEvents: make(chan event.TypedGenericEvent[ir.Gateway], 1024),
-			metrics:      metrics.NewControllerRecorder(poolCfg.ControllerName),
+			metrics:      NewControllerRecorder(poolCfg.ControllerName),
 		},
 	}
 
@@ -320,7 +319,7 @@ func (c *controllerBuilder) watchGw(ctx context.Context) error {
 		controllerName: c.cfg.ControllerName,
 		autoProvision:  c.cfg.AutoProvision,
 		deployer:       d,
-		metrics:        metrics.NewControllerRecorder(c.cfg.ControllerName),
+		metrics:        NewControllerRecorder(c.cfg.ControllerName),
 	})
 }
 
@@ -446,7 +445,7 @@ func (c *controllerBuilder) watchInferencePool(ctx context.Context) error {
 			cli:      c.cfg.Mgr.GetClient(),
 			scheme:   c.cfg.Mgr.GetScheme(),
 			deployer: d,
-			metrics:  metrics.NewControllerRecorder(c.cfg.ControllerName),
+			metrics:  NewControllerRecorder(c.cfg.ControllerName),
 		}
 		if err := buildr.Complete(r); err != nil {
 			return err
@@ -482,7 +481,7 @@ type controllerReconciler struct {
 	cli          client.Client
 	scheme       *runtime.Scheme
 	customEvents chan event.TypedGenericEvent[ir.Gateway]
-	metrics      metrics.ControllerRecorder
+	metrics      *ControllerRecorder
 }
 
 func (r *controllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {

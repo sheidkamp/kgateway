@@ -7,41 +7,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	collectionSubsystem = "collection"
-	collectionNameLabel = "collection"
-)
-
 var (
 	transformsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: metricsNamespace,
-			Subsystem: collectionSubsystem,
+			Namespace: string(MetricsNamespaceKGateway),
+			Subsystem: string(MetricsSubsystemCollection),
 			Name:      "transforms_total",
 			Help:      "Total transforms",
 		},
-		[]string{collectionNameLabel, "result"},
+		[]string{string(MetricsLabelCollection), "result"},
 	)
 	transformDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace:                       metricsNamespace,
-			Subsystem:                       collectionSubsystem,
+			Namespace:                       string(MetricsNamespaceKGateway),
+			Subsystem:                       string(MetricsSubsystemCollection),
 			Name:                            "transform_duration_seconds",
 			Help:                            "Transform duration",
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,
 		},
-		[]string{collectionNameLabel},
+		[]string{string(MetricsLabelCollection)},
 	)
 	collectionResources = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: metricsNamespace,
-			Subsystem: collectionSubsystem,
+			Namespace: string(MetricsNamespaceKGateway),
+			Subsystem: string(MetricsSubsystemCollection),
 			Name:      "resources",
 			Help:      "Current number of resources managed by the collection",
 		},
-		[]string{collectionNameLabel, "name", "namespace", "resource"},
+		[]string{string(MetricsLabelCollection), "name", "namespace", "resource"},
 	)
 )
 
