@@ -98,9 +98,16 @@ func (s *testingSuite) TestMetrics() {
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body: gomega.And(
-				gomega.MatchRegexp(`kgateway_translator_translation_duration_seconds_count\{translator=\"TranslateGatewayIR\"\} 2`),
-				gomega.MatchRegexp(`kgateway_translator_translations_total\{result=\"success\",translator=\"TranslateGatewayIR\"\} 2`),
-				gomega.MatchRegexp(`kgateway_translator_resources\{name=\"gw\",namespace=\"default\",resource=\"Listener\",translator=\"TranslateGatewayIR\"\} 1`),
+				gomega.MatchRegexp(`kgateway_collection_transform_duration_seconds_count\{collection=\"Gateways\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_collection_transforms_total\{collection=\"Gateways\",result=\"success\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_collection_resources\{collection=\"Gateways\",name=\"gw\",namespace=\"default\",resource=\"Gateway\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_controller_reconcile_duration_seconds_count\{controller=\"kgateway\.dev\/kgateway\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_controller_reconciliations_total\{controller=\"kgateway\.dev\/kgateway\",result=\"success\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_status_syncer_resources\{name=\"gw\",namespace=\"default\",resource=\"Gateway\",syncer=\"GatewayStatusSyncer\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_status_syncer_status_sync_duration_seconds_count\{syncer=\"GatewayStatusSyncer\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_status_syncer_status_syncs_total\{result=\"success\",syncer=\"GatewayStatusSyncer\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_translator_translation_duration_seconds_count\{translator=\"TranslateGatewayIR\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_translator_translations_total\{result=\"success\",translator=\"TranslateGatewayIR\"\} \d+`),
 			),
 		})
 }
