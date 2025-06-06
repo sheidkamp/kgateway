@@ -111,78 +111,59 @@ func (m *collectionMetrics) TransformStart() func(error) {
 // ResetResources resets the resource count gauge for a specified resource.
 func (m *collectionMetrics) ResetResources(resource string) {
 	m.resourcesLock.Lock()
-	defer m.resourcesLock.Unlock()
 
-	for namespace, resources := range m.resourceNames {
-		for name, resourceMap := range resources {
-			if _, exists := resourceMap[resource]; !exists {
-				continue
-			}
+	namespaces, exists := m.resourceNames[resource]
+	if !exists {
+		m.resourcesLock.Unlock()
 
+		return
+	}
+
+	delete(m.resourceNames, resource)
+
+	m.resourcesLock.Unlock()
+
+	for namespace, names := range namespaces {
+		for name := range names {
 			m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Set(0)
-
-			delete(m.resourceNames[namespace][name], resource)
-			if len(m.resourceNames[namespace][name]) == 0 {
-				delete(m.resourceNames[namespace], name)
-			}
-		}
-
-		if len(m.resourceNames[namespace]) == 0 {
-			delete(m.resourceNames, namespace)
 		}
 	}
 }
 
+// updateResourceNames updates the internal map of resource names.
+func (m *collectionMetrics) updateResourceNames(labels CollectionResourcesLabels) {
+	m.resourcesLock.Lock()
+
+	if _, exists := m.resourceNames[labels.Resource]; !exists {
+		m.resourceNames[labels.Resource] = make(map[string]map[string]struct{})
+	}
+
+	if _, exists := m.resourceNames[labels.Resource][labels.Namespace]; !exists {
+		m.resourceNames[labels.Resource][labels.Namespace] = make(map[string]struct{})
+	}
+
+	m.resourceNames[labels.Resource][labels.Namespace][labels.Name] = struct{}{}
+
+	m.resourcesLock.Unlock()
+}
+
 // SetResources updates the resource count gauge.
 func (m *collectionMetrics) SetResources(labels CollectionResourcesLabels, count int) {
-	m.resourcesLock.Lock()
-	defer m.resourcesLock.Unlock()
-
-	if _, exists := m.resourceNames[labels.Namespace]; !exists {
-		m.resourceNames[labels.Namespace] = make(map[string]map[string]struct{})
-	}
-
-	if _, exists := m.resourceNames[labels.Namespace][labels.Name]; !exists {
-		m.resourceNames[labels.Namespace][labels.Name] = make(map[string]struct{})
-	}
-
-	m.resourceNames[labels.Namespace][labels.Name][labels.Resource] = struct{}{}
+	m.updateResourceNames(labels)
 
 	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Set(float64(count))
 }
 
 // IncResources increments the resource count gauge.
 func (m *collectionMetrics) IncResources(labels CollectionResourcesLabels) {
-	m.resourcesLock.Lock()
-	defer m.resourcesLock.Unlock()
-
-	if _, exists := m.resourceNames[labels.Namespace]; !exists {
-		m.resourceNames[labels.Namespace] = make(map[string]map[string]struct{})
-	}
-
-	if _, exists := m.resourceNames[labels.Namespace][labels.Name]; !exists {
-		m.resourceNames[labels.Namespace][labels.Name] = make(map[string]struct{})
-	}
-
-	m.resourceNames[labels.Namespace][labels.Name][labels.Resource] = struct{}{}
+	m.updateResourceNames(labels)
 
 	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Inc()
 }
 
 // DecResources decrements the resource count gauge.
 func (m *collectionMetrics) DecResources(labels CollectionResourcesLabels) {
-	m.resourcesLock.Lock()
-	defer m.resourcesLock.Unlock()
-
-	if _, exists := m.resourceNames[labels.Namespace]; !exists {
-		m.resourceNames[labels.Namespace] = make(map[string]map[string]struct{})
-	}
-
-	if _, exists := m.resourceNames[labels.Namespace][labels.Name]; !exists {
-		m.resourceNames[labels.Namespace][labels.Name] = make(map[string]struct{})
-	}
-
-	m.resourceNames[labels.Namespace][labels.Name][labels.Resource] = struct{}{}
+	m.updateResourceNames(labels)
 
 	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Dec()
 }
