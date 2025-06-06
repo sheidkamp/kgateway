@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
@@ -20,22 +18,23 @@ func TestNewTranslatorMetrics(t *testing.T) {
 	finishFunc := m.TranslationStart()
 	finishFunc(nil)
 
-	metricFamilies, err := metrics.Registry.Gather()
-	require.NoError(t, err)
-
 	expectedMetrics := []string{
 		"kgateway_translator_translations_total",
 		"kgateway_translator_translation_duration_seconds",
+		"kgateway_translator_translations_running",
 	}
 
-	foundMetrics := make(map[string]bool)
-	for _, mf := range metricFamilies {
-		foundMetrics[*mf.Name] = true
-	}
-
+	currentMetrics := mustGatherMetrics(t)
 	for _, expected := range expectedMetrics {
-		assert.True(t, foundMetrics[expected], "Expected metric %s not found", expected)
+		currentMetrics.assertMetricExists(expected)
 	}
+}
+
+func assertTranslationsRunning(currentMetrics gatheredMetrics, translatorName string, count int) {
+	currentMetrics.assertMetricLabels("kgateway_translator_translations_running", []*metricLabel{
+		{name: "translator", value: translatorName},
+	})
+	currentMetrics.assertMetricGaugeValue("kgateway_translator_translations_running", float64(count))
 }
 
 func TestTranslationStart_Success(t *testing.T) {
@@ -43,44 +42,35 @@ func TestTranslationStart_Success(t *testing.T) {
 
 	m := NewTranslatorRecorder("test-translator")
 
+	// Start translation
 	finishFunc := m.TranslationStart()
 	time.Sleep(10 * time.Millisecond)
+
+	// Check that the translations_running metric is 1
+	currentMetrics := mustGatherMetrics(t)
+	assertTranslationsRunning(currentMetrics, "test-translator", 1)
+
+	// Finish translation
 	finishFunc(nil)
+	time.Sleep(10 * time.Millisecond)
+	currentMetrics = mustGatherMetrics(t)
 
-	metricFamilies, err := metrics.Registry.Gather()
-	require.NoError(t, err)
+	// Check the translations_running metric
+	assertTranslationsRunning(currentMetrics, "test-translator", 0)
 
-	var found bool
+	// Check the translations_total metric
+	currentMetrics.assertMetricLabels("kgateway_translator_translations_total", []*metricLabel{
+		{name: "result", value: "success"},
+		{name: "translator", value: "test-translator"},
+	})
+	currentMetrics.assertMetricCounterValue("kgateway_translator_translations_total", 1)
 
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_translations_total" {
-			found = true
-			assert.Equal(t, 1, len(mf.Metric))
+	// Check the translation_duration_seconds metric
+	currentMetrics.assertMetricLabels("kgateway_translator_translation_duration_seconds", []*metricLabel{
+		{name: "translator", value: "test-translator"},
+	})
+	currentMetrics.assertHistogramPopulated("kgateway_translator_translation_duration_seconds")
 
-			metric := mf.Metric[0]
-			assert.Equal(t, 2, len(metric.Label))
-			assert.Equal(t, "result", *metric.Label[0].Name)
-			assert.Equal(t, "success", *metric.Label[0].Value)
-			assert.Equal(t, "translator", *metric.Label[1].Name)
-			assert.Equal(t, "test-translator", *metric.Label[1].Value)
-			assert.Equal(t, float64(1), metric.Counter.GetValue())
-		}
-	}
-
-	assert.True(t, found, "kgateway_translator_translations_total metric not found")
-
-	var durationFound bool
-
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_translation_duration_seconds" {
-			durationFound = true
-			assert.Equal(t, 1, len(mf.Metric))
-			assert.True(t, *mf.Metric[0].Histogram.SampleCount > 0)
-			assert.True(t, *mf.Metric[0].Histogram.SampleSum > 0)
-		}
-	}
-
-	assert.True(t, durationFound, "kgateway_translator_translation_duration_seconds metric not found")
 }
 
 func TestTranslationStart_Error(t *testing.T) {
@@ -89,26 +79,17 @@ func TestTranslationStart_Error(t *testing.T) {
 	m := NewTranslatorRecorder("test-translator")
 
 	finishFunc := m.TranslationStart()
+	currentMetrics := mustGatherMetrics(t)
+	assertTranslationsRunning(currentMetrics, "test-translator", 1)
+
 	finishFunc(assert.AnError)
+	currentMetrics = mustGatherMetrics(t)
+	assertTranslationsRunning(currentMetrics, "test-translator", 0)
 
-	metricFamilies, err := metrics.Registry.Gather()
-	require.NoError(t, err)
+	currentMetrics.assertMetricLabels("kgateway_translator_translations_total", []*metricLabel{
+		{name: "result", value: "error"},
+		{name: "translator", value: "test-translator"},
+	})
+	currentMetrics.assertMetricCounterValue("kgateway_translator_translations_total", 1)
 
-	var found bool
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_translator_translations_total" {
-			found = true
-			assert.Equal(t, 1, len(mf.Metric))
-
-			metric := mf.Metric[0]
-			assert.Equal(t, 2, len(metric.Label))
-			assert.Equal(t, "result", *metric.Label[0].Name)
-			assert.Equal(t, "error", *metric.Label[0].Value)
-			assert.Equal(t, "translator", *metric.Label[1].Name)
-			assert.Equal(t, "test-translator", *metric.Label[1].Value)
-			assert.Equal(t, float64(1), metric.Counter.GetValue())
-		}
-	}
-
-	assert.True(t, found, "kgateway_translator_translations_total metric not found")
 }
