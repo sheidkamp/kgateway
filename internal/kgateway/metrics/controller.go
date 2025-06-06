@@ -60,16 +60,11 @@ func NewControllerRecorder(controllerName string) ControllerRecorder {
 	return m
 }
 
-func (m *controllerMetrics) WithNowFunc(now nowFunc) ControllerRecorder {
-	m.now = now
-	return m
-}
-
 // ReconcileStart is called at the start of a controller reconciliation function
 // to begin metrics collection and returns a function called at the end to
 // complete metrics recording.
 func (m *controllerMetrics) ReconcileStart() func(error) {
-	start := m.now()
+	start := time.Now()
 
 	return func(err error) {
 		duration := time.Since(start)
