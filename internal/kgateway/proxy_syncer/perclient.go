@@ -98,14 +98,14 @@ func snapshotPerClient(
 	}, krtopts.ToOptions("PerClientXdsSnapshots")...)
 
 	xdsSnapshotsForUcc.Register(func(o krt.Event[XdsSnapWrapper]) {
-		namespace := o.Latest().ResourceName()
+		name := o.Latest().ResourceName()
+		namespace := "unknown"
 
-		pks := strings.SplitN(namespace, "~", 5)
+		pks := strings.SplitN(name, "~", 5)
 		if len(pks) > 1 {
 			namespace = pks[1]
 		}
 
-		name := o.Latest().ResourceName()
 		if len(pks) > 2 {
 			name = pks[2]
 		}

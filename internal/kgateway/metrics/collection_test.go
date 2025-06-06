@@ -9,7 +9,7 @@ import (
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
-func TestNewCollectionMetrics(t *testing.T) {
+func TestNewCollectionRecorder(t *testing.T) {
 	setupTest()
 
 	collectionName := "test-collection"

@@ -64,7 +64,7 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	}, 3)
 
 	expectedTranslationCounter := `
-		# HELP kgateway_status_syncer_status_syncs_total Total translations
+		# HELP kgateway_status_syncer_status_syncs_total Total status syncs
 		# TYPE kgateway_status_syncer_status_syncs_total counter
 		kgateway_status_syncer_status_syncs_total{result="success",syncer="RouteStatusSyncer"} 1
 	`
@@ -72,7 +72,7 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 	err := testutil.CollectAndCompare(
 		metrics.GetStatusSyncsTotal(),
 		strings.NewReader(expectedTranslationCounter),
-		"kgateway_kgateway_status_syncer_status_syncs_total",
+		"kgateway_status_syncer_status_syncs_total",
 	)
 	require.NoError(t, err, "Route status translation counter mismatch")
 

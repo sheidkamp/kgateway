@@ -12,7 +12,7 @@ var (
 	port      = "80"
 )
 
-func TestNewRouteMetrics(t *testing.T) {
+func TestNewRoutingRecorder(t *testing.T) {
 	setupTest()
 
 	m := NewRoutingRecorder()

@@ -9,7 +9,7 @@ import (
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
-func TestNewTranslatorMetrics(t *testing.T) {
+func TestNewTranslatorRecorder(t *testing.T) {
 	setupTest()
 
 	translatorName := "test-translator"

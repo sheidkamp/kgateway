@@ -9,7 +9,7 @@ import (
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
-func TestNewControllerMetrics(t *testing.T) {
+func TestNewControllerRecorder(t *testing.T) {
 	setupTest()
 
 	controllerName := "test-controller"

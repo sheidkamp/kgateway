@@ -9,7 +9,7 @@ import (
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
-func TestNewStatusSyncerMetrics(t *testing.T) {
+func TestNewStatusSyncRecorder(t *testing.T) {
 	setupTest()
 
 	syncerName := "test-syncer"

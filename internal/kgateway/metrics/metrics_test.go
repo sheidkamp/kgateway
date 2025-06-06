@@ -3,11 +3,12 @@ package metrics_test
 import (
 	"testing"
 
-	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 func TestMain(m *testing.M) {
