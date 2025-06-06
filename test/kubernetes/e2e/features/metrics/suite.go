@@ -7,75 +7,44 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	testmatchers "github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e"
 	testdefaults "github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/defaults"
+	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/tests/base"
 )
 
 var _ e2e.NewSuiteFunc = NewTestingSuite
 
 // testingSuite is a suite of basic control plane metrics.
 type testingSuite struct {
-	suite.Suite
-	ctx              context.Context
-	testInstallation *e2e.TestInstallation
+	*base.BaseTestingSuite
 }
 
 // NewTestingSuite creates a new testing suite for control plane metrics.
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	return &testingSuite{
-		ctx:              ctx,
-		testInstallation: testInst,
+		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
 	}
 }
 
 func (s *testingSuite) TestMetrics() {
-	manifests := []string{
-		testdefaults.CurlPodManifest,
-		exampleServiceManifest,
-		gatewayWithRouteManifest,
-	}
-	manifestObjects := []client.Object{
-		testdefaults.CurlPod, // curl
-		nginxPod, exampleSvc, // nginx
-		proxyService, proxyServiceAccount, proxyDeployment, // proxy
-		kgatewayService, // kgateway
-	}
-
-	s.T().Cleanup(func() {
-		for _, manifest := range manifests {
-			err := s.testInstallation.Actions.Kubectl().DeleteFileSafe(s.ctx, manifest)
-			s.Require().NoError(err)
-		}
-		s.testInstallation.Assertions.EventuallyObjectsNotExist(s.ctx, manifestObjects...)
-	})
-
-	for _, manifest := range manifests {
-		err := s.testInstallation.Actions.Kubectl().ApplyFile(s.ctx, manifest)
-		s.Require().NoError(err)
-	}
-	s.testInstallation.Assertions.EventuallyObjectsExist(s.ctx, manifestObjects...)
-
-	// make sure pods are running
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, testdefaults.CurlPod.GetNamespace(), metav1.ListOptions{
-		LabelSelector: testdefaults.CurlPodLabelSelector,
-	})
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, nginxPod.ObjectMeta.GetNamespace(), metav1.ListOptions{
+	// Make sure pods are running.
+	s.TestInstallation.Assertions.EventuallyPodsRunning(s.Ctx, nginxPod.ObjectMeta.GetNamespace(), metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=nginx",
 	})
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, proxyObjectMeta.GetNamespace(), metav1.ListOptions{
+	s.TestInstallation.Assertions.EventuallyPodsRunning(s.Ctx, proxyObjectMeta.GetNamespace(), metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=gw",
 	})
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, kgatewayObjectMeta.GetNamespace(), metav1.ListOptions{
+	s.TestInstallation.Assertions.EventuallyPodsRunning(s.Ctx, kgatewayObjectMeta.GetNamespace(), metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=kgateway",
 	})
 
-	s.testInstallation.Assertions.AssertEventualCurlResponse(
-		s.ctx,
+	// Verify the test services are created and working.
+	s.TestInstallation.Assertions.AssertEventualCurlResponse(
+		s.Ctx,
 		testdefaults.CurlPodExecOpt,
 		[]curl.Option{
 			curl.WithHost(kubeutils.ServiceFQDN(proxyObjectMeta)),
@@ -87,8 +56,9 @@ func (s *testingSuite) TestMetrics() {
 			Body:       gomega.ContainSubstring(testdefaults.NginxResponse),
 		})
 
-	s.testInstallation.Assertions.AssertEventualCurlResponse(
-		s.ctx,
+	// Verify the control plane metrics are generating as expected.
+	s.TestInstallation.Assertions.AssertEventualCurlResponse(
+		s.Ctx,
 		testdefaults.CurlPodExecOpt,
 		[]curl.Option{
 			curl.WithHost(kubeutils.ServiceFQDN(kgatewayObjectMeta)),
