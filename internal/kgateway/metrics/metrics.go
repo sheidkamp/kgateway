@@ -20,7 +20,6 @@ var (
 		"collectionResources":  collectionResources,
 		"reconciliationsTotal": reconciliationsTotal,
 		"reconcileDuration":    reconcileDuration,
-		"startupsTotal":        startupsTotal,
 		"statusSyncsTotal":     statusSyncsTotal,
 		"statusSyncDuration":   statusSyncDuration,
 		"statusSyncResources":  statusSyncResources,

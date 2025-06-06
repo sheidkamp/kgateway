@@ -98,7 +98,6 @@ func (s *testingSuite) TestMetrics() {
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body: gomega.And(
-				gomega.MatchRegexp(`kgateway_controller_startups_total\{controller=\"kgateway\.dev\/kgateway\",start_time=\".*\"\} 1`),
 				gomega.MatchRegexp(`kgateway_translator_translation_duration_seconds_count\{translator=\"TranslateGatewayIR\"\} 2`),
 				gomega.MatchRegexp(`kgateway_translator_translations_total\{result=\"success\",translator=\"TranslateGatewayIR\"\} 2`),
 				gomega.MatchRegexp(`kgateway_translator_resources\{name=\"gw\",namespace=\"default\",resource=\"Listener\",translator=\"TranslateGatewayIR\"\} 1`),

@@ -33,21 +33,11 @@ var (
 		},
 		[]string{controllerNameLabel},
 	)
-	startupsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: metricsNamespace,
-			Subsystem: controllerSubsystem,
-			Name:      "startups_total",
-			Help:      "Total controller startups",
-		},
-		[]string{controllerNameLabel, "start_time"},
-	)
 )
 
 // ControllerRecorder defines the interface for recording controller metrics.
 type ControllerRecorder interface {
 	ReconcileStart() func(error)
-	IncStartups()
 }
 
 // controllerMetrics provides metrics for controller operations.
@@ -55,7 +45,6 @@ type controllerMetrics struct {
 	controllerName       string
 	reconciliationsTotal *prometheus.CounterVec
 	reconcileDuration    *prometheus.HistogramVec
-	startupsTotal        *prometheus.CounterVec
 }
 
 // NewControllerRecorder creates a new ControllerMetrics instance.
@@ -64,7 +53,6 @@ func NewControllerRecorder(controllerName string) ControllerRecorder {
 		controllerName:       controllerName,
 		reconciliationsTotal: reconciliationsTotal,
 		reconcileDuration:    reconcileDuration,
-		startupsTotal:        startupsTotal,
 	}
 
 	return m
@@ -90,17 +78,10 @@ func (m *controllerMetrics) ReconcileStart() func(error) {
 	}
 }
 
-// IncStartups increments the startup counter for the controller.
-func (m *controllerMetrics) IncStartups() {
-	startupTime := time.Now().Format(time.RFC3339)
-	m.startupsTotal.WithLabelValues(m.controllerName, startupTime).Inc()
-}
-
 // ResetControllerMetrics resets the controller metrics.
 func ResetControllerMetrics() {
 	reconciliationsTotal.Reset()
 	reconcileDuration.Reset()
-	startupsTotal.Reset()
 }
 
 // GetReconciliationsTotal returns the reconciliations counter.
@@ -111,9 +92,4 @@ func GetReconciliationsTotal() *prometheus.CounterVec {
 // GetReconcileDuration returns the reconcile duration histogram.
 func GetReconcileDuration() *prometheus.HistogramVec {
 	return reconcileDuration
-}
-
-// GetStartups total returns the controller startups counter.
-func GetStartups() *prometheus.CounterVec {
-	return startupsTotal
 }

@@ -92,8 +92,6 @@ func NewBaseGatewayController(ctx context.Context, cfg GatewayConfig) error {
 		},
 	}
 
-	controllerBuilder.reconciler.metrics.IncStartups()
-
 	return run(
 		ctx,
 		controllerBuilder.watchGwClass,
@@ -123,8 +121,6 @@ func NewBaseInferencePoolController(ctx context.Context, poolCfg *InferencePoolC
 			metrics:      metrics.NewControllerRecorder(poolCfg.ControllerName),
 		},
 	}
-
-	controllerBuilder.reconciler.metrics.IncStartups()
 
 	return run(ctx, controllerBuilder.watchInferencePool)
 }

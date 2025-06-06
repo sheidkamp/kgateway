@@ -1,7 +1,6 @@
 package metrics_test
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -112,35 +111,4 @@ func TestReconcileStart_Error(t *testing.T) {
 	}
 
 	assert.True(t, found, "kgateway_controller_reconciliations_total metric not found")
-}
-
-func TestControllerStartups(t *testing.T) {
-	setupTest()
-
-	m := NewControllerRecorder("test-controller")
-	m.IncStartups()
-
-	metricFamilies, err := metrics.Registry.Gather()
-	require.NoError(t, err)
-
-	var found bool
-
-	fmt.Println("Gathered metrics:", metricFamilies)
-
-	for _, mf := range metricFamilies {
-		fmt.Println(*mf.Name)
-		if *mf.Name == "kgateway_controller_startups_total" {
-			found = true
-			assert.Equal(t, 1, len(mf.Metric))
-
-			for _, metric := range mf.Metric {
-				assert.Equal(t, 2, len(metric.Label))
-				assert.Equal(t, "controller", *metric.Label[0].Name)
-				assert.Equal(t, "test-controller", *metric.Label[0].Value)
-				assert.Equal(t, "start_time", *metric.Label[1].Name)
-			}
-		}
-	}
-
-	assert.True(t, found, "kgateway_controller_startups_total metric not found")
 }
