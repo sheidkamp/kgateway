@@ -40,8 +40,6 @@ type ControllerRecorder interface {
 	ReconcileStart() func(error)
 }
 
-type nowFunc func() time.Time
-
 // controllerMetrics provides metrics for controller operations.
 type controllerMetrics struct {
 	controllerName       string
