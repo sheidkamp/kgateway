@@ -73,6 +73,7 @@ func TestTransformStart_Error(t *testing.T) {
 	currentMetrics.assertMetricLabels("kgateway_collection_transform_duration_seconds", []*metricLabel{
 		{name: "collection", value: "test-collection"},
 	})
+	currentMetrics.assertHistogramPopulated("kgateway_collection_transform_duration_seconds")
 }
 
 func TestCollectionResources(t *testing.T) {
