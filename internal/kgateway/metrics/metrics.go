@@ -52,7 +52,7 @@ var (
 		"translationsTotal":   translationsTotal,
 		"translationDuration": translationDuration,
 		"translationsRunning": translationsRunning,
-		"domainsPerListener":  domainsPerListener,
+		//"domainsPerListener":  domainsPerListener,
 	}
 )
 

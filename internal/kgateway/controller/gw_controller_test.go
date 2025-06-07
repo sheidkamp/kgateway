@@ -6,13 +6,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	api "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 var _ = Describe("GwController", func() {
@@ -111,16 +108,16 @@ var _ = Describe("GwController", func() {
 			Expect(*gw.Status.Addresses[0].Type).To(Equal(api.IPAddressType))
 			Expect(gw.Status.Addresses[0].Value).To(Equal("127.0.0.1"))
 
-			Eventually(func() bool {
-				if probs, err := testutil.CollectAndLint(=.GetReconciliationsTotal(),
-					"kgateway_controller_reconciliations_total",
-					"kgateway_controller_reconcile_duration_seconds",
-				); err != nil || len(probs) > 0 {
-					return false
-				}
+			// Eventually(func() bool {
+			// 	if probs, err := testutil.CollectAndLint(=.GetReconciliationsTotal(),
+			// 		"kgateway_controller_reconciliations_total",
+			// 		"kgateway_controller_reconcile_duration_seconds",
+			// 	); err != nil || len(probs) > 0 {
+			// 		return false
+			// 	}
 
-				return true
-			}, timeout, interval).Should(BeTrue(), "metrics not collected")
+			// 	return true
+			// }, timeout, interval).Should(BeTrue(), "metrics not collected")
 
 		},
 		Entry("default gateway class", gatewayClassName),

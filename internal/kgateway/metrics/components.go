@@ -22,20 +22,20 @@ type CounterOpts struct {
 	Help      string
 }
 
-// type GaugeVec interface {
-// 	WithLabelValues(lvs ...string) Gauge
-// }
+type GaugeVec interface {
+	WithLabelValues(lvs ...string) Gauge
+}
 
-// type Gauge interface {
-// 	Set(value float64)
-// }
+type Gauge interface {
+	Set(value float64)
+}
 
-// type GaugeOpts struct {
-// 	Namespace string
-// 	Subsystem string
-// 	Name      string
-// 	Help      string
-// }
+type GaugeOpts struct {
+	Namespace MetricsNamespace
+	Subsystem MetricsSubsystem
+	Name      string
+	Help      string
+}
 
 type HistogramVec interface {
 	WithLabelValues(lvs ...string) Histogram
@@ -58,7 +58,7 @@ type HistogramOpts struct {
 type Metrics interface {
 	RegisterMetrics(metrics []Collector)
 	NewCounterVec(opts CounterOpts, labels []string) CounterVec
-	// NewGaugeVec(opts GaugeOpts, labels []string) GaugeVec
+	NewGaugeVec(opts GaugeOpts, labels []string) GaugeVec
 	NewHistogramVec(opts HistogramOpts, labels []string) HistogramVec
 }
 
@@ -131,24 +131,35 @@ func (m *prometheusMetrics) NewHistogramVec(opts HistogramOpts, labels []string)
 	}
 }
 
-// func (m *prometheusMetrics) NewGaugeVec(opts GaugeOpts, labels []string) GaugeVec {
-// 	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
-// 		Namespace: opts.Namespace,
-// 		Subsystem: opts.Subsystem,
-// 		Name:      opts.Name,
-// 		Help:      opts.Help,
-// 	}, labels)
-// }
+// Prometheus GaugeVec implementation
+type prometheusGaugeVec struct {
+	vec *prometheus.GaugeVec
+}
 
-// func (m *prometheusMetrics) NewHistogramVec(opts HistogramOpts, labels []string) HistogramVec {
-// 	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
-// 		Namespace: opts.Namespace,
-// 		Subsystem: opts.Subsystem,
-// 		Name:      opts.Name,
-// 		Help:      opts.Help,
-// 	}, labels)
-// }
+func (m *prometheusMetrics) NewGaugeVec(opts GaugeOpts, labels []string) GaugeVec {
+	return &prometheusGaugeVec{
+		vec: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: string(opts.Namespace),
+			Subsystem: string(opts.Subsystem),
+			Name:      opts.Name,
+			Help:      opts.Help,
+		}, labels),
+	}
+}
 
+func (v *prometheusGaugeVec) WithLabelValues(lvs ...string) Gauge {
+	return v.vec.WithLabelValues(lvs...)
+}
+
+func (v *prometheusGaugeVec) Collect(ch chan<- prometheus.Metric) {
+	v.vec.Collect(ch)
+}
+
+func (v *prometheusGaugeVec) Describe(ch chan<- *prometheus.Desc) {
+	v.vec.Describe(ch)
+}
+
+// Registry
 type prometheusCollector struct {
 	collector prometheus.Collector
 }
