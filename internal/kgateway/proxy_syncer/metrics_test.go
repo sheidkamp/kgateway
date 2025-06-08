@@ -5,13 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
-
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	kmetrics "github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
+	"github.com/stretchr/testify/require"
 )
 
 func setupMetricsTest() {
@@ -21,8 +18,6 @@ func setupMetricsTest() {
 }
 
 func TestProxySyncerMetrics(t *testing.T) {
-	setupMetricsTest()
-
 	t.Run("SyncMetrics", func(t *testing.T) {
 		testProxySyncerMetrics(t)
 	})
@@ -49,6 +44,8 @@ func testProxySyncerMetrics(t *testing.T) {
 }
 
 func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
+	setupMetricsTest()
+
 	finish := proxySyncer.routeStatusMetrics.StatusSyncStart()
 	finish(nil)
 
@@ -63,15 +60,15 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 		Resource:  "TCPRoute",
 	}, 3)
 
-	expectedTranslationCounter := `
+	expectedSyncsCounter := `
 		# HELP kgateway_status_syncer_status_syncs_total Total status syncs
 		# TYPE kgateway_status_syncer_status_syncs_total counter
 		kgateway_status_syncer_status_syncs_total{result="success",syncer="RouteStatusSyncer"} 1
 	`
 
-	err := testutil.CollectAndCompare(
+	err := metricstest.CollectAndCompare(
 		metrics.GetStatusSyncsTotal(),
-		strings.NewReader(expectedTranslationCounter),
+		strings.NewReader(expectedSyncsCounter),
 		"kgateway_status_syncer_status_syncs_total",
 	)
 	require.NoError(t, err, "Route status translation counter mismatch")
@@ -83,7 +80,7 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 		kgateway_status_syncer_resources{name="test",namespace="kube-system",resource="TCPRoute",syncer="RouteStatusSyncer"} 3
 	`
 
-	err = testutil.CollectAndCompare(
+	err = metricstest.CollectAndCompare(
 		metrics.GetStatusSyncResources(),
 		strings.NewReader(expectedResourceGauge),
 		"kgateway_status_syncer_resources",
@@ -92,6 +89,8 @@ func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 }
 
 func testGatewayMetrics(t *testing.T, proxySyncer *ProxySyncer) {
+	setupMetricsTest()
+
 	finish := proxySyncer.gatewayStatusMetrics.StatusSyncStart()
 	finish(errors.New("gateway sync error"))
 
@@ -101,28 +100,21 @@ func testGatewayMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 		Resource:  "Gateway",
 	}, 2)
 
-	metricFamilies, err := crmetrics.Registry.Gather()
-	require.NoError(t, err)
+	gathered := metricstest.MustGatherMetrics(t)
 
-	var found bool
-
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_status_syncer_status_syncs_total" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) >= 2 &&
-					*metric.Label[0].Value == "error" &&
-					*metric.Label[1].Value == "GatewayStatusSyncer" {
-					found = true
-					assert.Equal(t, float64(1), metric.Counter.GetValue())
-				}
-			}
-		}
-	}
-
-	assert.True(t, found, "Gateway status error metric not found")
+	gathered.AssertMetricExists("kgateway_status_syncer_status_syncs_total")
+	gathered.AssertMetricsLabels(
+		"kgateway_status_syncer_status_syncs_total",
+		[][]kmetrics.Label{{
+			{Name: "result", Value: "error"},
+			{Name: "syncer", Value: "GatewayStatusSyncer"},
+		}},
+	)
 }
 
 func testListenerMetrics(t *testing.T, proxySyncer *ProxySyncer) {
+	setupMetricsTest()
+
 	proxySyncer.listenerStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
 		Namespace: "default",
 		Name:      "test",
@@ -139,30 +131,23 @@ func testListenerMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 		Resource:  "ListenerSet",
 	})
 
-	metricFamilies, err := crmetrics.Registry.Gather()
-	require.NoError(t, err)
+	gathered := metricstest.MustGatherMetrics(t)
 
-	var found bool
-
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_status_syncer_resources" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) == 4 &&
-					*metric.Label[0].Value == "test" &&
-					*metric.Label[1].Value == "default" &&
-					*metric.Label[2].Value == "ListenerSet" &&
-					*metric.Label[3].Value == "ListenerSetStatusSyncer" {
-					found = true
-					assert.Equal(t, float64(1), metric.Gauge.GetValue())
-				}
-			}
-		}
-	}
-
-	assert.True(t, found, "Listener status resource metric not found")
+	gathered.AssertMetricExists("kgateway_status_syncer_resources")
+	gathered.AssertMetricsLabels(
+		"kgateway_status_syncer_resources",
+		[][]kmetrics.Label{{
+			{Name: "name", Value: "test"},
+			{Name: "namespace", Value: "default"},
+			{Name: "resource", Value: "ListenerSet"},
+			{Name: "syncer", Value: "ListenerSetStatusSyncer"},
+		}},
+	)
 }
 
 func testPolicyMetrics(t *testing.T, proxySyncer *ProxySyncer) {
+	setupMetricsTest()
+
 	finish := proxySyncer.policyStatusMetrics.StatusSyncStart()
 	finish(nil)
 
@@ -172,43 +157,32 @@ func testPolicyMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 		Resource:  "Policy",
 	}, 7)
 
-	metricFamilies, err := crmetrics.Registry.Gather()
-	require.NoError(t, err)
+	gathered := metricstest.MustGatherMetrics(t)
 
-	foundTranslation := false
-	foundResource := false
+	gathered.AssertMetricExists("kgateway_status_syncer_status_syncs_total")
+	gathered.AssertMetricsLabels(
+		"kgateway_status_syncer_status_syncs_total",
+		[][]kmetrics.Label{{
+			{Name: "result", Value: "success"},
+			{Name: "syncer", Value: "PolicyStatusSyncer"},
+		}},
+	)
 
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_status_syncer_status_syncs_total" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) >= 2 &&
-					*metric.Label[0].Value == "success" &&
-					*metric.Label[1].Value == "PolicyStatusSyncer" {
-					foundTranslation = true
-					assert.Equal(t, float64(1), metric.Counter.GetValue())
-				}
-			}
-		}
-
-		if *mf.Name == "kgateway_status_syncer_resources" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) == 4 &&
-					*metric.Label[0].Value == "test" &&
-					*metric.Label[1].Value == "default" &&
-					*metric.Label[2].Value == "Policy" &&
-					*metric.Label[3].Value == "PolicyStatusSyncer" {
-					foundResource = true
-					assert.Equal(t, float64(7), metric.Gauge.GetValue())
-				}
-			}
-		}
-	}
-
-	assert.True(t, foundTranslation, "Policy status translation metric not found")
-	assert.True(t, foundResource, "Policy status resource metric not found")
+	gathered.AssertMetricExists("kgateway_status_syncer_resources")
+	gathered.AssertMetricsLabels(
+		"kgateway_status_syncer_resources",
+		[][]kmetrics.Label{{
+			{Name: "name", Value: "test"},
+			{Name: "namespace", Value: "default"},
+			{Name: "resource", Value: "Policy"},
+			{Name: "syncer", Value: "PolicyStatusSyncer"},
+		}},
+	)
 }
 
 func testXDSSnapshotMetrics(t *testing.T, proxySyncer *ProxySyncer) {
+	setupMetricsTest()
+
 	finish := proxySyncer.xdsSnapshotsMetrics.TransformStart()
 	finish(nil)
 
@@ -218,43 +192,32 @@ func testXDSSnapshotMetrics(t *testing.T, proxySyncer *ProxySyncer) {
 		Resource:  "Cluster",
 	}, 7)
 
-	metricFamilies, err := crmetrics.Registry.Gather()
-	require.NoError(t, err)
+	gathered := metricstest.MustGatherMetrics(t)
 
-	foundTransforms := false
-	foundResources := false
+	gathered.AssertMetricExists("kgateway_collection_transforms_total")
+	gathered.AssertMetricsLabels(
+		"kgateway_collection_transforms_total",
+		[][]kmetrics.Label{{
+			{Name: "collection", Value: "ClientXDSSnapshots"},
+			{Name: "result", Value: "success"},
+		}},
+	)
 
-	for _, mf := range metricFamilies {
-		if *mf.Name == "kgateway_collection_transforms_total" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) >= 2 &&
-					*metric.Label[0].Value == "ClientXDSSnapshots" &&
-					*metric.Label[1].Value == "success" {
-					foundTransforms = true
-					assert.Equal(t, float64(1), metric.Counter.GetValue())
-				}
-			}
-		}
-
-		if *mf.Name == "kgateway_collection_resources" {
-			for _, metric := range mf.Metric {
-				if len(metric.Label) == 4 &&
-					*metric.Label[0].Value == "ClientXDSSnapshots" &&
-					*metric.Label[1].Value == "test" &&
-					*metric.Label[2].Value == "default" &&
-					*metric.Label[3].Value == "Cluster" {
-					foundResources = true
-					assert.Equal(t, float64(7), metric.Gauge.GetValue())
-				}
-			}
-		}
-	}
-
-	assert.True(t, foundTransforms, "XDS snapshot transforms metric not found")
-	assert.True(t, foundResources, "XDS snapshot resources metric not found")
+	gathered.AssertMetricExists("kgateway_collection_resources")
+	gathered.AssertMetricsLabels(
+		"kgateway_collection_resources",
+		[][]kmetrics.Label{{
+			{Name: "collection", Value: "ClientXDSSnapshots"},
+			{Name: "name", Value: "test"},
+			{Name: "namespace", Value: "default"},
+			{Name: "resource", Value: "Cluster"},
+		}},
+	)
 }
 
 func testMetricsLinting(t *testing.T) {
+	setupMetricsTest()
+
 	routeRecorder := metrics.NewStatusSyncRecorder("TestSyncer")
 
 	finish := routeRecorder.StatusSyncStart()
@@ -277,30 +240,14 @@ func testMetricsLinting(t *testing.T) {
 		Resource:  "Cluster",
 	}, 2)
 
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(
-		metrics.GetStatusSyncsTotal(),
-		metrics.GetStatusSyncDuration(),
-		metrics.GetStatusSyncResources(),
-		metrics.GetTransformsTotal(),
-		metrics.GetTransformDuration(),
-		metrics.GetCollectionResources(),
-	)
-
-	problems, err := testutil.GatherAndLint(reg)
+	problems, err := metricstest.GatherAndLint()
 	require.NoError(t, err)
 
 	if len(problems) > 0 {
 		t.Errorf("Metrics linting problems found: %v", problems)
 	}
 
-	metricFamilies, err := crmetrics.Registry.Gather()
-	require.NoError(t, err)
-
-	metricNames := make(map[string]bool)
-	for _, mf := range metricFamilies {
-		metricNames[*mf.Name] = true
-	}
+	gathered := metricstest.MustGatherMetrics(t)
 
 	expectedMetrics := []string{
 		"kgateway_status_syncer_status_syncs_total",
@@ -312,6 +259,6 @@ func testMetricsLinting(t *testing.T) {
 	}
 
 	for _, expected := range expectedMetrics {
-		assert.True(t, metricNames[expected], "Expected metric %s not found", expected)
+		gathered.AssertMetricExists(expected)
 	}
 }

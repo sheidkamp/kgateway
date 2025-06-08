@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
 
 func TestNewCollectionRecorder(t *testing.T) {
@@ -25,9 +27,9 @@ func TestNewCollectionRecorder(t *testing.T) {
 		"kgateway_collection_resources",
 	}
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 	for _, expected := range expectedMetrics {
-		currentMetrics.assertMetricExists(expected)
+		currentMetrics.AssertMetricExists(expected)
 	}
 }
 
@@ -40,18 +42,18 @@ func TestTransformStart_Success(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	finishFunc(nil)
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.assertMetricLabels("kgateway_collection_transforms_total", []*metricLabel{
-		{name: "collection", value: "test-collection"},
-		{name: "result", value: "success"},
+	currentMetrics.AssertMetricLabels("kgateway_collection_transforms_total", []metrics.Label{
+		{Name: "collection", Value: "test-collection"},
+		{Name: "result", Value: "success"},
 	})
-	currentMetrics.assertMetricCounterValue("kgateway_collection_transforms_total", 1)
+	currentMetrics.AssertMetricCounterValue("kgateway_collection_transforms_total", 1)
 
-	currentMetrics.assertMetricLabels("kgateway_collection_transform_duration_seconds", []*metricLabel{
-		{name: "collection", value: "test-collection"},
+	currentMetrics.AssertMetricLabels("kgateway_collection_transform_duration_seconds", []metrics.Label{
+		{Name: "collection", Value: "test-collection"},
 	})
-	currentMetrics.assertHistogramPopulated("kgateway_collection_transform_duration_seconds")
+	currentMetrics.AssertHistogramPopulated("kgateway_collection_transform_duration_seconds")
 }
 
 func TestTransformStart_Error(t *testing.T) {
@@ -62,18 +64,18 @@ func TestTransformStart_Error(t *testing.T) {
 	finishFunc := m.TransformStart()
 	finishFunc(assert.AnError)
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.assertMetricLabels("kgateway_collection_transforms_total", []*metricLabel{
-		{name: "collection", value: "test-collection"},
-		{name: "result", value: "error"},
+	currentMetrics.AssertMetricLabels("kgateway_collection_transforms_total", []metrics.Label{
+		{Name: "collection", Value: "test-collection"},
+		{Name: "result", Value: "error"},
 	})
-	currentMetrics.assertMetricCounterValue("kgateway_collection_transforms_total", 1)
+	currentMetrics.AssertMetricCounterValue("kgateway_collection_transforms_total", 1)
 
-	currentMetrics.assertMetricLabels("kgateway_collection_transform_duration_seconds", []*metricLabel{
-		{name: "collection", value: "test-collection"},
+	currentMetrics.AssertMetricLabels("kgateway_collection_transform_duration_seconds", []metrics.Label{
+		{Name: "collection", Value: "test-collection"},
 	})
-	currentMetrics.assertHistogramPopulated("kgateway_collection_transform_duration_seconds")
+	currentMetrics.AssertHistogramPopulated("kgateway_collection_transform_duration_seconds")
 }
 
 func TestCollectionResources(t *testing.T) {
@@ -85,44 +87,41 @@ func TestCollectionResources(t *testing.T) {
 	m.SetResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
 	m.SetResources(CollectionResourcesLabels{Namespace: "kube-system", Name: "test", Resource: "gateway"}, 3)
 
-	expectedLabels := [][]*metricLabel{
-		{
-			{name: "collection", value: "test-collection"},
-			{name: "name", value: "test"},
-			{name: "namespace", value: "default"},
-			{name: "resource", value: "route"},
-		},
-		{
-			{name: "collection", value: "test-collection"},
-			{name: "name", value: "test"},
-			{name: "namespace", value: "kube-system"},
-			{name: "resource", value: "gateway"},
-		},
-	}
+	expectedLabels := [][]metrics.Label{{
+		{Name: "collection", Value: "test-collection"},
+		{Name: "name", Value: "test"},
+		{Name: "namespace", Value: "default"},
+		{Name: "resource", Value: "route"},
+	}, {
+		{Name: "collection", Value: "test-collection"},
+		{Name: "name", Value: "test"},
+		{Name: "namespace", Value: "kube-system"},
+		{Name: "resource", Value: "gateway"},
+	}}
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.assertMetricsLabels("kgateway_collection_resources", expectedLabels)
-	currentMetrics.assertMetricGaugeValues("kgateway_collection_resources", []float64{5, 3})
+	currentMetrics.AssertMetricsLabels("kgateway_collection_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_collection_resources", []float64{5, 3})
 
 	// Test IncResources.
 	m.IncResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
 
-	currentMetrics = mustGatherMetrics(t)
-	currentMetrics.assertMetricsLabels("kgateway_collection_resources", expectedLabels)
-	currentMetrics.assertMetricGaugeValues("kgateway_collection_resources", []float64{6, 3})
+	currentMetrics = metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricsLabels("kgateway_collection_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_collection_resources", []float64{6, 3})
 
 	// Test DecResources.
 	m.DecResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
 
-	currentMetrics = mustGatherMetrics(t)
-	currentMetrics.assertMetricsLabels("kgateway_collection_resources", expectedLabels)
-	currentMetrics.assertMetricGaugeValues("kgateway_collection_resources", []float64{5, 3})
+	currentMetrics = metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricsLabels("kgateway_collection_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_collection_resources", []float64{5, 3})
 
 	// Test ResetResources.
 	m.ResetResources("route")
 
-	currentMetrics = mustGatherMetrics(t)
-	currentMetrics.assertMetricsLabels("kgateway_collection_resources", expectedLabels)
-	currentMetrics.assertMetricGaugeValues("kgateway_collection_resources", []float64{0, 3})
+	currentMetrics = metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricsLabels("kgateway_collection_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_collection_resources", []float64{0, 3})
 }

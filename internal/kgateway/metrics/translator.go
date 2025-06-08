@@ -3,7 +3,7 @@ package metrics
 import (
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 const (
@@ -12,8 +12,8 @@ const (
 )
 
 var (
-	translationsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	translationsTotal = metrics.NewCounter(
+		metrics.CounterOpts{
 			Namespace: metricsNamespace,
 			Subsystem: translatorSubsystem,
 			Name:      "translations_total",
@@ -21,8 +21,8 @@ var (
 		},
 		[]string{translatorNameLabel, "result"},
 	)
-	translationDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	translationDuration = metrics.NewHistogram(
+		metrics.HistogramOpts{
 			Namespace:                       metricsNamespace,
 			Subsystem:                       translatorSubsystem,
 			Name:                            "translation_duration_seconds",
@@ -33,8 +33,8 @@ var (
 		},
 		[]string{translatorNameLabel},
 	)
-	translationsRunning = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	translationsRunning = metrics.NewGauge(
+		metrics.GaugeOpts{
 			Namespace: metricsNamespace,
 			Subsystem: translatorSubsystem,
 			Name:      "translations_running",
@@ -52,9 +52,9 @@ type TranslatorRecorder interface {
 // translatorMetrics records metrics for translator operations.
 type translatorMetrics struct {
 	translatorName      string
-	translationsTotal   *prometheus.CounterVec
-	translationDuration *prometheus.HistogramVec
-	translationsRunning *prometheus.GaugeVec
+	translationsTotal   metrics.Counter
+	translationDuration metrics.Histogram
+	translationsRunning metrics.Gauge
 }
 
 // NewTranslatorRecorder creates a new recorder for translator metrics.
@@ -73,37 +73,44 @@ func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
 // collection and returns a function called at the end to complete metrics recording.
 func (m *translatorMetrics) TranslationStart() func(error) {
 	start := time.Now()
-	m.translationsRunning.WithLabelValues(m.translatorName).Inc()
+	m.translationsRunning.Add(1,
+		metrics.Label{Name: translatorNameLabel, Value: m.translatorName})
 
 	return func(err error) {
 		duration := time.Since(start)
 
-		m.translationDuration.WithLabelValues(m.translatorName).Observe(duration.Seconds())
+		m.translationDuration.Observe(duration.Seconds(),
+			metrics.Label{Name: translatorNameLabel, Value: m.translatorName})
 
 		result := "success"
 		if err != nil {
 			result = "error"
 		}
 
-		m.translationsTotal.WithLabelValues(m.translatorName, result).Inc()
-		m.translationsRunning.WithLabelValues(m.translatorName).Dec()
+		m.translationsTotal.Inc([]metrics.Label{
+			{Name: translatorNameLabel, Value: m.translatorName},
+			{Name: "result", Value: result},
+		}...)
+
+		m.translationsRunning.Sub(1,
+			metrics.Label{Name: translatorNameLabel, Value: m.translatorName})
 	}
 }
 
 // GetTranslationsTotal returns the translations counter.
 // This is provided for testing purposes.
-func GetTranslationsTotal() *prometheus.CounterVec {
+func GetTranslationsTotal() metrics.Counter {
 	return translationsTotal
 }
 
 // GetTranslationDuration returns the translation duration histogram.
 // This is provided for testing purposes.
-func GetTranslationDuration() *prometheus.HistogramVec {
+func GetTranslationDuration() metrics.Histogram {
 	return translationDuration
 }
 
 // GetTranslationsRunning returns the translations running gauge.
 // This is provided for testing purposes.
-func GetTranslationsRunning() *prometheus.GaugeVec {
+func GetTranslationsRunning() metrics.Gauge {
 	return translationsRunning
 }

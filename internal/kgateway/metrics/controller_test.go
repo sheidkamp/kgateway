@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
 
 func TestNewControllerRecorder(t *testing.T) {
@@ -23,9 +25,9 @@ func TestNewControllerRecorder(t *testing.T) {
 		"kgateway_controller_reconcile_duration_seconds",
 	}
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 	for _, expected := range expectedMetrics {
-		currentMetrics.assertMetricExists(expected)
+		currentMetrics.AssertMetricExists(expected)
 	}
 }
 
@@ -38,18 +40,18 @@ func TestReconcileStart_Success(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	finishFunc(nil)
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.assertMetricLabels("kgateway_controller_reconciliations_total", []*metricLabel{
-		{name: "controller", value: "test-controller"},
-		{name: "result", value: "success"},
+	currentMetrics.AssertMetricLabels("kgateway_controller_reconciliations_total", []metrics.Label{
+		{Name: "controller", Value: "test-controller"},
+		{Name: "result", Value: "success"},
 	})
-	currentMetrics.assertMetricCounterValue("kgateway_controller_reconciliations_total", 1)
+	currentMetrics.AssertMetricCounterValue("kgateway_controller_reconciliations_total", 1)
 
-	currentMetrics.assertMetricLabels("kgateway_controller_reconcile_duration_seconds", []*metricLabel{
-		{name: "controller", value: "test-controller"},
+	currentMetrics.AssertMetricLabels("kgateway_controller_reconcile_duration_seconds", []metrics.Label{
+		{Name: "controller", Value: "test-controller"},
 	})
-	currentMetrics.assertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
+	currentMetrics.AssertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
 }
 
 func TestReconcileStart_Error(t *testing.T) {
@@ -60,16 +62,16 @@ func TestReconcileStart_Error(t *testing.T) {
 	finishFunc := m.ReconcileStart()
 	finishFunc(assert.AnError)
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.assertMetricLabels("kgateway_controller_reconciliations_total", []*metricLabel{
-		{name: "controller", value: "test-controller"},
-		{name: "result", value: "error"},
+	currentMetrics.AssertMetricLabels("kgateway_controller_reconciliations_total", []metrics.Label{
+		{Name: "controller", Value: "test-controller"},
+		{Name: "result", Value: "error"},
 	})
-	currentMetrics.assertMetricCounterValue("kgateway_controller_reconciliations_total", 1)
+	currentMetrics.AssertMetricCounterValue("kgateway_controller_reconciliations_total", 1)
 
-	currentMetrics.assertMetricLabels("kgateway_controller_reconcile_duration_seconds", []*metricLabel{
-		{name: "controller", value: "test-controller"},
+	currentMetrics.AssertMetricLabels("kgateway_controller_reconcile_duration_seconds", []metrics.Label{
+		{Name: "controller", Value: "test-controller"},
 	})
-	currentMetrics.assertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
+	currentMetrics.AssertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
 }

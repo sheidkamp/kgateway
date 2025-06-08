@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
 
 var (
@@ -27,10 +29,10 @@ func TestNewRoutingRecorder(t *testing.T) {
 		"kgateway_routing_domains",
 	}
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 
 	for _, expected := range expectedMetrics {
-		currentMetrics.assertMetricExists(expected)
+		currentMetrics.AssertMetricExists(expected)
 	}
 }
 
@@ -45,12 +47,12 @@ func TestSetDomainPerListener(t *testing.T) {
 		Port:        port,
 	}, 5)
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.assertMetricLabels("kgateway_routing_domains", []*metricLabel{
-		{name: "gatewayName", value: gateway},
-		{name: "namespace", value: namespace},
-		{name: "port", value: port},
+	currentMetrics.AssertMetricLabels("kgateway_routing_domains", []metrics.Label{
+		{Name: "gatewayName", Value: gateway},
+		{Name: "namespace", Value: namespace},
+		{Name: "port", Value: port},
 	})
-	currentMetrics.assertMetricGaugeValue("kgateway_routing_domains", 5)
+	currentMetrics.AssertMetricGaugeValue("kgateway_routing_domains", 5)
 }

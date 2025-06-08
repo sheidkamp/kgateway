@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 const (
@@ -13,8 +13,8 @@ const (
 )
 
 var (
-	transformsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	transformsTotal = metrics.NewCounter(
+		metrics.CounterOpts{
 			Namespace: metricsNamespace,
 			Subsystem: collectionSubsystem,
 			Name:      "transforms_total",
@@ -22,8 +22,8 @@ var (
 		},
 		[]string{collectionNameLabel, "result"},
 	)
-	transformDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	transformDuration = metrics.NewHistogram(
+		metrics.HistogramOpts{
 			Namespace:                       metricsNamespace,
 			Subsystem:                       collectionSubsystem,
 			Name:                            "transform_duration_seconds",
@@ -34,8 +34,8 @@ var (
 		},
 		[]string{collectionNameLabel},
 	)
-	collectionResources = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	collectionResources = metrics.NewGauge(
+		metrics.GaugeOpts{
 			Namespace: metricsNamespace,
 			Subsystem: collectionSubsystem,
 			Name:      "resources",
@@ -52,8 +52,14 @@ type CollectionResourcesLabels struct {
 	Resource  string
 }
 
-func (r CollectionResourcesLabels) toMetricsLabels(collection string) []string {
-	return []string{collection, r.Name, r.Namespace, r.Resource}
+// toMetricsLabels converts CollectionResourcesLabels to a slice of metrics.Labels.
+func (r CollectionResourcesLabels) toMetricsLabels(collection string) []metrics.Label {
+	return []metrics.Label{
+		{Name: collectionNameLabel, Value: collection},
+		{Name: "name", Value: r.Name},
+		{Name: "namespace", Value: r.Namespace},
+		{Name: "resource", Value: r.Resource},
+	}
 }
 
 // CollectionRecorder defines the interface for recording collection metrics.
@@ -68,9 +74,9 @@ type CollectionRecorder interface {
 // collectionMetrics records metrics for collection operations.
 type collectionMetrics struct {
 	collectionName    string
-	transformsTotal   *prometheus.CounterVec
-	transformDuration *prometheus.HistogramVec
-	resources         *prometheus.GaugeVec
+	transformsTotal   metrics.Counter
+	transformDuration metrics.Histogram
+	resources         metrics.Gauge
 	resourceNames     map[string]map[string]map[string]struct{}
 	resourcesLock     sync.Mutex
 }
@@ -97,14 +103,18 @@ func (m *collectionMetrics) TransformStart() func(error) {
 	return func(err error) {
 		duration := time.Since(start)
 
-		m.transformDuration.WithLabelValues(m.collectionName).Observe(duration.Seconds())
+		m.transformDuration.Observe(duration.Seconds(),
+			metrics.Label{Name: collectionNameLabel, Value: m.collectionName})
 
 		result := "success"
 		if err != nil {
 			result = "error"
 		}
 
-		m.transformsTotal.WithLabelValues(m.collectionName, result).Inc()
+		m.transformsTotal.Inc([]metrics.Label{
+			{Name: collectionNameLabel, Value: m.collectionName},
+			{Name: "result", Value: result},
+		}...)
 	}
 }
 
@@ -125,7 +135,12 @@ func (m *collectionMetrics) ResetResources(resource string) {
 
 	for namespace, names := range namespaces {
 		for name := range names {
-			m.resources.WithLabelValues(m.collectionName, name, namespace, resource).Set(0)
+			m.resources.Set(0, []metrics.Label{
+				{Name: collectionNameLabel, Value: m.collectionName},
+				{Name: "name", Value: name},
+				{Name: "namespace", Value: namespace},
+				{Name: "resource", Value: resource},
+			}...)
 		}
 	}
 }
@@ -151,37 +166,37 @@ func (m *collectionMetrics) updateResourceNames(labels CollectionResourcesLabels
 func (m *collectionMetrics) SetResources(labels CollectionResourcesLabels, count int) {
 	m.updateResourceNames(labels)
 
-	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Set(float64(count))
+	m.resources.Set(float64(count), labels.toMetricsLabels(m.collectionName)...)
 }
 
 // IncResources increments the resource count gauge.
 func (m *collectionMetrics) IncResources(labels CollectionResourcesLabels) {
 	m.updateResourceNames(labels)
 
-	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Inc()
+	m.resources.Add(1, labels.toMetricsLabels(m.collectionName)...)
 }
 
 // DecResources decrements the resource count gauge.
 func (m *collectionMetrics) DecResources(labels CollectionResourcesLabels) {
 	m.updateResourceNames(labels)
 
-	m.resources.WithLabelValues(labels.toMetricsLabels(m.collectionName)...).Dec()
+	m.resources.Sub(1, labels.toMetricsLabels(m.collectionName)...)
 }
 
 // GetTransformsTotal returns the transforms counter.
 // This is provided for testing purposes.
-func GetTransformsTotal() *prometheus.CounterVec {
+func GetTransformsTotal() metrics.Counter {
 	return transformsTotal
 }
 
 // GetTransformDuration returns the transform duration histogram.
 // This is provided for testing purposes.
-func GetTransformDuration() *prometheus.HistogramVec {
+func GetTransformDuration() metrics.Histogram {
 	return transformDuration
 }
 
 // GetCollectionResources returns the collection resource count gauge.
 // This is provided for testing purposes.
-func GetCollectionResources() *prometheus.GaugeVec {
+func GetCollectionResources() metrics.Gauge {
 	return collectionResources
 }

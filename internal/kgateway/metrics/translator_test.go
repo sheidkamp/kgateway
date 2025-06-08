@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewTranslatorRecorder(t *testing.T) {
@@ -24,17 +25,17 @@ func TestNewTranslatorRecorder(t *testing.T) {
 		"kgateway_translator_translations_running",
 	}
 
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 	for _, expected := range expectedMetrics {
-		currentMetrics.assertMetricExists(expected)
+		currentMetrics.AssertMetricExists(expected)
 	}
 }
 
-func assertTranslationsRunning(currentMetrics gatheredMetrics, translatorName string, count int) {
-	currentMetrics.assertMetricLabels("kgateway_translator_translations_running", []*metricLabel{
-		{name: "translator", value: translatorName},
+func assertTranslationsRunning(currentMetrics metricstest.GatheredMetrics, translatorName string, count int) {
+	currentMetrics.AssertMetricLabels("kgateway_translator_translations_running", []metrics.Label{
+		{Name: "translator", Value: translatorName},
 	})
-	currentMetrics.assertMetricGaugeValue("kgateway_translator_translations_running", float64(count))
+	currentMetrics.AssertMetricGaugeValue("kgateway_translator_translations_running", float64(count))
 }
 
 func TestTranslationStart_Success(t *testing.T) {
@@ -47,29 +48,29 @@ func TestTranslationStart_Success(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Check that the translations_running metric is 1
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 	assertTranslationsRunning(currentMetrics, "test-translator", 1)
 
 	// Finish translation
 	finishFunc(nil)
 	time.Sleep(10 * time.Millisecond)
-	currentMetrics = mustGatherMetrics(t)
+	currentMetrics = metricstest.MustGatherMetrics(t)
 
 	// Check the translations_running metric
 	assertTranslationsRunning(currentMetrics, "test-translator", 0)
 
 	// Check the translations_total metric
-	currentMetrics.assertMetricLabels("kgateway_translator_translations_total", []*metricLabel{
-		{name: "result", value: "success"},
-		{name: "translator", value: "test-translator"},
+	currentMetrics.AssertMetricLabels("kgateway_translator_translations_total", []metrics.Label{
+		{Name: "result", Value: "success"},
+		{Name: "translator", Value: "test-translator"},
 	})
-	currentMetrics.assertMetricCounterValue("kgateway_translator_translations_total", 1)
+	currentMetrics.AssertMetricCounterValue("kgateway_translator_translations_total", 1)
 
 	// Check the translation_duration_seconds metric
-	currentMetrics.assertMetricLabels("kgateway_translator_translation_duration_seconds", []*metricLabel{
-		{name: "translator", value: "test-translator"},
+	currentMetrics.AssertMetricLabels("kgateway_translator_translation_duration_seconds", []metrics.Label{
+		{Name: "translator", Value: "test-translator"},
 	})
-	currentMetrics.assertHistogramPopulated("kgateway_translator_translation_duration_seconds")
+	currentMetrics.AssertHistogramPopulated("kgateway_translator_translation_duration_seconds")
 }
 
 func TestTranslationStart_Error(t *testing.T) {
@@ -78,16 +79,16 @@ func TestTranslationStart_Error(t *testing.T) {
 	m := NewTranslatorRecorder("test-translator")
 
 	finishFunc := m.TranslationStart()
-	currentMetrics := mustGatherMetrics(t)
+	currentMetrics := metricstest.MustGatherMetrics(t)
 	assertTranslationsRunning(currentMetrics, "test-translator", 1)
 
 	finishFunc(assert.AnError)
-	currentMetrics = mustGatherMetrics(t)
+	currentMetrics = metricstest.MustGatherMetrics(t)
 	assertTranslationsRunning(currentMetrics, "test-translator", 0)
 
-	currentMetrics.assertMetricLabels("kgateway_translator_translations_total", []*metricLabel{
-		{name: "result", value: "error"},
-		{name: "translator", value: "test-translator"},
+	currentMetrics.AssertMetricLabels("kgateway_translator_translations_total", []metrics.Label{
+		{Name: "result", Value: "error"},
+		{Name: "translator", Value: "test-translator"},
 	})
-	currentMetrics.assertMetricCounterValue("kgateway_translator_translations_total", 1)
+	currentMetrics.AssertMetricCounterValue("kgateway_translator_translations_total", 1)
 }

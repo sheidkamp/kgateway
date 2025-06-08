@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 const (
@@ -13,8 +13,8 @@ const (
 )
 
 var (
-	statusSyncsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	statusSyncsTotal = metrics.NewCounter(
+		metrics.CounterOpts{
 			Namespace: metricsNamespace,
 			Subsystem: statusSubsystem,
 			Name:      "status_syncs_total",
@@ -22,8 +22,8 @@ var (
 		},
 		[]string{syncerNameLabel, "result"},
 	)
-	statusSyncDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	statusSyncDuration = metrics.NewHistogram(
+		metrics.HistogramOpts{
 			Namespace:                       metricsNamespace,
 			Subsystem:                       statusSubsystem,
 			Name:                            "status_sync_duration_seconds",
@@ -34,8 +34,8 @@ var (
 		},
 		[]string{syncerNameLabel},
 	)
-	statusSyncResources = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	statusSyncResources = metrics.NewGauge(
+		metrics.GaugeOpts{
 			Namespace: metricsNamespace,
 			Subsystem: statusSubsystem,
 			Name:      "resources",
@@ -52,8 +52,13 @@ type StatusSyncResourcesLabels struct {
 	Resource  string
 }
 
-func (r StatusSyncResourcesLabels) toMetricsLabels(syncer string) []string {
-	return []string{syncer, r.Name, r.Namespace, r.Resource}
+func (r StatusSyncResourcesLabels) toMetricsLabels(syncer string) []metrics.Label {
+	return []metrics.Label{
+		{Name: syncerNameLabel, Value: syncer},
+		{Name: "name", Value: r.Name},
+		{Name: "namespace", Value: r.Namespace},
+		{Name: "resource", Value: r.Resource},
+	}
 }
 
 // StatusSyncRecorder defines the interface for recording status syncer metrics.
@@ -68,9 +73,9 @@ type StatusSyncRecorder interface {
 // statusSyncMetrics records metrics for status syncer operations.
 type statusSyncMetrics struct {
 	syncerName         string
-	statusSyncsTotal   *prometheus.CounterVec
-	statusSyncDuration *prometheus.HistogramVec
-	resources          *prometheus.GaugeVec
+	statusSyncsTotal   metrics.Counter
+	statusSyncDuration metrics.Histogram
+	resources          metrics.Gauge
 	resourceNames      map[string]map[string]map[string]struct{}
 	resourcesLock      sync.Mutex
 }
@@ -97,14 +102,18 @@ func (m *statusSyncMetrics) StatusSyncStart() func(error) {
 	return func(err error) {
 		duration := time.Since(start)
 
-		m.statusSyncDuration.WithLabelValues(m.syncerName).Observe(duration.Seconds())
+		m.statusSyncDuration.Observe(duration.Seconds(),
+			metrics.Label{Name: syncerNameLabel, Value: m.syncerName})
 
 		result := "success"
 		if err != nil {
 			result = "error"
 		}
 
-		m.statusSyncsTotal.WithLabelValues(m.syncerName, result).Inc()
+		m.statusSyncsTotal.Inc([]metrics.Label{
+			{Name: syncerNameLabel, Value: m.syncerName},
+			{Name: "result", Value: result},
+		}...)
 	}
 }
 
@@ -125,7 +134,12 @@ func (m *statusSyncMetrics) ResetResources(resource string) {
 
 	for namespace, names := range namespaces {
 		for name := range names {
-			m.resources.WithLabelValues(m.syncerName, name, namespace, resource).Set(0)
+			m.resources.Set(0, []metrics.Label{
+				{Name: syncerNameLabel, Value: m.syncerName},
+				{Name: "name", Value: name},
+				{Name: "namespace", Value: namespace},
+				{Name: "resource", Value: resource},
+			}...)
 		}
 	}
 }
@@ -151,37 +165,37 @@ func (m *statusSyncMetrics) updateResourceNames(labels StatusSyncResourcesLabels
 func (m *statusSyncMetrics) SetResources(labels StatusSyncResourcesLabels, count int) {
 	m.updateResourceNames(labels)
 
-	m.resources.WithLabelValues(labels.toMetricsLabels(m.syncerName)...).Set(float64(count))
+	m.resources.Set(float64(count), labels.toMetricsLabels(m.syncerName)...)
 }
 
 // IncResources increments the resource count gauge.
 func (m *statusSyncMetrics) IncResources(labels StatusSyncResourcesLabels) {
 	m.updateResourceNames(labels)
 
-	m.resources.WithLabelValues(labels.toMetricsLabels(m.syncerName)...).Inc()
+	m.resources.Add(1, labels.toMetricsLabels(m.syncerName)...)
 }
 
 // DecResources decrements the resource count gauge.
 func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesLabels) {
 	m.updateResourceNames(labels)
 
-	m.resources.WithLabelValues(labels.toMetricsLabels(m.syncerName)...).Dec()
+	m.resources.Sub(1, labels.toMetricsLabels(m.syncerName)...)
 }
 
 // GetStatusSyncsTotal returns the status syncs counter.
 // This is provided for testing purposes.
-func GetStatusSyncsTotal() *prometheus.CounterVec {
+func GetStatusSyncsTotal() metrics.Counter {
 	return statusSyncsTotal
 }
 
 // GetStatusSyncDuration returns the status sync duration histogram.
 // This is provided for testing purposes.
-func GetStatusSyncDuration() *prometheus.HistogramVec {
+func GetStatusSyncDuration() metrics.Histogram {
 	return statusSyncDuration
 }
 
 // GetStatusSyncResources returns the status syncer resource count gauge.
 // This is provided for testing purposes.
-func GetStatusSyncResources() *prometheus.GaugeVec {
+func GetStatusSyncResources() metrics.Gauge {
 	return statusSyncResources
 }
