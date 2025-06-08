@@ -13,6 +13,8 @@ import (
 )
 
 func TestCounterInterface(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.CounterOpts{
 		Name: "test_total",
 		Help: "A test counter metric",
@@ -36,11 +38,11 @@ func TestCounterInterface(t *testing.T) {
 	counter.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
 	gathered.AssertMetricNotExists("test_total")
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
 }
 
 func TestCounterPartialLabels(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.CounterOpts{
 		Name: "test_total",
 		Help: "A test counter metric with partial labels",
@@ -58,11 +60,11 @@ func TestCounterPartialLabels(t *testing.T) {
 		{Name: "label2", Value: ""},
 		{Name: "label3", Value: "value3"},
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
 }
 
 func TestCounterNoLabels(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.CounterOpts{
 		Name: "test_total",
 		Help: "A test counter metric with no labels",
@@ -75,27 +77,27 @@ func TestCounterNoLabels(t *testing.T) {
 
 	gathered := metricstest.MustGatherMetrics(t)
 	gathered.AssertMetricCounterValue("test_total", 3.5)
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
 }
 
 func TestCounterRegistrationPanic(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.CounterOpts{
 		Name: "test_total",
 		Help: "A test counter metric",
 	}
 
-	counter1 := metrics.NewCounter(opts, []string{})
+	metrics.NewCounter(opts, []string{})
 
 	// Attempting to create a counter with the same name should panic.
 	assert.Panics(t, func() {
 		metrics.NewCounter(opts, []string{})
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter1))
 }
 
 func TestHistogramInterface(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.HistogramOpts{
 		Name:    "test_duration_seconds",
 		Help:    "A test histogram metric",
@@ -120,11 +122,11 @@ func TestHistogramInterface(t *testing.T) {
 	histogram.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
 	gathered.AssertMetricNotExists("test_duration_seconds")
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(histogram))
 }
 
 func TestHistogramPartialLabels(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.HistogramOpts{
 		Name:    "test_duration_seconds_partial",
 		Help:    "A test histogram metric with partial labels",
@@ -146,11 +148,11 @@ func TestHistogramPartialLabels(t *testing.T) {
 		{Name: "label2", Value: ""},
 		{Name: "label3", Value: "value3"},
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(histogram))
 }
 
 func TestHistogramNoLabels(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.HistogramOpts{
 		Name:    "test_duration_seconds_no_labels",
 		Help:    "A test histogram metric with no labels",
@@ -168,28 +170,28 @@ func TestHistogramNoLabels(t *testing.T) {
 		SampleCount: 3,
 		SampleSum:   9.0,
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(histogram))
 }
 
 func TestHistogramRegistrationPanic(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.HistogramOpts{
 		Name:    "test_duration_seconds_duplicate",
 		Help:    "A test histogram metric",
 		Buckets: prometheus.DefBuckets,
 	}
 
-	histogram1 := metrics.NewHistogram(opts, []string{})
+	metrics.NewHistogram(opts, []string{})
 
 	// Attempting to create a histogram with the same name should panic.
 	assert.Panics(t, func() {
 		metrics.NewHistogram(opts, []string{})
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(histogram1))
 }
 
 func TestGaugeInterface(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.GaugeOpts{
 		Name: "tests",
 		Help: "A test gauge metric",
@@ -219,11 +221,11 @@ func TestGaugeInterface(t *testing.T) {
 	gauge.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
 	gathered.AssertMetricNotExists("tests")
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(gauge))
 }
 
 func TestGaugePartialLabels(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.GaugeOpts{
 		Name: "tests_partial",
 		Help: "A test gauge metric with partial labels",
@@ -241,11 +243,11 @@ func TestGaugePartialLabels(t *testing.T) {
 		{Name: "label2", Value: ""},
 		{Name: "label3", Value: "value3"},
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(gauge))
 }
 
 func TestGaugeNoLabels(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.GaugeOpts{
 		Name: "tests_no_labels",
 		Help: "A test gauge metric with no labels",
@@ -259,27 +261,27 @@ func TestGaugeNoLabels(t *testing.T) {
 
 	gathered := metricstest.MustGatherMetrics(t)
 	gathered.AssertMetricGaugeValue("tests_no_labels", 125.0)
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(gauge))
 }
 
 func TestGaugeRegistrationPanic(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.GaugeOpts{
 		Name: "tests_duplicate",
 		Help: "A test gauge metric",
 	}
 
-	gauge1 := metrics.NewGauge(opts, []string{})
+	metrics.NewGauge(opts, []string{})
 
 	// Attempting to create a gauge with the same name should panic.
 	assert.Panics(t, func() {
 		metrics.NewGauge(opts, []string{})
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(gauge1))
 }
 
 func TestGetPromCollector(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	counterOpts := metrics.CounterOpts{
 		Name: "test_collector_total",
 		Help: "A test counter for collector testing",
@@ -310,13 +312,11 @@ func TestGetPromCollector(t *testing.T) {
 
 	invalidCollector := metrics.GetPromCollector("invalid")
 	assert.Nil(t, invalidCollector)
-
-	crmetrics.Registry.Unregister(counterCollector)
-	crmetrics.Registry.Unregister(histogramCollector)
-	crmetrics.Registry.Unregister(gaugeCollector)
 }
 
 func TestValidateLabelsOrder(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	opts := metrics.CounterOpts{
 		Name: "test_label_order_total",
 		Help: "A test counter for label order testing",
@@ -338,8 +338,6 @@ func TestValidateLabelsOrder(t *testing.T) {
 		{Name: "m_label", Value: "m_value"},
 		{Name: "z_label", Value: "z_value"},
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
 }
 
 func TestLabelsWithEmptyValues(t *testing.T) {
@@ -362,11 +360,11 @@ func TestLabelsWithEmptyValues(t *testing.T) {
 		{Name: "label2", Value: "non_empty"},
 		{Name: "label3", Value: ""},
 	})
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
 }
 
 func TestMetricTypesInterfaces(t *testing.T) {
+	crmetrics.Registry = prometheus.NewRegistry()
+
 	var counter metrics.Counter
 	var histogram metrics.Histogram
 	var gauge metrics.Gauge
@@ -390,8 +388,4 @@ func TestMetricTypesInterfaces(t *testing.T) {
 	gauge.Add(1.0)
 	gauge.Sub(1.0)
 	gauge.Reset()
-
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(histogram))
-	crmetrics.Registry.Unregister(metrics.GetPromCollector(gauge))
 }
