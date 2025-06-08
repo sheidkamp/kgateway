@@ -3,17 +3,18 @@ package metrics_test
 import (
 	"testing"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
 
 func TestCounterInterface(t *testing.T) {
 	opts := metrics.CounterOpts{
-		Name: "test_counter",
+		Name: "test_total",
 		Help: "A test counter metric",
 	}
 
@@ -22,26 +23,26 @@ func TestCounterInterface(t *testing.T) {
 	counter.Inc(metrics.Label{Name: "label1", Value: "value1"}, metrics.Label{Name: "label2", Value: "value2"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("test_counter", 1.0)
-	gathered.AssertMetricLabels("test_counter", []metrics.Label{
+	gathered.AssertMetricCounterValue("test_total", 1.0)
+	gathered.AssertMetricLabels("test_total", []metrics.Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: "value2"},
 	})
 
 	counter.Add(5.0, metrics.Label{Name: "label1", Value: "value1"}, metrics.Label{Name: "label2", Value: "value2"})
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("test_counter", 6.0)
+	gathered.AssertMetricCounterValue("test_total", 6.0)
 
 	counter.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricNotExists("test_counter")
+	gathered.AssertMetricNotExists("test_total")
 
 	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
 }
 
 func TestCounterPartialLabels(t *testing.T) {
 	opts := metrics.CounterOpts{
-		Name: "test_counter_partial",
+		Name: "test_total",
 		Help: "A test counter metric with partial labels",
 	}
 
@@ -51,8 +52,8 @@ func TestCounterPartialLabels(t *testing.T) {
 	counter.Inc(metrics.Label{Name: "label3", Value: "value3"}, metrics.Label{Name: "label1", Value: "value1"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("test_counter_partial", 1.0)
-	gathered.AssertMetricLabels("test_counter_partial", []metrics.Label{
+	gathered.AssertMetricCounterValue("test_total", 1.0)
+	gathered.AssertMetricLabels("test_total", []metrics.Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: ""},
 		{Name: "label3", Value: "value3"},
@@ -63,7 +64,7 @@ func TestCounterPartialLabels(t *testing.T) {
 
 func TestCounterNoLabels(t *testing.T) {
 	opts := metrics.CounterOpts{
-		Name: "test_counter_no_labels",
+		Name: "test_total",
 		Help: "A test counter metric with no labels",
 	}
 
@@ -73,14 +74,14 @@ func TestCounterNoLabels(t *testing.T) {
 	counter.Add(2.5)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("test_counter_no_labels", 3.5)
+	gathered.AssertMetricCounterValue("test_total", 3.5)
 
 	crmetrics.Registry.Unregister(metrics.GetPromCollector(counter))
 }
 
 func TestCounterRegistrationPanic(t *testing.T) {
 	opts := metrics.CounterOpts{
-		Name: "test_counter_duplicate",
+		Name: "test_total",
 		Help: "A test counter metric",
 	}
 
@@ -96,7 +97,7 @@ func TestCounterRegistrationPanic(t *testing.T) {
 
 func TestHistogramInterface(t *testing.T) {
 	opts := metrics.HistogramOpts{
-		Name:    "test_histogram",
+		Name:    "test_duration_seconds",
 		Help:    "A test histogram metric",
 		Buckets: prometheus.DefBuckets,
 	}
@@ -107,25 +108,25 @@ func TestHistogramInterface(t *testing.T) {
 	histogram.Observe(2.5, metrics.Label{Name: "label1", Value: "value1"}, metrics.Label{Name: "label2", Value: "value2"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricHistogramValue("test_histogram", metricstest.HistogramMetricOutput{
+	gathered.AssertMetricHistogramValue("test_duration_seconds", metricstest.HistogramMetricOutput{
 		SampleCount: 2,
 		SampleSum:   4.0,
 	})
-	gathered.AssertMetricLabels("test_histogram", []metrics.Label{
+	gathered.AssertMetricLabels("test_duration_seconds", []metrics.Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: "value2"},
 	})
 
 	histogram.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricNotExists("test_histogram")
+	gathered.AssertMetricNotExists("test_duration_seconds")
 
 	crmetrics.Registry.Unregister(metrics.GetPromCollector(histogram))
 }
 
 func TestHistogramPartialLabels(t *testing.T) {
 	opts := metrics.HistogramOpts{
-		Name:    "test_histogram_partial",
+		Name:    "test_duration_seconds_partial",
 		Help:    "A test histogram metric with partial labels",
 		Buckets: prometheus.DefBuckets,
 	}
@@ -136,11 +137,11 @@ func TestHistogramPartialLabels(t *testing.T) {
 	histogram.Observe(3.14, metrics.Label{Name: "label1", Value: "value1"}, metrics.Label{Name: "label3", Value: "value3"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricHistogramValue("test_histogram_partial", metricstest.HistogramMetricOutput{
+	gathered.AssertMetricHistogramValue("test_duration_seconds_partial", metricstest.HistogramMetricOutput{
 		SampleCount: 1,
 		SampleSum:   3.14,
 	})
-	gathered.AssertMetricLabels("test_histogram_partial", []metrics.Label{
+	gathered.AssertMetricLabels("test_duration_seconds_partial", []metrics.Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: ""},
 		{Name: "label3", Value: "value3"},
@@ -151,7 +152,7 @@ func TestHistogramPartialLabels(t *testing.T) {
 
 func TestHistogramNoLabels(t *testing.T) {
 	opts := metrics.HistogramOpts{
-		Name:    "test_histogram_no_labels",
+		Name:    "test_duration_seconds_no_labels",
 		Help:    "A test histogram metric with no labels",
 		Buckets: []float64{0.1, 0.5, 1.0, 2.5, 5.0, 10.0},
 	}
@@ -163,7 +164,7 @@ func TestHistogramNoLabels(t *testing.T) {
 	histogram.Observe(7.0)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricHistogramValue("test_histogram_no_labels", metricstest.HistogramMetricOutput{
+	gathered.AssertMetricHistogramValue("test_duration_seconds_no_labels", metricstest.HistogramMetricOutput{
 		SampleCount: 3,
 		SampleSum:   9.0,
 	})
@@ -173,7 +174,7 @@ func TestHistogramNoLabels(t *testing.T) {
 
 func TestHistogramRegistrationPanic(t *testing.T) {
 	opts := metrics.HistogramOpts{
-		Name:    "test_histogram_duplicate",
+		Name:    "test_duration_seconds_duplicate",
 		Help:    "A test histogram metric",
 		Buckets: prometheus.DefBuckets,
 	}
@@ -190,7 +191,7 @@ func TestHistogramRegistrationPanic(t *testing.T) {
 
 func TestGaugeInterface(t *testing.T) {
 	opts := metrics.GaugeOpts{
-		Name: "test_gauge",
+		Name: "tests",
 		Help: "A test gauge metric",
 	}
 
@@ -204,27 +205,27 @@ func TestGaugeInterface(t *testing.T) {
 	gauge.Set(10.0, labels...)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("test_gauge", 10.0)
-	gathered.AssertMetricLabels("test_gauge", labels)
+	gathered.AssertMetricGaugeValue("tests", 10.0)
+	gathered.AssertMetricLabels("tests", labels)
 
 	gauge.Add(5.0, labels...)
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("test_gauge", 15.0)
+	gathered.AssertMetricGaugeValue("tests", 15.0)
 
 	gauge.Sub(3.0, labels...)
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("test_gauge", 12.0)
+	gathered.AssertMetricGaugeValue("tests", 12.0)
 
 	gauge.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricNotExists("test_gauge")
+	gathered.AssertMetricNotExists("tests")
 
 	crmetrics.Registry.Unregister(metrics.GetPromCollector(gauge))
 }
 
 func TestGaugePartialLabels(t *testing.T) {
 	opts := metrics.GaugeOpts{
-		Name: "test_gauge_partial",
+		Name: "tests_partial",
 		Help: "A test gauge metric with partial labels",
 	}
 
@@ -234,8 +235,8 @@ func TestGaugePartialLabels(t *testing.T) {
 	gauge.Set(42.0, metrics.Label{Name: "label3", Value: "value3"}, metrics.Label{Name: "label1", Value: "value1"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("test_gauge_partial", 42.0)
-	gathered.AssertMetricLabels("test_gauge_partial", []metrics.Label{
+	gathered.AssertMetricGaugeValue("tests_partial", 42.0)
+	gathered.AssertMetricLabels("tests_partial", []metrics.Label{
 		{Name: "label1", Value: "value1"},
 		{Name: "label2", Value: ""},
 		{Name: "label3", Value: "value3"},
@@ -246,7 +247,7 @@ func TestGaugePartialLabels(t *testing.T) {
 
 func TestGaugeNoLabels(t *testing.T) {
 	opts := metrics.GaugeOpts{
-		Name: "test_gauge_no_labels",
+		Name: "tests_no_labels",
 		Help: "A test gauge metric with no labels",
 	}
 
@@ -257,14 +258,14 @@ func TestGaugeNoLabels(t *testing.T) {
 	gauge.Sub(25.0)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("test_gauge_no_labels", 125.0)
+	gathered.AssertMetricGaugeValue("tests_no_labels", 125.0)
 
 	crmetrics.Registry.Unregister(metrics.GetPromCollector(gauge))
 }
 
 func TestGaugeRegistrationPanic(t *testing.T) {
 	opts := metrics.GaugeOpts{
-		Name: "test_gauge_duplicate",
+		Name: "tests_duplicate",
 		Help: "A test gauge metric",
 	}
 
@@ -280,7 +281,7 @@ func TestGaugeRegistrationPanic(t *testing.T) {
 
 func TestGetPromCollector(t *testing.T) {
 	counterOpts := metrics.CounterOpts{
-		Name: "test_collector_counter",
+		Name: "test_collector_total",
 		Help: "A test counter for collector testing",
 	}
 	counter := metrics.NewCounter(counterOpts, []string{})
@@ -289,7 +290,7 @@ func TestGetPromCollector(t *testing.T) {
 	assert.IsType(t, &prometheus.CounterVec{}, counterCollector)
 
 	histogramOpts := metrics.HistogramOpts{
-		Name:    "test_collector_histogram",
+		Name:    "test_collector_duration_seconds",
 		Help:    "A test histogram for collector testing",
 		Buckets: prometheus.DefBuckets,
 	}
@@ -299,7 +300,7 @@ func TestGetPromCollector(t *testing.T) {
 	assert.IsType(t, &prometheus.HistogramVec{}, histogramCollector)
 
 	gaugeOpts := metrics.GaugeOpts{
-		Name: "test_collector_gauge",
+		Name: "test_collectors",
 		Help: "A test gauge for collector testing",
 	}
 	gauge := metrics.NewGauge(gaugeOpts, []string{})
@@ -317,7 +318,7 @@ func TestGetPromCollector(t *testing.T) {
 
 func TestValidateLabelsOrder(t *testing.T) {
 	opts := metrics.CounterOpts{
-		Name: "test_label_order",
+		Name: "test_label_order_total",
 		Help: "A test counter for label order testing",
 	}
 
@@ -332,7 +333,7 @@ func TestValidateLabelsOrder(t *testing.T) {
 
 	gathered := metricstest.MustGatherMetrics(t)
 	// Labels are provided to the metric in the order they are defined, and gathered in alphabetical order.
-	gathered.AssertMetricLabels("test_label_order", []metrics.Label{
+	gathered.AssertMetricLabels("test_label_order_total", []metrics.Label{
 		{Name: "a_label", Value: "a_value"},
 		{Name: "m_label", Value: "m_value"},
 		{Name: "z_label", Value: "z_value"},
@@ -343,7 +344,7 @@ func TestValidateLabelsOrder(t *testing.T) {
 
 func TestLabelsWithEmptyValues(t *testing.T) {
 	opts := metrics.CounterOpts{
-		Name: "test_empty_labels",
+		Name: "test_empty_labels_total",
 		Help: "A test counter for empty label testing",
 	}
 
@@ -356,7 +357,7 @@ func TestLabelsWithEmptyValues(t *testing.T) {
 	)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricLabels("test_empty_labels", []metrics.Label{
+	gathered.AssertMetricLabels("test_empty_labels_total", []metrics.Label{
 		{Name: "label1", Value: ""},
 		{Name: "label2", Value: "non_empty"},
 		{Name: "label3", Value: ""},
@@ -370,9 +371,9 @@ func TestMetricTypesInterfaces(t *testing.T) {
 	var histogram metrics.Histogram
 	var gauge metrics.Gauge
 
-	counterOpts := metrics.CounterOpts{Name: "interface_counter", Help: "Test"}
-	histogramOpts := metrics.HistogramOpts{Name: "interface_histogram", Help: "Test", Buckets: prometheus.DefBuckets}
-	gaugeOpts := metrics.GaugeOpts{Name: "interface_gauge", Help: "Test"}
+	counterOpts := metrics.CounterOpts{Name: "interface_total", Help: "Test"}
+	histogramOpts := metrics.HistogramOpts{Name: "interface_duration_seconds", Help: "Test", Buckets: prometheus.DefBuckets}
+	gaugeOpts := metrics.GaugeOpts{Name: "interfaces", Help: "Test"}
 
 	counter = metrics.NewCounter(counterOpts, []string{})
 	histogram = metrics.NewHistogram(histogramOpts, []string{})

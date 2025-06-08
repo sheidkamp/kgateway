@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	kmetrics "github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
-	"github.com/stretchr/testify/require"
 )
 
 func setupMetricsTest() {

@@ -5,13 +5,14 @@ import (
 	"io"
 	"testing"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/prometheus/client_golang/prometheus/testutil/promlint"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 // HistogramMetricOutput is a struct to hold histogram metric output values.
@@ -56,9 +57,9 @@ func MustGatherPrometheusMetrics(t *testing.T) GatheredMetrics {
 	require.NoError(t, err)
 
 	for _, mf := range metricFamilies {
-		metrics := make([]*dto.Metric, len(mf.Metric))
-		copy(metrics, mf.Metric)
-		gathered.metrics[*mf.Name] = metrics
+		metrics := make([]*dto.Metric, len(mf.GetMetric()))
+		copy(metrics, mf.GetMetric())
+		gathered.metrics[mf.GetName()] = metrics
 	}
 
 	return &gathered
@@ -82,10 +83,10 @@ func (g *prometheusGatheredMetrics) MustGetMetrics(name string, expectedCount in
 
 // AssertMetricObjLabels asserts that a metric has the expected labels.
 func (g *prometheusGatheredMetrics) AssertMetricObjLabels(metric *dto.Metric, expectedLabels []metrics.Label) {
-	assert.Equal(g.t, len(expectedLabels), len(metric.Label), "Expected %d labels, got %d", len(expectedLabels), len(metric.Label))
+	assert.Equal(g.t, len(expectedLabels), len(metric.GetLabel()), "Expected %d labels, got %d", len(expectedLabels), len(metric.GetLabel()))
 	for i, label := range expectedLabels {
-		assert.Equal(g.t, label.Name, *metric.Label[i].Name, "Label %d name mismatch - expected %s, got %s", i, label.Name, *metric.Label[i].Name)
-		assert.Equal(g.t, label.Value, *metric.Label[i].Value, "Label %d value mismatch - expected %s, got %s", i, label.Value, *metric.Label[i].Value)
+		assert.Equal(g.t, label.Name, metric.GetLabel()[i].GetName(), "Label %d name mismatch - expected %s, got %s", i, label.Name, metric.GetLabel()[i].GetName())
+		assert.Equal(g.t, label.Value, metric.GetLabel()[i].GetValue(), "Label %d value mismatch - expected %s, got %s", i, label.Value, metric.GetLabel()[i].GetValue())
 	}
 }
 
@@ -107,20 +108,20 @@ func (g *prometheusGatheredMetrics) AssertMetricsLabels(name string, expectedLab
 // AssertMetricCounterValue asserts that a counter metric has the expected value.
 func (g *prometheusGatheredMetrics) AssertMetricCounterValue(name string, expectedValue float64) {
 	metric := g.MustGetMetric(name)
-	assert.Equal(g.t, expectedValue, metric.Counter.GetValue(), "Metric %s value mismatch - expected %f, got %f", name, expectedValue, metric.Counter.GetValue())
+	assert.Equal(g.t, expectedValue, metric.GetCounter().GetValue(), "Metric %s value mismatch - expected %f, got %f", name, expectedValue, metric.GetCounter().GetValue())
 }
 
 // AssertMetricCounterValue asserts that a counter metric has the expected value.
 func (g *prometheusGatheredMetrics) AssertMetricGaugeValue(name string, expectedValue float64) {
 	metric := g.MustGetMetric(name)
-	assert.Equal(g.t, expectedValue, metric.Gauge.GetValue(), "Metric %s value mismatch - expected %f, got %f", name, expectedValue, metric.Gauge.GetValue())
+	assert.Equal(g.t, expectedValue, metric.GetGauge().GetValue(), "Metric %s value mismatch - expected %f, got %f", name, expectedValue, metric.GetGauge().GetValue())
 }
 
 // AssertMetricGaugeValues asserts that a gauge metric has the expected values for multiple instances.
 func (g *prometheusGatheredMetrics) AssertMetricGaugeValues(name string, expectedValues []float64) {
 	metrics := g.MustGetMetrics(name, len(expectedValues))
 	for i, m := range metrics {
-		assert.Equal(g.t, expectedValues[i], m.Gauge.GetValue(), "Metric[%d] %s value mismatch - expected %f, got %f", i, name, expectedValues[i], m.Gauge.GetValue())
+		assert.Equal(g.t, expectedValues[i], m.GetGauge().GetValue(), "Metric[%d] %s value mismatch - expected %f, got %f", i, name, expectedValues[i], m.GetGauge().GetValue())
 	}
 }
 
@@ -128,19 +129,19 @@ func (g *prometheusGatheredMetrics) AssertMetricGaugeValues(name string, expecte
 func (g *prometheusGatheredMetrics) AssertMetricHistogramValue(name string, expectedValue HistogramMetricOutput) {
 	metric := g.MustGetMetric(name)
 	assert.Equal(g.t, expectedValue, HistogramMetricOutput{
-		SampleCount: *metric.Histogram.SampleCount,
-		SampleSum:   *metric.Histogram.SampleSum,
+		SampleCount: metric.GetHistogram().GetSampleCount(),
+		SampleSum:   metric.GetHistogram().GetSampleSum(),
 	}, "Metric %s histogram value mismatch - expected %v, got %v", name, expectedValue, HistogramMetricOutput{
-		SampleCount: *metric.Histogram.SampleCount,
-		SampleSum:   *metric.Histogram.SampleSum,
+		SampleCount: metric.GetHistogram().GetSampleCount(),
+		SampleSum:   metric.GetHistogram().GetSampleSum(),
 	})
 }
 
 // AssertHistogramPopulated asserts that a histogram metric is populated (has non-zero sample count and sum).
 func (g *prometheusGatheredMetrics) AssertHistogramPopulated(name string) {
 	metric := g.MustGetMetric(name)
-	assert.True(g.t, *metric.Histogram.SampleCount > 0, "Histogram %s is not populated", name)
-	assert.True(g.t, *metric.Histogram.SampleSum > 0, "Histogram %s is not populated", name)
+	assert.True(g.t, metric.GetHistogram().GetSampleCount() > 0, "Histogram %s is not populated", name)
+	assert.True(g.t, metric.GetHistogram().GetSampleSum() > 0, "Histogram %s is not populated", name)
 }
 
 // AssertMetricExists asserts that a metric with the given name exists.
