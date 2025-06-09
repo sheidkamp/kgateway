@@ -9,6 +9,7 @@ import (
 
 type CounterVec interface {
 	WithLabelValues(lvs ...string) Counter
+	Reset()
 }
 
 type Counter interface {
@@ -16,8 +17,8 @@ type Counter interface {
 }
 
 type CounterOpts struct {
-	Namespace MetricsNamespace
-	Subsystem MetricsSubsystem
+	Namespace metricsNamespace
+	Subsystem metricsSubsystem
 	Name      string
 	Help      string
 }
@@ -31,14 +32,15 @@ type Gauge interface {
 }
 
 type GaugeOpts struct {
-	Namespace MetricsNamespace
-	Subsystem MetricsSubsystem
+	Namespace metricsNamespace
+	Subsystem metricsSubsystem
 	Name      string
 	Help      string
 }
 
 type HistogramVec interface {
 	WithLabelValues(lvs ...string) Histogram
+	Reset()
 }
 
 type Histogram interface {
@@ -46,8 +48,8 @@ type Histogram interface {
 }
 
 type HistogramOpts struct {
-	Namespace                       MetricsNamespace
-	Subsystem                       MetricsSubsystem
+	Namespace                       metricsNamespace
+	Subsystem                       metricsSubsystem
 	Name                            string
 	Help                            string
 	NativeHistogramBucketFactor     float64
@@ -76,6 +78,7 @@ func newPrometheusMetrics() Metrics {
 	return &prometheusMetrics{}
 }
 
+// Prometheus CounterVec implementation
 type prometheusCounterVec struct {
 	vec *prometheus.CounterVec
 }
@@ -92,6 +95,10 @@ func (v *prometheusCounterVec) Describe(ch chan<- *prometheus.Desc) {
 	v.vec.Describe(ch)
 }
 
+func (v *prometheusCounterVec) Reset() {
+	v.vec.Reset()
+}
+
 func (m *prometheusMetrics) NewCounterVec(opts CounterOpts, labels []string) CounterVec {
 	return &prometheusCounterVec{
 		vec: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -103,6 +110,7 @@ func (m *prometheusMetrics) NewCounterVec(opts CounterOpts, labels []string) Cou
 	}
 }
 
+// Prometheus HistogramVec implementation
 type prometheusHistogramVec struct {
 	vec *prometheus.HistogramVec
 }
@@ -117,6 +125,10 @@ func (v *prometheusHistogramVec) Collect(ch chan<- prometheus.Metric) {
 
 func (v *prometheusHistogramVec) Describe(ch chan<- *prometheus.Desc) {
 	v.vec.Describe(ch)
+}
+
+func (v *prometheusHistogramVec) Reset() {
+	v.vec.Reset()
 }
 
 func (m *prometheusMetrics) NewHistogramVec(opts HistogramOpts, labels []string) HistogramVec {
@@ -169,6 +181,7 @@ type Collector interface{}
 
 func (m *prometheusMetrics) RegisterMetrics(metrics []Collector) {
 	for _, metric := range metrics {
+		// TODO: This is a hack to get the registry working for now.
 		if err := sigmetrics.Registry.Register(metric.(prometheus.Collector)); err != nil {
 			panic(err)
 		}

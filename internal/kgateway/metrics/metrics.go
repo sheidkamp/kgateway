@@ -8,32 +8,33 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-type MetricsNamespace string
+type metricsNamespace string
 
 const (
-	MetricsNamespaceKGateway MetricsNamespace = "kgateway"
+	MetricsNamespaceKGateway metricsNamespace = "kgateway"
 )
 
-type MetricsSubsystem string
+type metricsSubsystem string
 
 const (
-	MetricsSubsystemController    MetricsSubsystem = "controller"
-	MetricsSubsystemCollection    MetricsSubsystem = "collection"
-	MetricsSubsystemStatusSyncer  MetricsSubsystem = "status-syncer"
-	MetricsSubsystemTranslator    MetricsSubsystem = "translator"
-	MetricsSubsystemDomainMetrics MetricsSubsystem = "domain-metrics"
-	MetricsSubsystemRouting       MetricsSubsystem = "routing"
+	MetricsSubsystemController    metricsSubsystem = "controller"
+	MetricsSubsystemCollection    metricsSubsystem = "collection"
+	MetricsSubsystemStatusSyncer  metricsSubsystem = "status-syncer"
+	MetricsSubsystemTranslator    metricsSubsystem = "translator"
+	MetricsSubsystemDomainMetrics metricsSubsystem = "domain-metrics"
+	MetricsSubsystemRouting       metricsSubsystem = "routing"
 )
 
-type MetricsLabel string
+// TODO: is this always the same as the subsystem?
+type metricsLabel string
 
 const (
-	MetricsLabelController    MetricsLabel = "controller"
-	MetricsLabelCollection    MetricsLabel = "collection"
-	MetricsLabelStatusSyncer  MetricsLabel = "status-syncer"
-	MetricsLabelTranslator    MetricsLabel = "translator"
-	MetricsLabelDomainMetrics MetricsLabel = "domain-metrics"
-	MetricsLabelRouting       MetricsLabel = "routing"
+	MetricsLabelController    metricsLabel = "controller"
+	MetricsLabelCollection    metricsLabel = "collection"
+	MetricsLabelStatusSyncer  metricsLabel = "status-syncer"
+	MetricsLabelTranslator    metricsLabel = "translator"
+	MetricsLabelDomainMetrics metricsLabel = "domain-metrics"
+	MetricsLabelRouting       metricsLabel = "routing"
 )
 
 // MetricsRegistry stores registered metrics indexed by name.

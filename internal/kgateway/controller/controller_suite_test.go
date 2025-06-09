@@ -118,6 +118,10 @@ var _ = AfterSuite(func() {
 	}
 })
 
+// func TestMain(m *testing.M) {
+// 	m.Run()
+// }
+
 func TestController(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controller Suite")
