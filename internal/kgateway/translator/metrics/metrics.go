@@ -40,14 +40,6 @@ var (
 		},
 		[]string{translatorNameLabel},
 	)
-	domainsPerListener = metrics.NewGauge(
-		metrics.GaugeOpts{
-			Subsystem: routingSubsystem,
-			Name:      "domains",
-			Help:      "Number of domains per listener",
-		},
-		[]string{"namespace", "gateway", "port"},
-	)
 )
 
 // TranslatorMetricsRecorder defines the interface for recording translator metrics.
@@ -103,27 +95,6 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 	}
 }
 
-// DomainsPerListenerMetricLabels is used as an argument to SetDomainPerListener
-type DomainsPerListenerMetricLabels struct {
-	Namespace   string
-	GatewayName string
-	Port        string
-}
-
-// toMetricsLabels converts DomainPerListenerLabels to a slice of metrics.Labels.
-func (r DomainsPerListenerMetricLabels) toMetricsLabels() []metrics.Label {
-	return []metrics.Label{
-		{Name: "namespace", Value: r.Namespace},
-		{Name: "gateway", Value: r.GatewayName},
-		{Name: "port", Value: r.Port},
-	}
-}
-
-// SetDomainsPerListener sets the number of domains per listener gauge.
-func SetDomainsPerListener(labels DomainsPerListenerMetricLabels, domains int) {
-	domainsPerListener.Set(float64(domains), labels.toMetricsLabels()...)
-}
-
 // GetTranslationsTotalMetric returns the translations counter.
 // This is provided for testing purposes.
 func GetTranslationsTotalMetric() metrics.Counter {
@@ -140,10 +111,4 @@ func GetTranslationDurationMetric() metrics.Histogram {
 // This is provided for testing purposes.
 func GetTranslationsRunningMetric() metrics.Gauge {
 	return translationsRunning
-}
-
-// GetDomainsPerListenerMetric returns the domains per listener gauge.
-// This is provided for testing purposes.
-func GetDomainsPerListenerMetric() metrics.Gauge {
-	return domainsPerListener
 }

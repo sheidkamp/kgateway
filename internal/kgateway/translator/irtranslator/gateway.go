@@ -125,7 +125,7 @@ func (t *Translator) ComputeListener(
 				domainsOnListener += len(vhost.GetDomains())
 			}
 
-			metrics.SetDomainsPerListener(metrics.DomainsPerListenerMetricLabels{
+			setDomainsPerListener(domainsPerListenerMetricLabels{
 				Namespace:   hr.gw.SourceObject.GetNamespace(),
 				GatewayName: hr.gw.SourceObject.GetName(),
 				Port:        strconv.Itoa(int(lis.BindPort)),

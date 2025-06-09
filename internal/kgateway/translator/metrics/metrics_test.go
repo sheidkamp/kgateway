@@ -99,21 +99,3 @@ func TestTranslationStart_Error(t *testing.T) {
 	})
 	currentMetrics.AssertMetricCounterValue("kgateway_translator_translations_total", 1)
 }
-
-func TestSetDomainsPerListener(t *testing.T) {
-	setupTest()
-
-	SetDomainsPerListener(DomainsPerListenerMetricLabels{
-		Namespace:   "test-namespace",
-		GatewayName: "test-gateway",
-		Port:        "80",
-	}, 5)
-
-	currentMetrics := metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetricLabels("kgateway_routing_domains", []metrics.Label{
-		{Name: "gateway", Value: "test-gateway"},
-		{Name: "namespace", Value: "test-namespace"},
-		{Name: "port", Value: "80"},
-	})
-	currentMetrics.AssertMetricGaugeValue("kgateway_routing_domains", 5)
-}
