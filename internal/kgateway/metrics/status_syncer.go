@@ -15,7 +15,7 @@ const (
 var (
 	statusSyncsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
+			Namespace: MetricsNamespace,
 			Subsystem: statusSubsystem,
 			Name:      "status_syncs_total",
 			Help:      "Total status syncs",
@@ -24,7 +24,7 @@ var (
 	)
 	statusSyncDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
+			Namespace:                       MetricsNamespace,
 			Subsystem:                       statusSubsystem,
 			Name:                            "status_sync_duration_seconds",
 			Help:                            "Status sync duration",
@@ -36,7 +36,7 @@ var (
 	)
 	statusSyncResources = metrics.NewGauge(
 		metrics.GaugeOpts{
-			Namespace: metricsNamespace,
+			Namespace: MetricsNamespace,
 			Subsystem: statusSubsystem,
 			Name:      "resources",
 			Help:      "Current number of resources managed by the status syncer",

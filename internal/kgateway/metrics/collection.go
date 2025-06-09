@@ -15,7 +15,7 @@ const (
 var (
 	transformsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
+			Namespace: MetricsNamespace,
 			Subsystem: collectionSubsystem,
 			Name:      "transforms_total",
 			Help:      "Total transforms",
@@ -24,7 +24,7 @@ var (
 	)
 	transformDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
+			Namespace:                       MetricsNamespace,
 			Subsystem:                       collectionSubsystem,
 			Name:                            "transform_duration_seconds",
 			Help:                            "Transform duration",
@@ -36,7 +36,7 @@ var (
 	)
 	collectionResources = metrics.NewGauge(
 		metrics.GaugeOpts{
-			Namespace: metricsNamespace,
+			Namespace: MetricsNamespace,
 			Subsystem: collectionSubsystem,
 			Name:      "resources",
 			Help:      "Current number of resources managed by the collection",

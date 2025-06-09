@@ -14,7 +14,7 @@ const (
 var (
 	translationsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
+			Namespace: MetricsNamespace,
 			Subsystem: translatorSubsystem,
 			Name:      "translations_total",
 			Help:      "Total translations",
@@ -23,7 +23,7 @@ var (
 	)
 	translationDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
+			Namespace:                       MetricsNamespace,
 			Subsystem:                       translatorSubsystem,
 			Name:                            "translation_duration_seconds",
 			Help:                            "Translation duration",
@@ -35,7 +35,7 @@ var (
 	)
 	translationsRunning = metrics.NewGauge(
 		metrics.GaugeOpts{
-			Namespace: metricsNamespace,
+			Namespace: MetricsNamespace,
 			Subsystem: translatorSubsystem,
 			Name:      "translations_running",
 			Help:      "Number of translations currently running",

@@ -14,7 +14,7 @@ const (
 var (
 	reconciliationsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
+			Namespace: MetricsNamespace,
 			Subsystem: controllerSubsystem,
 			Name:      "reconciliations_total",
 			Help:      "Total controller reconciliations",
@@ -23,7 +23,7 @@ var (
 	)
 	reconcileDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
+			Namespace:                       MetricsNamespace,
 			Subsystem:                       controllerSubsystem,
 			Name:                            "reconcile_duration_seconds",
 			Help:                            "Reconcile duration for controller",

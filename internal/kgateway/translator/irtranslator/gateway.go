@@ -28,7 +28,6 @@ var logger = logging.New("translator/ir")
 type Translator struct {
 	ContributedPolicies map[schema.GroupKind]extensionsplug.PolicyPlugin
 	metrics             metrics.TranslatorRecorder
-	routingMetrics      metrics.RoutingRecorder
 }
 
 type TranslationPassPlugins map[schema.GroupKind]*TranslationPass
@@ -43,10 +42,6 @@ type TranslationResult struct {
 func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) TranslationResult {
 	if t.metrics == nil {
 		t.metrics = metrics.NewTranslatorRecorder("TranslateGatewayIR")
-	}
-
-	if t.routingMetrics == nil {
-		t.routingMetrics = metrics.NewRoutingRecorder()
 	}
 
 	defer t.metrics.TranslationStart()(nil)
@@ -130,13 +125,11 @@ func (t *Translator) ComputeListener(
 				domainsOnListener += len(vhost.GetDomains())
 			}
 
-			if t.routingMetrics != nil {
-				t.routingMetrics.SetDomainPerListener(metrics.DomainPerListenerLabels{
-					Namespace:   hr.gw.SourceObject.GetNamespace(),
-					GatewayName: hr.gw.SourceObject.GetName(),
-					Port:        strconv.Itoa(int(lis.BindPort)),
-				}, domainsOnListener)
-			}
+			setDomainPerListener(domainPerListenerLabels{
+				Namespace:   hr.gw.SourceObject.GetNamespace(),
+				GatewayName: hr.gw.SourceObject.GetName(),
+				Port:        strconv.Itoa(int(lis.BindPort)),
+			}, domainsOnListener)
 		}
 
 		// compute chains

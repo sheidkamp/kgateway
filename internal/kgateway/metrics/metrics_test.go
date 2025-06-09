@@ -15,5 +15,5 @@ func setupTest() {
 	GetStatusSyncResources().Reset()
 	GetTranslationDuration().Reset()
 	GetTranslationsTotal().Reset()
-	GetDomainsPerListener().Reset()
+	//GetDomainsPerListener().Reset()
 }
