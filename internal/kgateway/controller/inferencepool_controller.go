@@ -12,7 +12,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/deployer"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 )
 
@@ -20,7 +19,7 @@ type inferencePoolReconciler struct {
 	cli      client.Client
 	scheme   *runtime.Scheme
 	deployer *deployer.Deployer
-	metrics  metrics.ControllerRecorder
+	metrics  controllerMetricsRecorder
 }
 
 func (r *inferencePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {

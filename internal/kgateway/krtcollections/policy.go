@@ -22,7 +22,6 @@ import (
 	apilabels "github.com/kgateway-dev/kgateway/v2/api/labels"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/backendref"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/utils"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
@@ -285,7 +284,7 @@ func NewGatewayIndex(
 		}}
 	})
 
-	metricsRecorder := metrics.NewCollectionRecorder("Gateways")
+	metricsRecorder := NewCollectionMetricsRecorder("Gateways")
 
 	h.Gateways = krt.NewCollection(gws, func(kctx krt.HandlerContext, i *gwv1.Gateway) *ir.Gateway {
 		defer metricsRecorder.TransformStart()(nil)
@@ -393,23 +392,23 @@ func NewGatewayIndex(
 	h.Gateways.Register(func(o krt.Event[ir.Gateway]) {
 		switch o.Event {
 		case controllers.EventDelete:
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
 				Namespace: o.Latest().Namespace,
 				Name:      o.Latest().Name,
 				Resource:  "Gateway",
 			}, 0)
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
 				Namespace: o.Latest().Namespace,
 				Name:      o.Latest().Name,
 				Resource:  "Listeners",
 			}, 0)
 		case controllers.EventAdd, controllers.EventUpdate:
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
 				Namespace: o.Latest().Namespace,
 				Name:      o.Latest().Name,
 				Resource:  "Gateway",
 			}, 1)
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
 				Namespace: o.Latest().Namespace,
 				Name:      o.Latest().Name,
 				Resource:  "Listeners",

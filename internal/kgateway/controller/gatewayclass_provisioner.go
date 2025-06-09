@@ -19,8 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	apiv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 // gatewayClassProvisioner reconciles the provisioned GatewayClass objects
@@ -35,7 +33,7 @@ type gatewayClassProvisioner struct {
 	// initialReconcileCh is a channel that is used to trigger initial reconciliation when
 	// no GatewayClass objects exist in the cluster.
 	initialReconcileCh chan event.TypedGenericEvent[client.Object]
-	metrics            metrics.ControllerRecorder
+	metrics            controllerMetricsRecorder
 }
 
 var _ reconcile.TypedReconciler[reconcile.Request] = &gatewayClassProvisioner{}
@@ -54,7 +52,7 @@ func NewGatewayClassProvisioner(mgr ctrl.Manager, controllerName string, classCo
 		controllerName:     controllerName,
 		classConfigs:       classConfigs,
 		initialReconcileCh: initialReconcileCh,
-		metrics:            metrics.NewControllerRecorder(controllerName + "-gatewayclass-provisioner"),
+		metrics:            NewControllerMetricsRecorder(controllerName + "-gatewayclass-provisioner"),
 	}
 	if err := provisioner.SetupWithManager(mgr); err != nil {
 		return err

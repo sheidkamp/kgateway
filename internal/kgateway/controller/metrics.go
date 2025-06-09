@@ -1,4 +1,4 @@
-package metrics
+package controller
 
 import (
 	"time"
@@ -14,7 +14,6 @@ const (
 var (
 	reconciliationsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
 			Subsystem: controllerSubsystem,
 			Name:      "reconciliations_total",
 			Help:      "Total controller reconciliations",
@@ -23,7 +22,6 @@ var (
 	)
 	reconcileDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
 			Subsystem:                       controllerSubsystem,
 			Name:                            "reconcile_duration_seconds",
 			Help:                            "Reconcile duration for controller",
@@ -35,8 +33,8 @@ var (
 	)
 )
 
-// ControllerRecorder defines the interface for recording controller metrics.
-type ControllerRecorder interface {
+// controllerMetricsRecorder defines the interface for recording controller metrics.
+type controllerMetricsRecorder interface {
 	ReconcileStart() func(error)
 }
 
@@ -47,8 +45,8 @@ type controllerMetrics struct {
 	reconcileDuration    metrics.Histogram
 }
 
-// NewControllerRecorder creates a new ControllerMetrics instance.
-func NewControllerRecorder(controllerName string) ControllerRecorder {
+// NewControllerMetricsRecorder creates a new ControllerMetrics instance.
+func NewControllerMetricsRecorder(controllerName string) controllerMetricsRecorder {
 	m := &controllerMetrics{
 		controllerName:       controllerName,
 		reconciliationsTotal: reconciliationsTotal,
@@ -82,14 +80,14 @@ func (m *controllerMetrics) ReconcileStart() func(error) {
 	}
 }
 
-// GetReconciliationsTotal returns the reconciliations counter.
+// GetReconciliationsTotalMetric returns the reconciliations counter.
 // This is provided for testing purposes.
-func GetReconciliationsTotal() metrics.Counter {
+func GetReconciliationsTotalMetric() metrics.Counter {
 	return reconciliationsTotal
 }
 
-// GetReconcileDuration returns the reconcile duration histogram.
+// GetReconcileDurationMetric returns the reconcile duration histogram.
 // This is provided for testing purposes.
-func GetReconcileDuration() metrics.Histogram {
+func GetReconcileDurationMetric() metrics.Histogram {
 	return reconcileDuration
 }

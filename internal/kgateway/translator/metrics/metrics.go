@@ -9,12 +9,12 @@ import (
 const (
 	translatorSubsystem = "translator"
 	translatorNameLabel = "translator"
+	routingSubsystem    = "routing"
 )
 
 var (
 	translationsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
 			Subsystem: translatorSubsystem,
 			Name:      "translations_total",
 			Help:      "Total translations",
@@ -23,7 +23,6 @@ var (
 	)
 	translationDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
 			Subsystem:                       translatorSubsystem,
 			Name:                            "translation_duration_seconds",
 			Help:                            "Translation duration",
@@ -35,17 +34,24 @@ var (
 	)
 	translationsRunning = metrics.NewGauge(
 		metrics.GaugeOpts{
-			Namespace: metricsNamespace,
 			Subsystem: translatorSubsystem,
 			Name:      "translations_running",
 			Help:      "Number of translations currently running",
 		},
 		[]string{translatorNameLabel},
 	)
+	domainsPerListener = metrics.NewGauge(
+		metrics.GaugeOpts{
+			Subsystem: routingSubsystem,
+			Name:      "domains",
+			Help:      "Number of domains per listener",
+		},
+		[]string{"namespace", "gatewayName", "port"},
+	)
 )
 
-// TranslatorRecorder defines the interface for recording translator metrics.
-type TranslatorRecorder interface {
+// TranslatorMetricsRecorder defines the interface for recording translator metrics.
+type TranslatorMetricsRecorder interface {
 	TranslationStart() func(error)
 }
 
@@ -57,8 +63,8 @@ type translatorMetrics struct {
 	translationsRunning metrics.Gauge
 }
 
-// NewTranslatorRecorder creates a new recorder for translator metrics.
-func NewTranslatorRecorder(translatorName string) TranslatorRecorder {
+// NewTranslatorMetricsRecorder creates a new recorder for translator metrics.
+func NewTranslatorMetricsRecorder(translatorName string) TranslatorMetricsRecorder {
 	m := &translatorMetrics{
 		translatorName:      translatorName,
 		translationsTotal:   translationsTotal,
@@ -97,20 +103,47 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 	}
 }
 
-// GetTranslationsTotal returns the translations counter.
+// DomainsPerListenerMetricLabels is used as an argument to SetDomainPerListener
+type DomainsPerListenerMetricLabels struct {
+	Namespace   string
+	GatewayName string
+	Port        string
+}
+
+// toMetricsLabels converts DomainPerListenerLabels to a slice of metrics.Labels.
+func (r DomainsPerListenerMetricLabels) toMetricsLabels() []metrics.Label {
+	return []metrics.Label{
+		{Name: "namespace", Value: r.Namespace},
+		{Name: "gatewayName", Value: r.GatewayName},
+		{Name: "port", Value: r.Port},
+	}
+}
+
+// SetDomainsPerListener sets the number of domains per listener gauge.
+func SetDomainsPerListener(labels DomainsPerListenerMetricLabels, domains int) {
+	domainsPerListener.Set(float64(domains), labels.toMetricsLabels()...)
+}
+
+// GetTranslationsTotalMetric returns the translations counter.
 // This is provided for testing purposes.
-func GetTranslationsTotal() metrics.Counter {
+func GetTranslationsTotalMetric() metrics.Counter {
 	return translationsTotal
 }
 
-// GetTranslationDuration returns the translation duration histogram.
+// GetTranslationDurationMetric returns the translation duration histogram.
 // This is provided for testing purposes.
-func GetTranslationDuration() metrics.Histogram {
+func GetTranslationDurationMetric() metrics.Histogram {
 	return translationDuration
 }
 
-// GetTranslationsRunning returns the translations running gauge.
+// GetTranslationsRunningMetric returns the translations running gauge.
 // This is provided for testing purposes.
-func GetTranslationsRunning() metrics.Gauge {
+func GetTranslationsRunningMetric() metrics.Gauge {
 	return translationsRunning
+}
+
+// GetDomainsPerListenerMetric returns the domains per listener gauge.
+// This is provided for testing purposes.
+func GetDomainsPerListenerMetric() metrics.Gauge {
+	return domainsPerListener
 }

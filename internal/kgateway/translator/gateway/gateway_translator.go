@@ -10,9 +10,9 @@ import (
 
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/listener"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
 	reports "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/reporter"
@@ -28,14 +28,14 @@ func NewTranslator(queries query.GatewayQueries, settings TranslatorConfig) exte
 	return &translator{
 		queries:  queries,
 		settings: settings,
-		metrics:  metrics.NewTranslatorRecorder("TranslateGatewayProxy"),
+		metrics:  metrics.NewTranslatorMetricsRecorder("TranslateGatewayProxy"),
 	}
 }
 
 type translator struct {
 	queries  query.GatewayQueries
 	settings TranslatorConfig
-	metrics  metrics.TranslatorRecorder
+	metrics  metrics.TranslatorMetricsRecorder
 }
 
 func (t *translator) Translate(

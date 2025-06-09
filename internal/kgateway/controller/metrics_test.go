@@ -1,4 +1,4 @@
-package metrics_test
+package controller_test
 
 import (
 	"testing"
@@ -6,16 +6,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/controller"
+
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
+
+func setupTest() {
+	GetReconcileDurationMetric().Reset()
+	GetReconciliationsTotalMetric().Reset()
+}
 
 func TestNewControllerRecorder(t *testing.T) {
 	setupTest()
 
 	controllerName := "test-controller"
-	m := NewControllerRecorder(controllerName)
+	m := NewControllerMetricsRecorder(controllerName)
 
 	finishFunc := m.ReconcileStart()
 	finishFunc(nil)
@@ -34,7 +40,7 @@ func TestNewControllerRecorder(t *testing.T) {
 func TestReconcileStart_Success(t *testing.T) {
 	setupTest()
 
-	m := NewControllerRecorder("test-controller")
+	m := NewControllerMetricsRecorder("test-controller")
 
 	finishFunc := m.ReconcileStart()
 	time.Sleep(10 * time.Millisecond)
@@ -57,7 +63,7 @@ func TestReconcileStart_Success(t *testing.T) {
 func TestReconcileStart_Error(t *testing.T) {
 	setupTest()
 
-	m := NewControllerRecorder("test-controller")
+	m := NewControllerMetricsRecorder("test-controller")
 
 	finishFunc := m.ReconcileStart()
 	finishFunc(assert.AnError)

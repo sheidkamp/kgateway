@@ -6,16 +6,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
+
+func setupTest() {
+	GetTranslationsTotalMetric().Reset()
+	GetTranslationDurationMetric().Reset()
+	GetTranslationsRunningMetric().Reset()
+}
 
 func TestNewTranslatorRecorder(t *testing.T) {
 	setupTest()
 
 	translatorName := "test-translator"
-	m := NewTranslatorRecorder(translatorName)
+	m := NewTranslatorMetricsRecorder(translatorName)
 
 	finishFunc := m.TranslationStart()
 	finishFunc(nil)
@@ -42,7 +48,7 @@ func assertTranslationsRunning(currentMetrics metricstest.GatheredMetrics, trans
 func TestTranslationStart_Success(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorRecorder("test-translator")
+	m := NewTranslatorMetricsRecorder("test-translator")
 
 	// Start translation
 	finishFunc := m.TranslationStart()
@@ -77,7 +83,7 @@ func TestTranslationStart_Success(t *testing.T) {
 func TestTranslationStart_Error(t *testing.T) {
 	setupTest()
 
-	m := NewTranslatorRecorder("test-translator")
+	m := NewTranslatorMetricsRecorder("test-translator")
 
 	finishFunc := m.TranslationStart()
 	currentMetrics := metricstest.MustGatherMetrics(t)
@@ -92,4 +98,22 @@ func TestTranslationStart_Error(t *testing.T) {
 		{Name: "translator", Value: "test-translator"},
 	})
 	currentMetrics.AssertMetricCounterValue("kgateway_translator_translations_total", 1)
+}
+
+func TestSetDomainsPerListener(t *testing.T) {
+	setupTest()
+
+	SetDomainsPerListener(DomainsPerListenerMetricLabels{
+		Namespace:   "test-namespace",
+		GatewayName: "test-gateway",
+		Port:        "80",
+	}, 5)
+
+	currentMetrics := metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricLabels("kgateway_routing_domains", []metrics.Label{
+		{Name: "gatewayName", Value: "test-gateway"},
+		{Name: "namespace", Value: "test-namespace"},
+		{Name: "port", Value: "80"},
+	})
+	currentMetrics.AssertMetricGaugeValue("kgateway_routing_domains", 5)
 }

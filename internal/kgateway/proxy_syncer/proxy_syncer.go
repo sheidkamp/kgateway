@@ -33,7 +33,7 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/common"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/reports"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/irtranslator"
@@ -70,11 +70,11 @@ type ProxySyncer struct {
 	waitForSync []cache.InformerSynced
 	ready       atomic.Bool
 
-	routeStatusMetrics    metrics.StatusSyncRecorder
-	gatewayStatusMetrics  metrics.StatusSyncRecorder
-	listenerStatusMetrics metrics.StatusSyncRecorder
-	policyStatusMetrics   metrics.StatusSyncRecorder
-	xdsSnapshotsMetrics   metrics.CollectionRecorder
+	routeStatusMetrics    statusSyncMetricsRecorder
+	gatewayStatusMetrics  statusSyncMetricsRecorder
+	listenerStatusMetrics statusSyncMetricsRecorder
+	policyStatusMetrics   statusSyncMetricsRecorder
+	xdsSnapshotsMetrics   krtcollections.CollectionMetricsRecorder
 }
 
 type GatewayXdsResources struct {
@@ -155,11 +155,11 @@ func NewProxySyncer(
 		uniqueClients:         uniqueClients,
 		translator:            translator.NewCombinedTranslator(ctx, mergedPlugins, commonCols),
 		plugins:               mergedPlugins,
-		routeStatusMetrics:    metrics.NewStatusSyncRecorder("RouteStatusSyncer"),
-		gatewayStatusMetrics:  metrics.NewStatusSyncRecorder("GatewayStatusSyncer"),
-		listenerStatusMetrics: metrics.NewStatusSyncRecorder("ListenerSetStatusSyncer"),
-		policyStatusMetrics:   metrics.NewStatusSyncRecorder("PolicyStatusSyncer"),
-		xdsSnapshotsMetrics:   metrics.NewCollectionRecorder("ClientXDSSnapshots"),
+		routeStatusMetrics:    NewStatusSyncMetricsRecorder("RouteStatusSyncer"),
+		gatewayStatusMetrics:  NewStatusSyncMetricsRecorder("GatewayStatusSyncer"),
+		listenerStatusMetrics: NewStatusSyncMetricsRecorder("ListenerSetStatusSyncer"),
+		policyStatusMetrics:   NewStatusSyncMetricsRecorder("PolicyStatusSyncer"),
+		xdsSnapshotsMetrics:   krtcollections.NewCollectionMetricsRecorder("ClientXDSSnapshots"),
 	}
 }
 
@@ -531,7 +531,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("HTTPRoute")
 
 	for rnn := range rm.HTTPRoutes {
-		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+		s.routeStatusMetrics.IncResources(StatusSyncResourcesMetricLabels{
 			Namespace: rnn.Namespace,
 			Name:      rnn.Name,
 			Resource:  "HTTPRoute",
@@ -556,7 +556,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("TCPRoute")
 
 	for rnn := range rm.TCPRoutes {
-		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+		s.routeStatusMetrics.IncResources(StatusSyncResourcesMetricLabels{
 			Namespace: rnn.Namespace,
 			Name:      rnn.Name,
 			Resource:  "TCPRoute",
@@ -574,7 +574,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("TLSRoute")
 
 	for rnn := range rm.TLSRoutes {
-		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+		s.routeStatusMetrics.IncResources(StatusSyncResourcesMetricLabels{
 			Namespace: rnn.Namespace,
 			Name:      rnn.Name,
 			Resource:  "TLSRoute",
@@ -592,7 +592,7 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 	s.routeStatusMetrics.ResetResources("GRPCRoute")
 
 	for rnn := range rm.GRPCRoutes {
-		s.routeStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+		s.routeStatusMetrics.IncResources(StatusSyncResourcesMetricLabels{
 			Namespace: rnn.Namespace,
 			Name:      rnn.Name,
 			Resource:  "GRPCRoute",
@@ -626,7 +626,7 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 				return err
 			}
 
-			s.gatewayStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+			s.gatewayStatusMetrics.IncResources(StatusSyncResourcesMetricLabels{
 				Namespace: gwnn.Namespace,
 				Name:      gwnn.Name,
 				Resource:  "Gateway",
@@ -717,7 +717,7 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 		gk := schema.GroupKind{Group: key.Group, Kind: key.Kind}
 		nsName := types.NamespacedName{Namespace: key.Namespace, Name: key.Name}
 
-		s.gatewayStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
+		s.gatewayStatusMetrics.IncResources(StatusSyncResourcesMetricLabels{
 			Namespace: nsName.Namespace,
 			Name:      nsName.Name,
 			Resource:  "Policy",

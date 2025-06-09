@@ -6,6 +6,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+const (
+	// DefaultNamespace is the default namespace used for all metrics.
+	DefaultNamespace = "kgateway"
+)
+
 // Label defines a name-value pair for labeling metrics.
 type Label struct {
 	Name  string
@@ -30,6 +35,10 @@ type CounterOpts prometheus.CounterOpts
 
 // NewCounter creates a new counter metric.
 func NewCounter(opts CounterOpts, labels []string) Counter {
+	if opts.Namespace == "" {
+		opts.Namespace = DefaultNamespace
+	}
+
 	c := &prometheusCounter{
 		m:      prometheus.NewCounterVec(prometheus.CounterOpts(opts), labels),
 		labels: labels,
@@ -97,6 +106,10 @@ type HistogramOpts prometheus.HistogramOpts
 
 // NewHistogram creates a new histogram metric.
 func NewHistogram(opts HistogramOpts, labels []string) Histogram {
+	if opts.Namespace == "" {
+		opts.Namespace = DefaultNamespace
+	}
+
 	h := &prometheusHistogram{
 		m:      prometheus.NewHistogramVec(prometheus.HistogramOpts(opts), labels),
 		labels: labels,
@@ -161,6 +174,10 @@ type GaugeOpts prometheus.GaugeOpts
 
 // NewGauge creates a new gauge metric.
 func NewGauge(opts GaugeOpts, labels []string) Gauge {
+	if opts.Namespace == "" {
+		opts.Namespace = DefaultNamespace
+	}
+
 	g := &prometheusGauge{
 		m:      prometheus.NewGaugeVec(prometheus.GaugeOpts(opts), labels),
 		labels: labels,

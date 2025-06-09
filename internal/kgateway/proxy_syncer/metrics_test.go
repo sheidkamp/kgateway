@@ -1,265 +1,135 @@
-package proxy_syncer
+package proxy_syncer_test
 
 import (
-	"errors"
-	"strings"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
-	kmetrics "github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/proxy_syncer"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
 
-func setupMetricsTest() {
-	metrics.GetStatusSyncDuration().Reset()
-	metrics.GetStatusSyncsTotal().Reset()
-	metrics.GetStatusSyncResources().Reset()
+func setupTest() {
+	GetStatusSyncDurationMetric().Reset()
+	GetStatusSyncsTotalMetric().Reset()
+	GetStatusSyncResourcesMetric().Reset()
 }
 
-func TestProxySyncerMetrics(t *testing.T) {
-	t.Run("SyncMetrics", func(t *testing.T) {
-		testProxySyncerMetrics(t)
-	})
+func TestNewStatusSyncRecorder(t *testing.T) {
+	setupTest()
 
-	t.Run("MetricsLinting", func(t *testing.T) {
-		testMetricsLinting(t)
-	})
-}
+	syncerName := "test-syncer"
+	m := NewStatusSyncMetricsRecorder(syncerName)
 
-func testProxySyncerMetrics(t *testing.T) {
-	proxySyncer := &ProxySyncer{
-		routeStatusMetrics:    metrics.NewStatusSyncRecorder("RouteStatusSyncer"),
-		gatewayStatusMetrics:  metrics.NewStatusSyncRecorder("GatewayStatusSyncer"),
-		listenerStatusMetrics: metrics.NewStatusSyncRecorder("ListenerSetStatusSyncer"),
-		policyStatusMetrics:   metrics.NewStatusSyncRecorder("PolicyStatusSyncer"),
-		xdsSnapshotsMetrics:   metrics.NewCollectionRecorder("ClientXDSSnapshots"),
-	}
-
-	testRouteMetrics(t, proxySyncer)
-	testGatewayMetrics(t, proxySyncer)
-	testListenerMetrics(t, proxySyncer)
-	testPolicyMetrics(t, proxySyncer)
-	testXDSSnapshotMetrics(t, proxySyncer)
-}
-
-func testRouteMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	setupMetricsTest()
-
-	finish := proxySyncer.routeStatusMetrics.StatusSyncStart()
-	finish(nil)
-
-	proxySyncer.routeStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "HTTPRoute",
-	}, 5)
-	proxySyncer.routeStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "kube-system",
-		Name:      "test",
-		Resource:  "TCPRoute",
-	}, 3)
-
-	expectedSyncsCounter := `
-		# HELP kgateway_status_syncer_status_syncs_total Total status syncs
-		# TYPE kgateway_status_syncer_status_syncs_total counter
-		kgateway_status_syncer_status_syncs_total{result="success",syncer="RouteStatusSyncer"} 1
-	`
-
-	err := metricstest.CollectAndCompare(
-		metrics.GetStatusSyncsTotal(),
-		strings.NewReader(expectedSyncsCounter),
-		"kgateway_status_syncer_status_syncs_total",
-	)
-	require.NoError(t, err, "Route status translation counter mismatch")
-
-	expectedResourceGauge := `
-		# HELP kgateway_status_syncer_resources Current number of resources managed by the status syncer
-		# TYPE kgateway_status_syncer_resources gauge
-		kgateway_status_syncer_resources{name="test",namespace="default",resource="HTTPRoute",syncer="RouteStatusSyncer"} 5
-		kgateway_status_syncer_resources{name="test",namespace="kube-system",resource="TCPRoute",syncer="RouteStatusSyncer"} 3
-	`
-
-	err = metricstest.CollectAndCompare(
-		metrics.GetStatusSyncResources(),
-		strings.NewReader(expectedResourceGauge),
-		"kgateway_status_syncer_resources",
-	)
-	require.NoError(t, err, "Route status resource gauge mismatch")
-}
-
-func testGatewayMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	setupMetricsTest()
-
-	finish := proxySyncer.gatewayStatusMetrics.StatusSyncStart()
-	finish(errors.New("gateway sync error"))
-
-	proxySyncer.gatewayStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "Gateway",
-	}, 2)
-
-	gathered := metricstest.MustGatherMetrics(t)
-
-	gathered.AssertMetricExists("kgateway_status_syncer_status_syncs_total")
-	gathered.AssertMetricsLabels(
-		"kgateway_status_syncer_status_syncs_total",
-		[][]kmetrics.Label{{
-			{Name: "result", Value: "error"},
-			{Name: "syncer", Value: "GatewayStatusSyncer"},
-		}},
-	)
-}
-
-func testListenerMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	setupMetricsTest()
-
-	proxySyncer.listenerStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "ListenerSet",
-	})
-	proxySyncer.listenerStatusMetrics.IncResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "ListenerSet",
-	})
-	proxySyncer.listenerStatusMetrics.DecResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "ListenerSet",
-	})
-
-	gathered := metricstest.MustGatherMetrics(t)
-
-	gathered.AssertMetricExists("kgateway_status_syncer_resources")
-	gathered.AssertMetricsLabels(
-		"kgateway_status_syncer_resources",
-		[][]kmetrics.Label{{
-			{Name: "name", Value: "test"},
-			{Name: "namespace", Value: "default"},
-			{Name: "resource", Value: "ListenerSet"},
-			{Name: "syncer", Value: "ListenerSetStatusSyncer"},
-		}},
-	)
-}
-
-func testPolicyMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	setupMetricsTest()
-
-	finish := proxySyncer.policyStatusMetrics.StatusSyncStart()
-	finish(nil)
-
-	proxySyncer.policyStatusMetrics.SetResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "Policy",
-	}, 7)
-
-	gathered := metricstest.MustGatherMetrics(t)
-
-	gathered.AssertMetricExists("kgateway_status_syncer_status_syncs_total")
-	gathered.AssertMetricsLabels(
-		"kgateway_status_syncer_status_syncs_total",
-		[][]kmetrics.Label{{
-			{Name: "result", Value: "success"},
-			{Name: "syncer", Value: "PolicyStatusSyncer"},
-		}},
-	)
-
-	gathered.AssertMetricExists("kgateway_status_syncer_resources")
-	gathered.AssertMetricsLabels(
-		"kgateway_status_syncer_resources",
-		[][]kmetrics.Label{{
-			{Name: "name", Value: "test"},
-			{Name: "namespace", Value: "default"},
-			{Name: "resource", Value: "Policy"},
-			{Name: "syncer", Value: "PolicyStatusSyncer"},
-		}},
-	)
-}
-
-func testXDSSnapshotMetrics(t *testing.T, proxySyncer *ProxySyncer) {
-	setupMetricsTest()
-
-	finish := proxySyncer.xdsSnapshotsMetrics.TransformStart()
-	finish(nil)
-
-	proxySyncer.xdsSnapshotsMetrics.SetResources(metrics.CollectionResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "Cluster",
-	}, 7)
-
-	gathered := metricstest.MustGatherMetrics(t)
-
-	gathered.AssertMetricExists("kgateway_collection_transforms_total")
-	gathered.AssertMetricsLabels(
-		"kgateway_collection_transforms_total",
-		[][]kmetrics.Label{{
-			{Name: "collection", Value: "ClientXDSSnapshots"},
-			{Name: "result", Value: "success"},
-		}},
-	)
-
-	gathered.AssertMetricExists("kgateway_collection_resources")
-	gathered.AssertMetricsLabels(
-		"kgateway_collection_resources",
-		[][]kmetrics.Label{{
-			{Name: "collection", Value: "ClientXDSSnapshots"},
-			{Name: "name", Value: "test"},
-			{Name: "namespace", Value: "default"},
-			{Name: "resource", Value: "Cluster"},
-		}},
-	)
-}
-
-func testMetricsLinting(t *testing.T) {
-	setupMetricsTest()
-
-	routeRecorder := metrics.NewStatusSyncRecorder("TestSyncer")
-
-	finish := routeRecorder.StatusSyncStart()
-	finish(nil)
-
-	routeRecorder.SetResources(metrics.StatusSyncResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "HTTPRoute",
-	}, 1)
-
-	xdsSnapshotRecorder := metrics.NewCollectionRecorder("TestXDSSnapshots")
-
-	finish = xdsSnapshotRecorder.TransformStart()
-	finish(nil)
-
-	xdsSnapshotRecorder.SetResources(metrics.CollectionResourcesLabels{
-		Namespace: "default",
-		Name:      "test",
-		Resource:  "Cluster",
-	}, 2)
-
-	problems, err := metricstest.GatherAndLint()
-	require.NoError(t, err)
-
-	if len(problems) > 0 {
-		t.Errorf("Metrics linting problems found: %v", problems)
-	}
-
-	gathered := metricstest.MustGatherMetrics(t)
+	finishFunc := m.StatusSyncStart()
+	finishFunc(nil)
+	m.SetResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
 
 	expectedMetrics := []string{
 		"kgateway_status_syncer_status_syncs_total",
 		"kgateway_status_syncer_status_sync_duration_seconds",
 		"kgateway_status_syncer_resources",
-		"kgateway_collection_transforms_total",
-		"kgateway_collection_transform_duration_seconds",
-		"kgateway_collection_resources",
 	}
 
+	currentMetrics := metricstest.MustGatherMetrics(t)
+
 	for _, expected := range expectedMetrics {
-		gathered.AssertMetricExists(expected)
+		currentMetrics.AssertMetricExists(expected)
 	}
+}
+
+func TestStatusSyncStart_Success(t *testing.T) {
+	setupTest()
+
+	m := NewStatusSyncMetricsRecorder("test-syncer")
+
+	finishFunc := m.StatusSyncStart()
+	time.Sleep(10 * time.Millisecond)
+	finishFunc(nil)
+
+	currentMetrics := metricstest.MustGatherMetrics(t)
+
+	currentMetrics.AssertMetricLabels("kgateway_status_syncer_status_syncs_total", []metrics.Label{
+		{Name: "result", Value: "success"},
+		{Name: "syncer", Value: "test-syncer"},
+	})
+	currentMetrics.AssertMetricCounterValue("kgateway_status_syncer_status_syncs_total", 1)
+
+	currentMetrics.AssertMetricLabels("kgateway_status_syncer_status_sync_duration_seconds", []metrics.Label{
+		{Name: "syncer", Value: "test-syncer"},
+	})
+	currentMetrics.AssertHistogramPopulated("kgateway_status_syncer_status_sync_duration_seconds")
+}
+
+func TesStatusSyncStart_Error(t *testing.T) {
+	setupTest()
+
+	m := NewStatusSyncMetricsRecorder("test-syncer")
+
+	finishFunc := m.StatusSyncStart()
+	finishFunc(assert.AnError)
+
+	currentMetrics := metricstest.MustGatherMetrics(t)
+
+	currentMetrics.AssertMetricLabels("kgateway_status_syncer_status_syncs_total", []metrics.Label{
+		{Name: "result", Value: "error"},
+		{Name: "syncer", Value: "test-syncer"},
+	})
+	currentMetrics.AssertMetricCounterValue("kgateway_status_syncer_status_syncs_total", 1)
+	currentMetrics.AssertMetricNotExists("kgateway_status_syncer_status_sync_duration_seconds")
+}
+
+func TestStatusSyncResources(t *testing.T) {
+	setupTest()
+
+	m := NewStatusSyncMetricsRecorder("test-statusSync")
+
+	// Test SetResources.
+	m.SetResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
+	m.SetResources(StatusSyncResourcesMetricLabels{Namespace: "kube-system", Name: "test", Resource: "gateway"}, 3)
+
+	// Assert.True(t, found, "kgateway_status_syncer_resources metric not found")
+
+	expectedLabels := [][]metrics.Label{
+		{
+			{Name: "name", Value: "test"},
+			{Name: "namespace", Value: "default"},
+			{Name: "resource", Value: "route"},
+			{Name: "syncer", Value: "test-statusSync"},
+		},
+		{
+			{Name: "name", Value: "test"},
+			{Name: "namespace", Value: "kube-system"},
+			{Name: "resource", Value: "gateway"},
+			{Name: "syncer", Value: "test-statusSync"},
+		},
+	}
+
+	currentMetrics := metricstest.MustGatherMetrics(t)
+
+	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{5, 3})
+
+	// Test IncResources.
+	m.IncResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
+
+	currentMetrics = metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{6, 3})
+
+	// Test DecResources.
+	m.DecResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
+
+	currentMetrics = metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{5, 3})
+
+	// Test ResetResources.
+	m.ResetResources("route")
+
+	currentMetrics = metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
+	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{0, 3})
 }

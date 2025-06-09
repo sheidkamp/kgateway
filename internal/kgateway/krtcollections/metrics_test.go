@@ -1,4 +1,4 @@
-package metrics_test
+package krtcollections_test
 
 import (
 	"testing"
@@ -6,20 +6,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
+
+func setupTest() {
+	GetTransformDurationMetric().Reset()
+	GetTransformsTotalMetric().Reset()
+	GetCollectionResourcesMetric().Reset()
+}
 
 func TestNewCollectionRecorder(t *testing.T) {
 	setupTest()
 
 	collectionName := "test-collection"
-	m := NewCollectionRecorder(collectionName)
+	m := NewCollectionMetricsRecorder(collectionName)
 
 	finishFunc := m.TransformStart()
 	finishFunc(nil)
-	m.SetResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
+	m.SetResources(CollectionResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
 
 	expectedMetrics := []string{
 		"kgateway_collection_transforms_total",
@@ -36,7 +42,7 @@ func TestNewCollectionRecorder(t *testing.T) {
 func TestTransformStart_Success(t *testing.T) {
 	setupTest()
 
-	m := NewCollectionRecorder("test-collection")
+	m := NewCollectionMetricsRecorder("test-collection")
 
 	finishFunc := m.TransformStart()
 	time.Sleep(10 * time.Millisecond)
@@ -59,7 +65,7 @@ func TestTransformStart_Success(t *testing.T) {
 func TestTransformStart_Error(t *testing.T) {
 	setupTest()
 
-	m := NewCollectionRecorder("test-collection")
+	m := NewCollectionMetricsRecorder("test-collection")
 
 	finishFunc := m.TransformStart()
 	finishFunc(assert.AnError)
@@ -81,11 +87,11 @@ func TestTransformStart_Error(t *testing.T) {
 func TestCollectionResources(t *testing.T) {
 	setupTest()
 
-	m := NewCollectionRecorder("test-collection")
+	m := NewCollectionMetricsRecorder("test-collection")
 
 	// Test SetResources.
-	m.SetResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
-	m.SetResources(CollectionResourcesLabels{Namespace: "kube-system", Name: "test", Resource: "gateway"}, 3)
+	m.SetResources(CollectionResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
+	m.SetResources(CollectionResourcesMetricLabels{Namespace: "kube-system", Name: "test", Resource: "gateway"}, 3)
 
 	expectedLabels := [][]metrics.Label{{
 		{Name: "collection", Value: "test-collection"},
@@ -105,14 +111,14 @@ func TestCollectionResources(t *testing.T) {
 	currentMetrics.AssertMetricGaugeValues("kgateway_collection_resources", []float64{5, 3})
 
 	// Test IncResources.
-	m.IncResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
+	m.IncResources(CollectionResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
 	currentMetrics.AssertMetricsLabels("kgateway_collection_resources", expectedLabels)
 	currentMetrics.AssertMetricGaugeValues("kgateway_collection_resources", []float64{6, 3})
 
 	// Test DecResources.
-	m.DecResources(CollectionResourcesLabels{Namespace: "default", Name: "test", Resource: "route"})
+	m.DecResources(CollectionResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
 	currentMetrics.AssertMetricsLabels("kgateway_collection_resources", expectedLabels)

@@ -10,7 +10,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 )
 
@@ -20,7 +20,7 @@ func snapshotPerClient(
 	mostXdsSnapshots krt.Collection[GatewayXdsResources],
 	endpoints PerClientEnvoyEndpoints,
 	clusters PerClientEnvoyClusters,
-	metricsRecorder metrics.CollectionRecorder,
+	metricsRecorder krtcollections.CollectionMetricsRecorder,
 ) krt.Collection[XdsSnapWrapper] {
 	xdsSnapshotsForUcc := krt.NewCollection(uccCol, func(kctx krt.HandlerContext, ucc ir.UniqlyConnectedClient) *XdsSnapWrapper {
 		defer metricsRecorder.TransformStart()(nil)
@@ -112,49 +112,49 @@ func snapshotPerClient(
 
 		switch o.Event {
 		case controllers.EventDelete:
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Cluster",
 			}, 0)
 
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Endpoint",
 			}, 0)
 
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Route",
 			}, 0)
 
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Listener",
 			}, 0)
 		case controllers.EventAdd, controllers.EventUpdate:
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Cluster",
 			}, len(o.Latest().snap.Resources[envoycachetypes.Cluster].Items))
 
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Endpoint",
 			}, len(o.Latest().snap.Resources[envoycachetypes.Endpoint].Items))
 
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Route",
 			}, len(o.Latest().snap.Resources[envoycachetypes.Route].Items))
 
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(krtcollections.CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Listener",

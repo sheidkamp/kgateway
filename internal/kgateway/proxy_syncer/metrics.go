@@ -1,4 +1,4 @@
-package metrics
+package proxy_syncer
 
 import (
 	"sync"
@@ -15,7 +15,6 @@ const (
 var (
 	statusSyncsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
 			Subsystem: statusSubsystem,
 			Name:      "status_syncs_total",
 			Help:      "Total status syncs",
@@ -24,7 +23,6 @@ var (
 	)
 	statusSyncDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
 			Subsystem:                       statusSubsystem,
 			Name:                            "status_sync_duration_seconds",
 			Help:                            "Status sync duration",
@@ -36,7 +34,6 @@ var (
 	)
 	statusSyncResources = metrics.NewGauge(
 		metrics.GaugeOpts{
-			Namespace: metricsNamespace,
 			Subsystem: statusSubsystem,
 			Name:      "resources",
 			Help:      "Current number of resources managed by the status syncer",
@@ -45,14 +42,14 @@ var (
 	)
 )
 
-// StatusSyncResourcesLabels defines the labels for the syncer resources metric.
-type StatusSyncResourcesLabels struct {
+// StatusSyncResourcesMetricLabels defines the labels for the syncer resources metric.
+type StatusSyncResourcesMetricLabels struct {
 	Name      string
 	Namespace string
 	Resource  string
 }
 
-func (r StatusSyncResourcesLabels) toMetricsLabels(syncer string) []metrics.Label {
+func (r StatusSyncResourcesMetricLabels) toMetricsLabels(syncer string) []metrics.Label {
 	return []metrics.Label{
 		{Name: syncerNameLabel, Value: syncer},
 		{Name: "name", Value: r.Name},
@@ -61,13 +58,13 @@ func (r StatusSyncResourcesLabels) toMetricsLabels(syncer string) []metrics.Labe
 	}
 }
 
-// StatusSyncRecorder defines the interface for recording status syncer metrics.
-type StatusSyncRecorder interface {
+// statusSyncMetricsRecorder defines the interface for recording status syncer metrics.
+type statusSyncMetricsRecorder interface {
 	StatusSyncStart() func(error)
 	ResetResources(resource string)
-	SetResources(labels StatusSyncResourcesLabels, count int)
-	IncResources(labels StatusSyncResourcesLabels)
-	DecResources(labels StatusSyncResourcesLabels)
+	SetResources(labels StatusSyncResourcesMetricLabels, count int)
+	IncResources(labels StatusSyncResourcesMetricLabels)
+	DecResources(labels StatusSyncResourcesMetricLabels)
 }
 
 // statusSyncMetrics records metrics for status syncer operations.
@@ -80,8 +77,8 @@ type statusSyncMetrics struct {
 	resourcesLock      sync.Mutex
 }
 
-// NewStatusSyncRecorder creates a new recorder for status syncer metrics.
-func NewStatusSyncRecorder(syncerName string) StatusSyncRecorder {
+// NewStatusSyncMetricsRecorder creates a new recorder for status syncer metrics.
+func NewStatusSyncMetricsRecorder(syncerName string) statusSyncMetricsRecorder {
 	m := &statusSyncMetrics{
 		syncerName:         syncerName,
 		statusSyncsTotal:   statusSyncsTotal,
@@ -145,7 +142,7 @@ func (m *statusSyncMetrics) ResetResources(resource string) {
 }
 
 // updateResourceNames updates the internal map of resource names.
-func (m *statusSyncMetrics) updateResourceNames(labels StatusSyncResourcesLabels) {
+func (m *statusSyncMetrics) updateResourceNames(labels StatusSyncResourcesMetricLabels) {
 	m.resourcesLock.Lock()
 
 	if _, exists := m.resourceNames[labels.Resource]; !exists {
@@ -162,40 +159,40 @@ func (m *statusSyncMetrics) updateResourceNames(labels StatusSyncResourcesLabels
 }
 
 // SetResources updates the resource count gauge.
-func (m *statusSyncMetrics) SetResources(labels StatusSyncResourcesLabels, count int) {
+func (m *statusSyncMetrics) SetResources(labels StatusSyncResourcesMetricLabels, count int) {
 	m.updateResourceNames(labels)
 
 	m.resources.Set(float64(count), labels.toMetricsLabels(m.syncerName)...)
 }
 
 // IncResources increments the resource count gauge.
-func (m *statusSyncMetrics) IncResources(labels StatusSyncResourcesLabels) {
+func (m *statusSyncMetrics) IncResources(labels StatusSyncResourcesMetricLabels) {
 	m.updateResourceNames(labels)
 
 	m.resources.Add(1, labels.toMetricsLabels(m.syncerName)...)
 }
 
 // DecResources decrements the resource count gauge.
-func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesLabels) {
+func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesMetricLabels) {
 	m.updateResourceNames(labels)
 
 	m.resources.Sub(1, labels.toMetricsLabels(m.syncerName)...)
 }
 
-// GetStatusSyncsTotal returns the status syncs counter.
+// GetStatusSyncsTotalMetric returns the status syncs counter.
 // This is provided for testing purposes.
-func GetStatusSyncsTotal() metrics.Counter {
+func GetStatusSyncsTotalMetric() metrics.Counter {
 	return statusSyncsTotal
 }
 
-// GetStatusSyncDuration returns the status sync duration histogram.
+// GetStatusSyncDurationMetric returns the status sync duration histogram.
 // This is provided for testing purposes.
-func GetStatusSyncDuration() metrics.Histogram {
+func GetStatusSyncDurationMetric() metrics.Histogram {
 	return statusSyncDuration
 }
 
-// GetStatusSyncResources returns the status syncer resource count gauge.
+// GetStatusSyncResourcesMetric returns the status syncer resource count gauge.
 // This is provided for testing purposes.
-func GetStatusSyncResources() metrics.Gauge {
+func GetStatusSyncResourcesMetric() metrics.Gauge {
 	return statusSyncResources
 }

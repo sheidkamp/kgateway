@@ -1,4 +1,4 @@
-package metrics
+package krtcollections
 
 import (
 	"sync"
@@ -15,7 +15,6 @@ const (
 var (
 	transformsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
-			Namespace: metricsNamespace,
 			Subsystem: collectionSubsystem,
 			Name:      "transforms_total",
 			Help:      "Total transforms",
@@ -24,7 +23,6 @@ var (
 	)
 	transformDuration = metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Namespace:                       metricsNamespace,
 			Subsystem:                       collectionSubsystem,
 			Name:                            "transform_duration_seconds",
 			Help:                            "Transform duration",
@@ -36,7 +34,6 @@ var (
 	)
 	collectionResources = metrics.NewGauge(
 		metrics.GaugeOpts{
-			Namespace: metricsNamespace,
 			Subsystem: collectionSubsystem,
 			Name:      "resources",
 			Help:      "Current number of resources managed by the collection",
@@ -45,15 +42,15 @@ var (
 	)
 )
 
-// CollectionResourcesLabels defines the labels for the collection resources metric.
-type CollectionResourcesLabels struct {
+// CollectionResourcesMetricLabels defines the labels for the collection resources metric.
+type CollectionResourcesMetricLabels struct {
 	Name      string
 	Namespace string
 	Resource  string
 }
 
 // toMetricsLabels converts CollectionResourcesLabels to a slice of metrics.Labels.
-func (r CollectionResourcesLabels) toMetricsLabels(collection string) []metrics.Label {
+func (r CollectionResourcesMetricLabels) toMetricsLabels(collection string) []metrics.Label {
 	return []metrics.Label{
 		{Name: collectionNameLabel, Value: collection},
 		{Name: "name", Value: r.Name},
@@ -62,13 +59,13 @@ func (r CollectionResourcesLabels) toMetricsLabels(collection string) []metrics.
 	}
 }
 
-// CollectionRecorder defines the interface for recording collection metrics.
-type CollectionRecorder interface {
+// CollectionMetricsRecorder defines the interface for recording collection metrics.
+type CollectionMetricsRecorder interface {
 	TransformStart() func(error)
 	ResetResources(resource string)
-	SetResources(labels CollectionResourcesLabels, count int)
-	IncResources(labels CollectionResourcesLabels)
-	DecResources(labels CollectionResourcesLabels)
+	SetResources(labels CollectionResourcesMetricLabels, count int)
+	IncResources(labels CollectionResourcesMetricLabels)
+	DecResources(labels CollectionResourcesMetricLabels)
 }
 
 // collectionMetrics records metrics for collection operations.
@@ -81,8 +78,8 @@ type collectionMetrics struct {
 	resourcesLock     sync.Mutex
 }
 
-// NewCollectionRecorder creates a new recorder for collection metrics.
-func NewCollectionRecorder(collectionName string) CollectionRecorder {
+// NewCollectionMetricsRecorder creates a new recorder for collection metrics.
+func NewCollectionMetricsRecorder(collectionName string) CollectionMetricsRecorder {
 	m := &collectionMetrics{
 		collectionName:    collectionName,
 		transformsTotal:   transformsTotal,
@@ -146,7 +143,7 @@ func (m *collectionMetrics) ResetResources(resource string) {
 }
 
 // updateResourceNames updates the internal map of resource names.
-func (m *collectionMetrics) updateResourceNames(labels CollectionResourcesLabels) {
+func (m *collectionMetrics) updateResourceNames(labels CollectionResourcesMetricLabels) {
 	m.resourcesLock.Lock()
 
 	if _, exists := m.resourceNames[labels.Resource]; !exists {
@@ -163,40 +160,40 @@ func (m *collectionMetrics) updateResourceNames(labels CollectionResourcesLabels
 }
 
 // SetResources updates the resource count gauge.
-func (m *collectionMetrics) SetResources(labels CollectionResourcesLabels, count int) {
+func (m *collectionMetrics) SetResources(labels CollectionResourcesMetricLabels, count int) {
 	m.updateResourceNames(labels)
 
 	m.resources.Set(float64(count), labels.toMetricsLabels(m.collectionName)...)
 }
 
 // IncResources increments the resource count gauge.
-func (m *collectionMetrics) IncResources(labels CollectionResourcesLabels) {
+func (m *collectionMetrics) IncResources(labels CollectionResourcesMetricLabels) {
 	m.updateResourceNames(labels)
 
 	m.resources.Add(1, labels.toMetricsLabels(m.collectionName)...)
 }
 
 // DecResources decrements the resource count gauge.
-func (m *collectionMetrics) DecResources(labels CollectionResourcesLabels) {
+func (m *collectionMetrics) DecResources(labels CollectionResourcesMetricLabels) {
 	m.updateResourceNames(labels)
 
 	m.resources.Sub(1, labels.toMetricsLabels(m.collectionName)...)
 }
 
-// GetTransformsTotal returns the transforms counter.
+// GetTransformsTotalMetric returns the transforms counter.
 // This is provided for testing purposes.
-func GetTransformsTotal() metrics.Counter {
+func GetTransformsTotalMetric() metrics.Counter {
 	return transformsTotal
 }
 
-// GetTransformDuration returns the transform duration histogram.
+// GetTransformDurationMetric returns the transform duration histogram.
 // This is provided for testing purposes.
-func GetTransformDuration() metrics.Histogram {
+func GetTransformDurationMetric() metrics.Histogram {
 	return transformDuration
 }
 
-// GetCollectionResources returns the collection resource count gauge.
+// GetCollectionResourcesMetric returns the collection resource count gauge.
 // This is provided for testing purposes.
-func GetCollectionResources() metrics.Gauge {
+func GetCollectionResourcesMetric() metrics.Gauge {
 	return collectionResources
 }

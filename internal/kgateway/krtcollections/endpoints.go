@@ -18,7 +18,6 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
@@ -87,7 +86,7 @@ func NewGlooK8sEndpointInputs(
 }
 
 func NewK8sEndpoints(ctx context.Context, inputs EndpointsInputs) krt.Collection[ir.EndpointsForBackend] {
-	metricsRecorder := metrics.NewCollectionRecorder("K8sEndpoints")
+	metricsRecorder := NewCollectionMetricsRecorder("K8sEndpoints")
 
 	c := krt.NewCollection(inputs.Backends, transformK8sEndpoints(ctx, inputs, metricsRecorder), inputs.KrtOpts.ToOptions("K8sEndpoints")...)
 
@@ -108,13 +107,13 @@ func NewK8sEndpoints(ctx context.Context, inputs EndpointsInputs) krt.Collection
 
 		switch o.Event {
 		case controllers.EventDelete:
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Endpoints",
 			}, 0)
 		case controllers.EventAdd, controllers.EventUpdate:
-			metricsRecorder.SetResources(metrics.CollectionResourcesLabels{
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
 				Namespace: namespace,
 				Name:      name,
 				Resource:  "Endpoints",
@@ -127,7 +126,7 @@ func NewK8sEndpoints(ctx context.Context, inputs EndpointsInputs) krt.Collection
 
 func transformK8sEndpoints(ctx context.Context,
 	inputs EndpointsInputs,
-	metricsRecorder metrics.CollectionRecorder,
+	metricsRecorder CollectionMetricsRecorder,
 ) func(kctx krt.HandlerContext, backend ir.BackendObjectIR) *ir.EndpointsForBackend {
 	augmentedPods := inputs.Pods
 

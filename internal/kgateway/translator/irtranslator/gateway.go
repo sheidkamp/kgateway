@@ -15,9 +15,9 @@ import (
 
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/reports"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/reporter"
@@ -27,8 +27,7 @@ var logger = logging.New("translator/ir")
 
 type Translator struct {
 	ContributedPolicies map[schema.GroupKind]extensionsplug.PolicyPlugin
-	metrics             metrics.TranslatorRecorder
-	routingMetrics      metrics.RoutingRecorder
+	metrics             metrics.TranslatorMetricsRecorder
 }
 
 type TranslationPassPlugins map[schema.GroupKind]*TranslationPass
@@ -42,11 +41,7 @@ type TranslationResult struct {
 // Translate IR to gateway. IR is self contained, so no need for krt context
 func (t *Translator) Translate(gw ir.GatewayIR, reporter reports.Reporter) TranslationResult {
 	if t.metrics == nil {
-		t.metrics = metrics.NewTranslatorRecorder("TranslateGatewayIR")
-	}
-
-	if t.routingMetrics == nil {
-		t.routingMetrics = metrics.NewRoutingRecorder()
+		t.metrics = metrics.NewTranslatorMetricsRecorder("TranslateGatewayIR")
 	}
 
 	defer t.metrics.TranslationStart()(nil)
@@ -130,13 +125,11 @@ func (t *Translator) ComputeListener(
 				domainsOnListener += len(vhost.GetDomains())
 			}
 
-			if t.routingMetrics != nil {
-				t.routingMetrics.SetDomainPerListener(metrics.DomainPerListenerLabels{
-					Namespace:   hr.gw.SourceObject.GetNamespace(),
-					GatewayName: hr.gw.SourceObject.GetName(),
-					Port:        strconv.Itoa(int(lis.BindPort)),
-				}, domainsOnListener)
-			}
+			metrics.SetDomainsPerListener(metrics.DomainsPerListenerMetricLabels{
+				Namespace:   hr.gw.SourceObject.GetNamespace(),
+				GatewayName: hr.gw.SourceObject.GetName(),
+				Port:        strconv.Itoa(int(lis.BindPort)),
+			}, domainsOnListener)
 		}
 
 		// compute chains

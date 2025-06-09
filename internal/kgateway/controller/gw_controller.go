@@ -14,7 +14,6 @@ import (
 	api "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/deployer"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/metrics"
 )
 
 const (
@@ -29,7 +28,7 @@ type gatewayReconciler struct {
 
 	scheme   *runtime.Scheme
 	deployer *deployer.Deployer
-	metrics  metrics.ControllerRecorder
+	metrics  controllerMetricsRecorder
 }
 
 func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, rErr error) {
