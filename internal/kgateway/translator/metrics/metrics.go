@@ -46,7 +46,7 @@ var (
 			Name:      "domains",
 			Help:      "Number of domains per listener",
 		},
-		[]string{"namespace", "gatewayName", "port"},
+		[]string{"namespace", "gateway", "port"},
 	)
 )
 
@@ -114,7 +114,7 @@ type DomainsPerListenerMetricLabels struct {
 func (r DomainsPerListenerMetricLabels) toMetricsLabels() []metrics.Label {
 	return []metrics.Label{
 		{Name: "namespace", Value: r.Namespace},
-		{Name: "gatewayName", Value: r.GatewayName},
+		{Name: "gateway", Value: r.GatewayName},
 		{Name: "port", Value: r.Port},
 	}
 }

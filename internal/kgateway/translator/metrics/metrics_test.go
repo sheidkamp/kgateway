@@ -111,7 +111,7 @@ func TestSetDomainsPerListener(t *testing.T) {
 
 	currentMetrics := metricstest.MustGatherMetrics(t)
 	currentMetrics.AssertMetricLabels("kgateway_routing_domains", []metrics.Label{
-		{Name: "gatewayName", Value: "test-gateway"},
+		{Name: "gateway", Value: "test-gateway"},
 		{Name: "namespace", Value: "test-namespace"},
 		{Name: "port", Value: "80"},
 	})
