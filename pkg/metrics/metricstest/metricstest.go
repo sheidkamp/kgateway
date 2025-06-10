@@ -3,7 +3,6 @@ package metricstest
 
 import (
 	"io"
-	"testing"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/prometheus/client_golang/prometheus/testutil/promlint"
@@ -26,6 +25,8 @@ type GatheredMetrics interface {
 	AssertMetricsLabels(name string, expectedLabels [][]metrics.Label)
 	AssertMetricLabels(name string, expectedLabels []metrics.Label)
 	AssertMetricCounterValue(name string, expectedValue float64)
+	AssertMetricCounterValues(name string, expectedValues []float64)
+	AssertMetricCounterValuesBetween(name string, expectedValues [][]float64)
 	AssertMetricGaugeValue(name string, expectedValue float64)
 	AssertMetricGaugeValues(name string, expectedValues []float64)
 	AssertMetricHistogramValue(name string, expectedValue HistogramMetricOutput)
@@ -35,7 +36,7 @@ type GatheredMetrics interface {
 }
 
 // MustGatherMetrics gathers metrics and returns them as GatheredMetrics.
-func MustGatherMetrics(t *testing.T) GatheredMetrics {
+func MustGatherMetrics(t require.TestingT) GatheredMetrics {
 	return MustGatherPrometheusMetrics(t)
 }
 
@@ -44,11 +45,11 @@ var _ GatheredMetrics = &prometheusGatheredMetrics{}
 // Gathered metrics implementation for prometheus metrics.
 type prometheusGatheredMetrics struct {
 	metrics map[string][]*dto.Metric
-	t       *testing.T
+	t       require.TestingT
 }
 
 // MustGatherPrometheusMetrics gathers metrics from the registry and returns them.
-func MustGatherPrometheusMetrics(t *testing.T) GatheredMetrics {
+func MustGatherPrometheusMetrics(t require.TestingT) GatheredMetrics {
 	gathered := prometheusGatheredMetrics{
 		metrics: make(map[string][]*dto.Metric),
 		t:       t,
@@ -111,6 +112,34 @@ func (g *prometheusGatheredMetrics) AssertMetricCounterValue(name string, expect
 	assert.Equal(g.t, expectedValue, metric.GetCounter().GetValue(), "Metric %s value mismatch - expected %f, got %f", name, expectedValue, metric.GetCounter().GetValue())
 }
 
+// AssertMetricCounterValues asserts that a counter metric has the expected values for multiple instances.
+func (g *prometheusGatheredMetrics) AssertMetricCounterValues(name string, expectedValues []float64) {
+	metrics := g.MustGetMetrics(name, len(expectedValues))
+	for i, m := range metrics {
+		assert.Equal(g.t, expectedValues[i], m.GetCounter().GetValue(),
+			"Metric[%d] %s value mismatch - expected %f, got %f",
+			i, name, expectedValues[i], m.GetCounter().GetValue())
+	}
+}
+
+// AssertMetricCounterValuesBetween asserts that a counter metric has the expected values for multiple instances.
+func (g *prometheusGatheredMetrics) AssertMetricCounterValuesBetween(name string, expectedValues [][]float64) {
+	metrics := g.MustGetMetrics(name, len(expectedValues))
+	for i, m := range metrics {
+		if len(expectedValues[i]) != 2 {
+			assert.Fail(g.t, "Expected exactly two values for value range for metric %s at index %d, got %d",
+				name, i, len(expectedValues[i]))
+		}
+
+		assert.GreaterOrEqual(g.t, m.GetCounter().GetValue(), expectedValues[i][0],
+			"Metric[%d] %s value mismatch - expected greater than or equal to %f, got %f",
+			i, name, expectedValues[i][0], m.GetCounter().GetValue())
+		assert.LessOrEqual(g.t, m.GetCounter().GetValue(), expectedValues[i][1],
+			"Metric[%d] %s value mismatch - expected less than or equal to %f, got %f",
+			i, name, expectedValues[i][1], m.GetCounter().GetValue())
+	}
+}
+
 // AssertMetricCounterValue asserts that a counter metric has the expected value.
 func (g *prometheusGatheredMetrics) AssertMetricGaugeValue(name string, expectedValue float64) {
 	metric := g.MustGetMetric(name)
@@ -159,6 +188,11 @@ func (g *prometheusGatheredMetrics) AssertMetricNotExists(name string) {
 // GatherAndLint gathers metrics and runs a linter on them.
 func GatherAndLint(metricNames ...string) ([]promlint.Problem, error) {
 	return testutil.GatherAndLint(crmetrics.Registry, metricNames...)
+}
+
+// GatherAndCompare gathers metrics and runs a linter on them.
+func GatherAndCompare(expected io.Reader, metricNames ...string) error {
+	return testutil.GatherAndCompare(crmetrics.Registry, expected, metricNames...)
 }
 
 // CollectAndCompare collects metrics from a collector and compares them against expected values.

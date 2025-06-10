@@ -95,20 +95,10 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 	}
 }
 
-// GetTranslationsTotalMetric returns the translations counter.
-// This is provided for testing purposes.
-func GetTranslationsTotalMetric() metrics.Counter {
-	return translationsTotal
-}
-
-// GetTranslationDurationMetric returns the translation duration histogram.
-// This is provided for testing purposes.
-func GetTranslationDurationMetric() metrics.Histogram {
-	return translationDuration
-}
-
-// GetTranslationsRunningMetric returns the translations running gauge.
-// This is provided for testing purposes.
-func GetTranslationsRunningMetric() metrics.Gauge {
-	return translationsRunning
+// ResetMetrics resets the metrics from this package.
+// This is provided for testing purposes only.
+func ResetMetrics() {
+	translationsTotal.Reset()
+	translationDuration.Reset()
+	translationsRunning.Reset()
 }

@@ -35,7 +35,7 @@ var (
 
 // controllerMetricsRecorder defines the interface for recording controller metrics.
 type controllerMetricsRecorder interface {
-	ReconcileStart() func(error)
+	reconcileStart() func(error)
 }
 
 // controllerMetrics provides metrics for controller operations.
@@ -45,8 +45,8 @@ type controllerMetrics struct {
 	reconcileDuration    metrics.Histogram
 }
 
-// NewControllerMetricsRecorder creates a new ControllerMetrics instance.
-func NewControllerMetricsRecorder(controllerName string) controllerMetricsRecorder {
+// newControllerMetricsRecorder creates a new ControllerMetrics instance.
+func newControllerMetricsRecorder(controllerName string) controllerMetricsRecorder {
 	m := &controllerMetrics{
 		controllerName:       controllerName,
 		reconciliationsTotal: reconciliationsTotal,
@@ -56,10 +56,10 @@ func NewControllerMetricsRecorder(controllerName string) controllerMetricsRecord
 	return m
 }
 
-// ReconcileStart is called at the start of a controller reconciliation function
+// reconcileStart is called at the start of a controller reconciliation function
 // to begin metrics collection and returns a function called at the end to
 // complete metrics recording.
-func (m *controllerMetrics) ReconcileStart() func(error) {
+func (m *controllerMetrics) reconcileStart() func(error) {
 	start := time.Now()
 
 	return func(err error) {
@@ -80,14 +80,9 @@ func (m *controllerMetrics) ReconcileStart() func(error) {
 	}
 }
 
-// GetReconciliationsTotalMetric returns the reconciliations counter.
-// This is provided for testing purposes.
-func GetReconciliationsTotalMetric() metrics.Counter {
-	return reconciliationsTotal
-}
-
-// GetReconcileDurationMetric returns the reconcile duration histogram.
-// This is provided for testing purposes.
-func GetReconcileDurationMetric() metrics.Histogram {
-	return reconcileDuration
+// ResetMetrics resets the metrics from this package.
+// This is provided for testing purposes only.
+func ResetMetrics() {
+	reconciliationsTotal.Reset()
+	reconcileDuration.Reset()
 }

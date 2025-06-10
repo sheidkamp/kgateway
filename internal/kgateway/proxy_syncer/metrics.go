@@ -42,7 +42,6 @@ var (
 		},
 		[]string{syncerNameLabel, "name", "namespace", "resource"},
 	)
-
 	gwResources = metrics.NewGauge(
 		metrics.GaugeOpts{
 			Subsystem: resourceSubsystem,
@@ -200,20 +199,11 @@ func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesMetricLabels)
 	m.resources.Sub(1, labels.toMetricsLabels(m.syncerName)...)
 }
 
-// GetStatusSyncsTotalMetric returns the status syncs counter.
-// This is provided for testing purposes.
-func GetStatusSyncsTotalMetric() metrics.Counter {
-	return statusSyncsTotal
-}
-
-// GetStatusSyncDurationMetric returns the status sync duration histogram.
-// This is provided for testing purposes.
-func GetStatusSyncDurationMetric() metrics.Histogram {
-	return statusSyncDuration
-}
-
-// GetStatusSyncResourcesMetric returns the status syncer resource count gauge.
-// This is provided for testing purposes.
-func GetStatusSyncResourcesMetric() metrics.Gauge {
-	return statusSyncResources
+// ResetMetrics resets the metrics from this package.
+// This is provided for testing purposes only.
+func ResetMetrics() {
+	statusSyncDuration.Reset()
+	statusSyncsTotal.Reset()
+	statusSyncResources.Reset()
+	gwResources.Reset()
 }

@@ -10,8 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	api "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
 
 var _ = Describe("GwController", func() {
@@ -109,15 +107,6 @@ var _ = Describe("GwController", func() {
 			Expect(gw.Status.Addresses).To(HaveLen(1))
 			Expect(*gw.Status.Addresses[0].Type).To(Equal(api.IPAddressType))
 			Expect(gw.Status.Addresses[0].Value).To(Equal("127.0.0.1"))
-
-			Eventually(func() bool {
-				if probs, err := metricstest.GatherAndLint(); err != nil || len(probs) > 0 {
-					return false
-				}
-
-				return true
-			}, timeout, interval).Should(BeTrue(), "metrics not collected")
-
 		},
 		Entry("default gateway class", gatewayClassName),
 		Entry("alternative gateway class", altGatewayClassName),

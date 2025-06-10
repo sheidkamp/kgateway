@@ -52,7 +52,7 @@ func NewGatewayClassProvisioner(mgr ctrl.Manager, controllerName string, classCo
 		controllerName:     controllerName,
 		classConfigs:       classConfigs,
 		initialReconcileCh: initialReconcileCh,
-		metrics:            NewControllerMetricsRecorder(controllerName + "-gatewayclass-provisioner"),
+		metrics:            newControllerMetricsRecorder(controllerName + "-gatewayclass-provisioner"),
 	}
 	if err := provisioner.SetupWithManager(mgr); err != nil {
 		return err
@@ -86,7 +86,7 @@ func (r *gatewayClassProvisioner) Reconcile(ctx context.Context, req ctrl.Reques
 	defer log.Info("finished reconciling GatewayClasses", "controllerName", "gatewayclass-provisioner")
 
 	if r.metrics != nil {
-		defer r.metrics.ReconcileStart()(rErr)
+		defer r.metrics.reconcileStart()(rErr)
 	}
 
 	var errs []error

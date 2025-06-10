@@ -12,9 +12,7 @@ import (
 )
 
 func setupTest() {
-	GetTranslationsTotalMetric().Reset()
-	GetTranslationDurationMetric().Reset()
-	GetTranslationsRunningMetric().Reset()
+	ResetMetrics()
 }
 
 func TestNewTranslatorRecorder(t *testing.T) {

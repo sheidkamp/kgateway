@@ -27,7 +27,7 @@ func (r *inferencePoolReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	log.V(1).Info("reconciling request", "request", req)
 
 	if r.metrics != nil {
-		defer r.metrics.ReconcileStart()(rErr)
+		defer r.metrics.reconcileStart()(rErr)
 	}
 
 	pool := new(infextv1a2.InferencePool)

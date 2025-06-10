@@ -12,9 +12,7 @@ import (
 )
 
 func setupTest() {
-	GetTransformDurationMetric().Reset()
-	GetTransformsTotalMetric().Reset()
-	GetCollectionResourcesMetric().Reset()
+	ResetMetrics()
 }
 
 func TestNewCollectionRecorder(t *testing.T) {

@@ -12,9 +12,7 @@ import (
 )
 
 func setupTest() {
-	GetStatusSyncDurationMetric().Reset()
-	GetStatusSyncsTotalMetric().Reset()
-	GetStatusSyncResourcesMetric().Reset()
+	ResetMetrics()
 }
 
 func TestNewStatusSyncRecorder(t *testing.T) {

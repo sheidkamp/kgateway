@@ -36,7 +36,7 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (re
 	log.V(1).Info("reconciling request", "req", req)
 
 	if r.metrics != nil {
-		defer r.metrics.ReconcileStart()(rErr)
+		defer r.metrics.reconcileStart()(rErr)
 	}
 
 	// check if we need to auto deploy the gateway

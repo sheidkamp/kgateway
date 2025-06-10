@@ -1,83 +1,122 @@
 package controller_test
 
 import (
-	"testing"
+	"context"
+	"fmt"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	api "sigs.k8s.io/gateway-api/apis/v1"
 
 	. "github.com/kgateway-dev/kgateway/v2/internal/kgateway/controller"
-
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics/metricstest"
 )
 
-func setupTest() {
-	GetReconcileDurationMetric().Reset()
-	GetReconciliationsTotalMetric().Reset()
+type GinkgoTestReporter struct{}
+
+func (g GinkgoTestReporter) Errorf(format string, args ...interface{}) {
+	Fail(fmt.Sprintf(format, args...))
 }
 
-func TestNewControllerRecorder(t *testing.T) {
-	setupTest()
-
-	controllerName := "test-controller"
-	m := NewControllerMetricsRecorder(controllerName)
-
-	finishFunc := m.ReconcileStart()
-	finishFunc(nil)
-
-	expectedMetrics := []string{
-		"kgateway_controller_reconciliations_total",
-		"kgateway_controller_reconcile_duration_seconds",
-	}
-
-	currentMetrics := metricstest.MustGatherMetrics(t)
-	for _, expected := range expectedMetrics {
-		currentMetrics.AssertMetricExists(expected)
-	}
+func (g GinkgoTestReporter) Fatalf(format string, args ...interface{}) {
+	Fail(fmt.Sprintf(format, args...))
 }
 
-func TestReconcileStart_Success(t *testing.T) {
-	setupTest()
+var _ = Describe("GwControllerMetrics", func() {
+	const (
+		timeout  = time.Second * 10
+		interval = time.Millisecond * 250
+	)
 
-	m := NewControllerMetricsRecorder("test-controller")
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
 
-	finishFunc := m.ReconcileStart()
-	time.Sleep(10 * time.Millisecond)
-	finishFunc(nil)
+	BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
 
-	currentMetrics := metricstest.MustGatherMetrics(t)
+		var err error
+		cancel, err = createManager(ctx, inferenceExt, nil)
+		Expect(err).NotTo(HaveOccurred())
 
-	currentMetrics.AssertMetricLabels("kgateway_controller_reconciliations_total", []metrics.Label{
-		{Name: "controller", Value: "test-controller"},
-		{Name: "result", Value: "success"},
+		ResetMetrics()
 	})
-	currentMetrics.AssertMetricCounterValue("kgateway_controller_reconciliations_total", 1)
 
-	currentMetrics.AssertMetricLabels("kgateway_controller_reconcile_duration_seconds", []metrics.Label{
-		{Name: "controller", Value: "test-controller"},
+	AfterEach(func() {
+		if cancel != nil {
+			cancel()
+		}
+		// ensure goroutines cleanup
+		Eventually(func() bool { return true }).WithTimeout(3 * time.Second).Should(BeTrue())
 	})
-	currentMetrics.AssertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
-}
 
-func TestReconcileStart_Error(t *testing.T) {
-	setupTest()
+	It("should generate gateway controller metrics", func() {
+		same := api.NamespacesFromSame
+		gwName := "gw-" + gatewayClassName + "-metrics"
+		gw := api.Gateway{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      gwName,
+				Namespace: defaultNamespace,
+			},
+			Spec: api.GatewaySpec{
+				GatewayClassName: api.ObjectName(gatewayClassName),
+				Listeners: []api.Listener{{
+					Protocol: "HTTP",
+					Port:     80,
+					AllowedRoutes: &api.AllowedRoutes{
+						Namespaces: &api.RouteNamespaces{
+							From: &same,
+						},
+					},
+					Name: "listener",
+				}},
+			},
+		}
+		err := k8sClient.Create(ctx, &gw)
+		Expect(err).NotTo(HaveOccurred())
 
-	m := NewControllerMetricsRecorder("test-controller")
+		// Wait for service to be created
+		var svc corev1.Service
+		Eventually(func() bool {
+			var createdServices corev1.ServiceList
+			err := k8sClient.List(ctx, &createdServices)
+			if err != nil {
+				return false
+			}
+			for _, svc = range createdServices.Items {
+				if len(svc.ObjectMeta.OwnerReferences) == 1 && svc.ObjectMeta.OwnerReferences[0].UID == gw.UID {
+					return true
+				}
+			}
+			return false
+		}, timeout, interval).Should(BeTrue(), "service not created")
+		Expect(svc.Spec.ClusterIP).NotTo(BeEmpty())
 
-	finishFunc := m.ReconcileStart()
-	finishFunc(assert.AnError)
+		if probs, err := metricstest.GatherAndLint(); err != nil || len(probs) > 0 {
+			Fail("metrics linter error: " + err.Error())
+		}
 
-	currentMetrics := metricstest.MustGatherMetrics(t)
+		gathered := metricstest.MustGatherMetrics(GinkgoT())
 
-	currentMetrics.AssertMetricLabels("kgateway_controller_reconciliations_total", []metrics.Label{
-		{Name: "controller", Value: "test-controller"},
-		{Name: "result", Value: "error"},
+		gathered.AssertMetricsLabels("kgateway_controller_reconciliations_total", [][]metrics.Label{{
+			{Name: "controller", Value: "kgateway.dev/kgateway"},
+			{Name: "result", Value: "success"},
+		}, {
+			{Name: "controller", Value: "kgateway.dev/kgateway-gatewayclass-provisioner"},
+			{Name: "result", Value: "success"},
+		}})
+
+		gathered.AssertMetricsLabels("kgateway_controller_reconcile_duration_seconds", [][]metrics.Label{{
+			{Name: "controller", Value: "kgateway.dev/kgateway"},
+		}, {
+			{Name: "controller", Value: "kgateway.dev/kgateway-gatewayclass-provisioner"},
+		}})
+
+		gathered.AssertMetricCounterValuesBetween("kgateway_controller_reconciliations_total", [][]float64{{1, 20}, {1, 10}})
 	})
-	currentMetrics.AssertMetricCounterValue("kgateway_controller_reconciliations_total", 1)
-
-	currentMetrics.AssertMetricLabels("kgateway_controller_reconcile_duration_seconds", []metrics.Label{
-		{Name: "controller", Value: "test-controller"},
-	})
-	currentMetrics.AssertHistogramPopulated("kgateway_controller_reconcile_duration_seconds")
-}
+})

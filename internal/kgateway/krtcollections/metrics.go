@@ -180,20 +180,10 @@ func (m *collectionMetrics) DecResources(labels CollectionResourcesMetricLabels)
 	m.resources.Sub(1, labels.toMetricsLabels(m.collectionName)...)
 }
 
-// GetTransformsTotalMetric returns the transforms counter.
-// This is provided for testing purposes.
-func GetTransformsTotalMetric() metrics.Counter {
-	return transformsTotal
-}
-
-// GetTransformDurationMetric returns the transform duration histogram.
-// This is provided for testing purposes.
-func GetTransformDurationMetric() metrics.Histogram {
-	return transformDuration
-}
-
-// GetCollectionResourcesMetric returns the collection resource count gauge.
-// This is provided for testing purposes.
-func GetCollectionResourcesMetric() metrics.Gauge {
-	return collectionResources
+// ResetMetrics resets the metrics from this package.
+// This is provided for testing purposes only.
+func ResetMetrics() {
+	transformsTotal.Reset()
+	transformDuration.Reset()
+	collectionResources.Reset()
 }
