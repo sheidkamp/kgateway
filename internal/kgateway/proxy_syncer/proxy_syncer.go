@@ -222,6 +222,10 @@ func (s *ProxySyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) {
 
 		logger.Debug("building proxy for kube gw", "name", client.ObjectKeyFromObject(gw.Obj), "version", gw.Obj.GetResourceVersion())
 
+		gwResources.Set(float64(s.commonCols.Routes.GetHttpRouteCount()), GwResourceLabels{ResourceType: "http_routes"}.toMetricsLabels()...)
+		gwResources.Set(float64(s.commonCols.GatewayIndex.GetGatewayCount()), GwResourceLabels{ResourceType: "gateways"}.toMetricsLabels()...)
+		gwResources.Set(float64(s.commonCols.RefGrants.GetRefGrantCount()), GwResourceLabels{ResourceType: "reference_grants"}.toMetricsLabels()...)
+
 		xdsSnap, rm := s.translator.TranslateGateway(kctx, ctx, gw)
 		if xdsSnap == nil {
 			return nil
