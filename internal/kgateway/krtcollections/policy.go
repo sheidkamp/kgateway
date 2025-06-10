@@ -419,6 +419,10 @@ func NewGatewayIndex(
 	return h
 }
 
+func (h *GatewayIndex) GatewayCount() int {
+	return len(h.Gateways.List())
+}
+
 func allowedListenerSet(gw *gwv1.Gateway, listenerSet *gwxv1a1.XListenerSet, namespaces krt.Collection[NamespaceMetadata]) (func(kctx krt.HandlerContext, namespace string) bool, error) {
 	// Default to None. Ref: https://gateway-api.sigs.k8s.io/geps/gep-1713/#gateway-listenerset-handshake
 	allowedNs := NoNamespace()
@@ -753,6 +757,10 @@ func (h *RefGrantIndex) HasSynced() bool {
 	return h.refgrants.HasSynced()
 }
 
+func (h *RefGrantIndex) RefGrantCount() int {
+	return len(h.refgrants.List())
+}
+
 func NewRefGrantIndex(refgrants krt.Collection[*gwv1beta1.ReferenceGrant]) *RefGrantIndex {
 	refGrantIndex := krt.NewIndex(refgrants, func(p *gwv1beta1.ReferenceGrant) []refGrantIndexKey {
 		ret := make([]refGrantIndexKey, 0, len(p.Spec.To)*len(p.Spec.From))
@@ -941,6 +949,10 @@ func NewRoutesIndex(
 	h.byParentRef = byParentRef
 
 	return h
+}
+
+func (h *RoutesIndex) HttpRouteCount() int {
+	return len(h.httpRoutes.List())
 }
 
 func (h *RoutesIndex) FetchHTTPRoutesBySelector(kctx krt.HandlerContext, selector HTTPRouteSelector) []ir.HttpRouteIR {
