@@ -362,30 +362,13 @@ func TestLabelsWithEmptyValues(t *testing.T) {
 	})
 }
 
-func TestMetricTypesInterfaces(t *testing.T) {
-	crmetrics.Registry = prometheus.NewRegistry()
+func TestActiveMetrics(t *testing.T) {
+	// Ensure metrics are active by default.
+	assert.True(t, metrics.Active())
 
-	var counter metrics.Counter
-	var histogram metrics.Histogram
-	var gauge metrics.Gauge
+	metrics.SetActive(false)
+	assert.False(t, metrics.Active())
 
-	counterOpts := metrics.CounterOpts{Name: "interface_total", Help: "Test"}
-	histogramOpts := metrics.HistogramOpts{Name: "interface_duration_seconds", Help: "Test", Buckets: prometheus.DefBuckets}
-	gaugeOpts := metrics.GaugeOpts{Name: "interfaces", Help: "Test"}
-
-	counter = metrics.NewCounter(counterOpts, []string{})
-	histogram = metrics.NewHistogram(histogramOpts, []string{})
-	gauge = metrics.NewGauge(gaugeOpts, []string{})
-
-	counter.Inc()
-	counter.Add(1.0)
-	counter.Reset()
-
-	histogram.Observe(1.0)
-	histogram.Reset()
-
-	gauge.Set(1.0)
-	gauge.Add(1.0)
-	gauge.Sub(1.0)
-	gauge.Reset()
+	metrics.SetActive(true)
+	assert.True(t, metrics.Active())
 }

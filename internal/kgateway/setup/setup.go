@@ -22,6 +22,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	sdk "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/envutils"
 )
@@ -124,6 +125,10 @@ func StartKgatewayWithConfig(
 	kubeClient, err := CreateKubeClient(restConfig)
 	if err != nil {
 		return err
+	}
+
+	if setupOpts.MetricsBindAddress == "" || setupOpts.MetricsBindAddress == "0" {
+		metrics.SetActive(false)
 	}
 
 	slog.Info("creating krt collections")

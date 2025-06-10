@@ -37,5 +37,9 @@ func (r domainsPerListenerMetricLabels) toMetricsLabels() []metrics.Label {
 
 // setDomainsPerListener sets the number of domains per listener gauge metric.
 func setDomainsPerListener(labels domainsPerListenerMetricLabels, domains int) {
+	if !metrics.Active() {
+		return
+	}
+
 	domainsPerListener.Set(float64(domains), labels.toMetricsLabels()...)
 }

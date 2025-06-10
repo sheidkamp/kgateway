@@ -21,6 +21,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 type EndpointsSettings struct {
@@ -90,36 +91,38 @@ func NewK8sEndpoints(ctx context.Context, inputs EndpointsInputs) krt.Collection
 
 	c := krt.NewCollection(inputs.Backends, transformK8sEndpoints(ctx, inputs, metricsRecorder), inputs.KrtOpts.ToOptions("K8sEndpoints")...)
 
-	c.Register(func(o krt.Event[ir.EndpointsForBackend]) {
-		namespace := o.Latest().ClusterName
+	if metrics.Active() {
+		c.Register(func(o krt.Event[ir.EndpointsForBackend]) {
+			namespace := o.Latest().ClusterName
 
-		cns := strings.SplitN(namespace, "_", 3)
-		if len(cns) > 1 {
-			namespace = cns[1]
-		}
+			cns := strings.SplitN(namespace, "_", 3)
+			if len(cns) > 1 {
+				namespace = cns[1]
+			}
 
-		name := o.Latest().Hostname
+			name := o.Latest().Hostname
 
-		hns := strings.SplitN(name, ".", 2)
-		if len(hns) > 0 {
-			name = hns[0]
-		}
+			hns := strings.SplitN(name, ".", 2)
+			if len(hns) > 0 {
+				name = hns[0]
+			}
 
-		switch o.Event {
-		case controllers.EventDelete:
-			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-				Namespace: namespace,
-				Name:      name,
-				Resource:  "Endpoints",
-			}, 0)
-		case controllers.EventAdd, controllers.EventUpdate:
-			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-				Namespace: namespace,
-				Name:      name,
-				Resource:  "Endpoints",
-			}, len(o.Latest().LbEps))
-		}
-	})
+			switch o.Event {
+			case controllers.EventDelete:
+				metricsRecorder.SetResources(CollectionResourcesMetricLabels{
+					Namespace: namespace,
+					Name:      name,
+					Resource:  "Endpoints",
+				}, 0)
+			case controllers.EventAdd, controllers.EventUpdate:
+				metricsRecorder.SetResources(CollectionResourcesMetricLabels{
+					Namespace: namespace,
+					Name:      name,
+					Resource:  "Endpoints",
+				}, len(o.Latest().LbEps))
+			}
+		})
+	}
 
 	return c
 }

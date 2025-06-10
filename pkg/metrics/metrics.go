@@ -2,6 +2,8 @@
 package metrics
 
 import (
+	"sync/atomic"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -246,4 +248,22 @@ func GetPromCollector(c any) prometheus.Collector {
 	}
 
 	return nil
+}
+
+var (
+	disabled uint32
+)
+
+// SetActive sets the globally active state for metrics.
+func SetActive(active bool) {
+	if active {
+		atomic.StoreUint32(&disabled, 0)
+	} else {
+		atomic.StoreUint32(&disabled, 1)
+	}
+}
+
+// Active checks if metrics are globally active.
+func Active() bool {
+	return atomic.LoadUint32(&disabled) == 0
 }

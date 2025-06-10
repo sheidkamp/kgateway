@@ -70,7 +70,14 @@ func NewTranslatorMetricsRecorder(translatorName string) TranslatorMetricsRecord
 // TranslationStart is called at the start of a translation function to begin metrics
 // collection and returns a function called at the end to complete metrics recording.
 func (m *translatorMetrics) TranslationStart() func(error) {
+	if !metrics.Active() {
+		return func(err error) {
+			// No-op if metrics are not active.
+		}
+	}
+
 	start := time.Now()
+
 	m.translationsRunning.Add(1,
 		metrics.Label{Name: translatorNameLabel, Value: m.translatorName})
 
