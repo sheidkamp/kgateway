@@ -419,7 +419,7 @@ func NewGatewayIndex(
 	return h
 }
 
-func (h *GatewayIndex) GetGatewayCount() int {
+func (h *GatewayIndex) GatewayCount() int {
 	return len(h.Gateways.List())
 }
 
@@ -757,7 +757,7 @@ func (h *RefGrantIndex) HasSynced() bool {
 	return h.refgrants.HasSynced()
 }
 
-func (h *RefGrantIndex) GetRefGrantCount() int {
+func (h *RefGrantIndex) RefGrantCount() int {
 	return len(h.refgrants.List())
 }
 
@@ -951,7 +951,7 @@ func NewRoutesIndex(
 	return h
 }
 
-func (h *RoutesIndex) GetHttpRouteCount() int {
+func (h *RoutesIndex) HttpRouteCount() int {
 	return len(h.httpRoutes.List())
 }
 
