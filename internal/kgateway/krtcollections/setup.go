@@ -23,6 +23,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 // registertypes for common collections
@@ -108,32 +109,32 @@ func InitCollections(
 
 	// create the KRT clients, remember to also register any needed types in the type registration setup.
 	httpRoutes := krt.WrapClient(kclient.NewFiltered[*gwv1.HTTPRoute](istioClient, filter), krtopts.ToOptions("HTTPRoute")...)
-	httpRoutes.Register(func(o krt.Event[*gwv1.HTTPRoute]) {
+	metrics.RegisterEvents(httpRoutes, func(o krt.Event[*gwv1.HTTPRoute]) {
 		gwResourceMetricEventHandler(o, "HTTPRoute")
 	})
 
 	tcproutes := krt.WrapClient(kclient.NewDelayedInformer[*gwv1a2.TCPRoute](istioClient, gvr.TCPRoute, kubetypes.StandardInformer, filter), krtopts.ToOptions("TCPRoute")...)
-	tcproutes.Register(func(o krt.Event[*gwv1a2.TCPRoute]) {
+	metrics.RegisterEvents(tcproutes, func(o krt.Event[*gwv1a2.TCPRoute]) {
 		gwResourceMetricEventHandler(o, "TCPRoute")
 	})
 
 	tlsRoutes := krt.WrapClient(kclient.NewDelayedInformer[*gwv1a2.TLSRoute](istioClient, gvr.TLSRoute, kubetypes.StandardInformer, filter), krtopts.ToOptions("TLSRoute")...)
-	tlsRoutes.Register(func(o krt.Event[*gwv1a2.TLSRoute]) {
+	metrics.RegisterEvents(tlsRoutes, func(o krt.Event[*gwv1a2.TLSRoute]) {
 		gwResourceMetricEventHandler(o, "TLSRoute")
 	})
 
 	grpcRoutes := krt.WrapClient(kclient.NewFiltered[*gwv1.GRPCRoute](istioClient, filter), krtopts.ToOptions("GRPCRoute")...)
-	grpcRoutes.Register(func(o krt.Event[*gwv1.GRPCRoute]) {
+	metrics.RegisterEvents(grpcRoutes, func(o krt.Event[*gwv1.GRPCRoute]) {
 		gwResourceMetricEventHandler(o, "GRPCRoute")
 	})
 
 	kubeRawGateways := krt.WrapClient(kclient.NewFiltered[*gwv1.Gateway](istioClient, filter), krtopts.ToOptions("KubeGateways")...)
-	kubeRawGateways.Register(func(o krt.Event[*gwv1.Gateway]) {
+	metrics.RegisterEvents(kubeRawGateways, func(o krt.Event[*gwv1.Gateway]) {
 		gwResourceMetricEventHandler(o, "Gateway")
 	})
 
 	kubeRawListenerSets := krt.WrapClient(kclient.NewDelayedInformer[*gwxv1a1.XListenerSet](istioClient, wellknown.XListenerSetGVR, kubetypes.StandardInformer, kclient.Filter{}), krtopts.ToOptions("KubeListenerSets")...)
-	kubeRawListenerSets.Register(func(o krt.Event[*gwxv1a1.XListenerSet]) {
+	metrics.RegisterEvents(kubeRawListenerSets, func(o krt.Event[*gwxv1a1.XListenerSet]) {
 		gwResourceMetricEventHandler(o, "XListenerSet")
 	})
 
