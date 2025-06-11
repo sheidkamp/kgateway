@@ -131,3 +131,19 @@ func TestStatusSyncResources(t *testing.T) {
 	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
 	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{0, 3})
 }
+
+func TestStatusSyncMetricsNotActive(t *testing.T) {
+	metrics.SetActive(false)
+	defer metrics.SetActive(true)
+
+	m := NewStatusSyncMetricsRecorder("test-syncer")
+
+	finishFunc := m.StatusSyncStart()
+	time.Sleep(10 * time.Millisecond)
+	finishFunc(nil)
+
+	currentMetrics := metricstest.MustGatherMetrics(t)
+
+	currentMetrics.AssertMetricNotExists("kgateway_status_syncer_status_syncs_total")
+	currentMetrics.AssertMetricNotExists("kgateway_status_syncer_status_sync_duration_seconds")
+}
