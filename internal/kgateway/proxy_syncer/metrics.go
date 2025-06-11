@@ -81,6 +81,10 @@ type statusSyncMetrics struct {
 
 // NewStatusSyncMetricsRecorder creates a new recorder for status syncer metrics.
 func NewStatusSyncMetricsRecorder(syncerName string) statusSyncMetricsRecorder {
+	if !metrics.Active() {
+		return &nullStatusSyncMetricsRecorder{}
+	}
+
 	m := &statusSyncMetrics{
 		syncerName:         syncerName,
 		statusSyncsTotal:   statusSyncsTotal,
@@ -93,13 +97,24 @@ func NewStatusSyncMetricsRecorder(syncerName string) statusSyncMetricsRecorder {
 	return m
 }
 
+type nullStatusSyncMetricsRecorder struct{}
+
+func (m *nullStatusSyncMetricsRecorder) StatusSyncStart() func(error) {
+	return func(err error) {}
+}
+
+func (m *nullStatusSyncMetricsRecorder) ResetResources(resource string) {}
+
+func (m *nullStatusSyncMetricsRecorder) SetResources(labels StatusSyncResourcesMetricLabels, count int) {
+}
+
+func (m *nullStatusSyncMetricsRecorder) IncResources(labels StatusSyncResourcesMetricLabels) {}
+
+func (m *nullStatusSyncMetricsRecorder) DecResources(labels StatusSyncResourcesMetricLabels) {}
+
 // StatusSyncStart is called at the start of a status sync function to begin metrics
 // collection and returns a function called at the end to complete metrics recording.
 func (m *statusSyncMetrics) StatusSyncStart() func(error) {
-	if !metrics.Active() {
-		return func(err error) {}
-	}
-
 	start := time.Now()
 
 	return func(err error) {
@@ -166,10 +181,6 @@ func (m *statusSyncMetrics) updateResourceNames(labels StatusSyncResourcesMetric
 
 // SetResources updates the resource count gauge.
 func (m *statusSyncMetrics) SetResources(labels StatusSyncResourcesMetricLabels, count int) {
-	if !metrics.Active() {
-		return
-	}
-
 	m.updateResourceNames(labels)
 
 	m.resources.Set(float64(count), labels.toMetricsLabels(m.syncerName)...)
@@ -177,10 +188,6 @@ func (m *statusSyncMetrics) SetResources(labels StatusSyncResourcesMetricLabels,
 
 // IncResources increments the resource count gauge.
 func (m *statusSyncMetrics) IncResources(labels StatusSyncResourcesMetricLabels) {
-	if !metrics.Active() {
-		return
-	}
-
 	m.updateResourceNames(labels)
 
 	m.resources.Add(1, labels.toMetricsLabels(m.syncerName)...)
@@ -188,10 +195,6 @@ func (m *statusSyncMetrics) IncResources(labels StatusSyncResourcesMetricLabels)
 
 // DecResources decrements the resource count gauge.
 func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesMetricLabels) {
-	if !metrics.Active() {
-		return
-	}
-
 	m.updateResourceNames(labels)
 
 	m.resources.Sub(1, labels.toMetricsLabels(m.syncerName)...)

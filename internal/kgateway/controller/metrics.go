@@ -45,8 +45,14 @@ type controllerMetrics struct {
 	reconcileDuration    metrics.Histogram
 }
 
+var _ controllerMetricsRecorder = &controllerMetrics{}
+
 // newControllerMetricsRecorder creates a new ControllerMetrics instance.
 func newControllerMetricsRecorder(controllerName string) controllerMetricsRecorder {
+	if !metrics.Active() {
+		return &nullControllerMetricsRecorder{}
+	}
+
 	m := &controllerMetrics{
 		controllerName:       controllerName,
 		reconciliationsTotal: reconciliationsTotal,
@@ -60,10 +66,6 @@ func newControllerMetricsRecorder(controllerName string) controllerMetricsRecord
 // to begin metrics collection and returns a function called at the end to
 // complete metrics recording.
 func (m *controllerMetrics) reconcileStart() func(error) {
-	if !metrics.Active() {
-		return func(err error) {}
-	}
-
 	start := time.Now()
 
 	return func(err error) {
@@ -83,6 +85,14 @@ func (m *controllerMetrics) reconcileStart() func(error) {
 		}...)
 	}
 }
+
+type nullControllerMetricsRecorder struct{}
+
+func (m *nullControllerMetricsRecorder) reconcileStart() func(error) {
+	return func(err error) {}
+}
+
+var _ controllerMetricsRecorder = &nullControllerMetricsRecorder{}
 
 // ResetMetrics resets the metrics from this package.
 // This is provided for testing purposes only.
