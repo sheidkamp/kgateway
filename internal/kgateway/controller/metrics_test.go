@@ -37,7 +37,7 @@ var _ = Describe("GwControllerMetrics", func() {
 		cancel context.CancelFunc
 	)
 
-	BeforeEach(func() {
+	JustBeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 
 		var err error
@@ -45,61 +45,21 @@ var _ = Describe("GwControllerMetrics", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		ResetMetrics()
+
 	})
 
 	AfterEach(func() {
 		if cancel != nil {
 			cancel()
 		}
+
 		// ensure goroutines cleanup
 		Eventually(func() bool { return true }).WithTimeout(3 * time.Second).Should(BeTrue())
 	})
 
 	It("should generate gateway controller metrics", func() {
-		same := api.NamespacesFromSame
-		gwName := "gw-" + gatewayClassName + "-metrics"
-		gw := api.Gateway{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      gwName,
-				Namespace: defaultNamespace,
-			},
-			Spec: api.GatewaySpec{
-				GatewayClassName: api.ObjectName(gatewayClassName),
-				Listeners: []api.Listener{{
-					Protocol: "HTTP",
-					Port:     80,
-					AllowedRoutes: &api.AllowedRoutes{
-						Namespaces: &api.RouteNamespaces{
-							From: &same,
-						},
-					},
-					Name: "listener",
-				}},
-			},
-		}
-		err := k8sClient.Create(ctx, &gw)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Wait for service to be created
-		var svc corev1.Service
-		Eventually(func() bool {
-			var createdServices corev1.ServiceList
-			err := k8sClient.List(ctx, &createdServices)
-			if err != nil {
-				return false
-			}
-			for _, svc = range createdServices.Items {
-				if len(svc.ObjectMeta.OwnerReferences) == 1 && svc.ObjectMeta.OwnerReferences[0].UID == gw.UID {
-					return true
-				}
-			}
-			return false
-		}, timeout, interval).Should(BeTrue(), "service not created")
-		Expect(svc.Spec.ClusterIP).NotTo(BeEmpty())
-
-		if probs, err := metricstest.GatherAndLint(); err != nil || len(probs) > 0 {
-			Fail("metrics linter error: " + err.Error())
-		}
+		setupGateway(ctx)
+		defer deleteGateway(ctx)
 
 		gathered := metricstest.MustGatherMetrics(GinkgoT())
 
@@ -119,4 +79,92 @@ var _ = Describe("GwControllerMetrics", func() {
 
 		gathered.AssertMetricCounterValuesBetween("kgateway_controller_reconciliations_total", [][]float64{{1, 20}, {1, 10}})
 	})
+
+	Context("when metrics are not active", func() {
+		BeforeEach(func() {
+			metrics.SetActive(false)
+		})
+
+		AfterEach(func() {
+			metrics.SetActive(true)
+		})
+
+		It("should not record metrics if metrics are not active", func() {
+			setupGateway(ctx)
+			defer deleteGateway(ctx)
+
+			gathered := metricstest.MustGatherMetrics(GinkgoT())
+
+			gathered.AssertMetricNotExists("kgateway_controller_reconciliations_total")
+
+			gathered.AssertMetricNotExists("kgateway_controller_reconcile_duration_seconds")
+		})
+
+	})
+
 })
+
+func gateway() *api.Gateway {
+	same := api.NamespacesFromSame
+	gwName := "gw-" + gatewayClassName + "-metrics"
+	gw := api.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwName,
+			Namespace: defaultNamespace,
+		},
+		Spec: api.GatewaySpec{
+			GatewayClassName: api.ObjectName(gatewayClassName),
+			Listeners: []api.Listener{{
+				Protocol: "HTTP",
+				Port:     80,
+				AllowedRoutes: &api.AllowedRoutes{
+					Namespaces: &api.RouteNamespaces{
+						From: &same,
+					},
+				},
+				Name: "listener",
+			}},
+		},
+	}
+
+	return &gw
+}
+
+func deleteGateway(ctx context.Context) {
+	gw := gateway()
+	err := k8sClient.Delete(ctx, gw)
+	Expect(err).NotTo(HaveOccurred())
+
+	Eventually(func() bool {
+		var createdGateways api.GatewayList
+		err := k8sClient.List(ctx, &createdGateways)
+		return err == nil && len(createdGateways.Items) == 0
+	}, timeout, interval).Should(BeTrue(), "gateway not deleted")
+}
+
+func setupGateway(ctx context.Context) {
+	gw := gateway()
+	err := k8sClient.Create(ctx, gw)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Wait for service to be created
+	var svc corev1.Service
+	Eventually(func() bool {
+		var createdServices corev1.ServiceList
+		err := k8sClient.List(ctx, &createdServices)
+		if err != nil {
+			return false
+		}
+		for _, svc = range createdServices.Items {
+			if len(svc.ObjectMeta.OwnerReferences) == 1 && svc.ObjectMeta.OwnerReferences[0].UID == gw.GetUID() {
+				return true
+			}
+		}
+		return false
+	}, timeout, interval).Should(BeTrue(), "service not created")
+	Expect(svc.Spec.ClusterIP).NotTo(BeEmpty())
+
+	if probs, err := metricstest.GatherAndLint(); err != nil || len(probs) > 0 {
+		Fail("metrics linter error: " + err.Error())
+	}
+}

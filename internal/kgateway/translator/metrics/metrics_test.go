@@ -97,3 +97,36 @@ func TestTranslationStart_Error(t *testing.T) {
 	})
 	currentMetrics.AssertMetricCounterValue("kgateway_translator_translations_total", 1)
 }
+
+func TestTranslationMetricsNotActive(t *testing.T) {
+	metrics.SetActive(false)
+	defer metrics.SetActive(true)
+
+	setupTest()
+
+	assert.False(t, metrics.Active())
+
+	m := NewTranslatorMetricsRecorder("test-translator")
+
+	// Start translation
+	finishFunc := m.TranslationStart()
+	time.Sleep(10 * time.Millisecond)
+
+	// Check that the translations_running metric is 1
+	currentMetrics := metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetricNotExists("kgateway_translator_translations_running")
+
+	// Finish translation
+	finishFunc(nil)
+	time.Sleep(10 * time.Millisecond)
+	currentMetrics = metricstest.MustGatherMetrics(t)
+
+	// Check the translations_running metric
+	currentMetrics.AssertMetricNotExists("kgateway_translator_translations_running")
+
+	// Check the translations_total metric
+	currentMetrics.AssertMetricNotExists("kgateway_translator_translations_total")
+
+	// Check the translation_duration_seconds metric
+	currentMetrics.AssertMetricNotExists("kgateway_translator_translation_duration_seconds")
+}

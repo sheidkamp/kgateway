@@ -129,3 +129,21 @@ func TestCollectionResources(t *testing.T) {
 	currentMetrics.AssertMetricsLabels("kgateway_collection_resources", expectedLabels)
 	currentMetrics.AssertMetricGaugeValues("kgateway_collection_resources", []float64{0, 3})
 }
+
+func TestTransformStartNotActive(t *testing.T) {
+	metrics.SetActive(false)
+	defer metrics.SetActive(true)
+
+	setupTest()
+
+	m := NewCollectionMetricsRecorder("test-collection")
+
+	finishFunc := m.TransformStart()
+	time.Sleep(10 * time.Millisecond)
+	finishFunc(nil)
+
+	currentMetrics := metricstest.MustGatherMetrics(t)
+
+	currentMetrics.AssertMetricNotExists("kgateway_collection_transforms_total")
+	currentMetrics.AssertMetricNotExists("kgateway_collection_transform_duration_seconds")
+}
