@@ -256,6 +256,7 @@ var (
 )
 
 // SetActive sets the globally active state for metrics.
+// Setting this does not effect metrics that are already being collected.
 func SetActive(active bool) {
 	if active {
 		atomic.StoreUint32(&disabled, 0)

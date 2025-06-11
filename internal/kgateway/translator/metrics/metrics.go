@@ -57,6 +57,10 @@ type translatorMetrics struct {
 
 // NewTranslatorMetricsRecorder creates a new recorder for translator metrics.
 func NewTranslatorMetricsRecorder(translatorName string) TranslatorMetricsRecorder {
+	if !metrics.Active() {
+		return &nullTranslatorMetricsRecorder{}
+	}
+
 	m := &translatorMetrics{
 		translatorName:      translatorName,
 		translationsTotal:   translationsTotal,
@@ -70,10 +74,6 @@ func NewTranslatorMetricsRecorder(translatorName string) TranslatorMetricsRecord
 // TranslationStart is called at the start of a translation function to begin metrics
 // collection and returns a function called at the end to complete metrics recording.
 func (m *translatorMetrics) TranslationStart() func(error) {
-	if !metrics.Active() {
-		return func(err error) {}
-	}
-
 	start := time.Now()
 
 	m.translationsRunning.Add(1,
@@ -98,6 +98,14 @@ func (m *translatorMetrics) TranslationStart() func(error) {
 		m.translationsRunning.Sub(1,
 			metrics.Label{Name: translatorNameLabel, Value: m.translatorName})
 	}
+}
+
+var _ TranslatorMetricsRecorder = &translatorMetrics{}
+
+type nullTranslatorMetricsRecorder struct{}
+
+func (m *nullTranslatorMetricsRecorder) TranslationStart() func(error) {
+	return func(err error) {}
 }
 
 // ResetMetrics resets the metrics from this package.
