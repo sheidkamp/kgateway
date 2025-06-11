@@ -61,9 +61,7 @@ func newControllerMetricsRecorder(controllerName string) controllerMetricsRecord
 // complete metrics recording.
 func (m *controllerMetrics) reconcileStart() func(error) {
 	if !metrics.Active() {
-		return func(err error) {
-			// No-op if metrics are not active.
-		}
+		return func(err error) {}
 	}
 
 	start := time.Now()

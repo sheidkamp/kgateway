@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"istio.io/istio/pkg/kube/krt"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -266,4 +267,13 @@ func SetActive(active bool) {
 // Active checks if metrics are globally active.
 func Active() bool {
 	return atomic.LoadUint32(&disabled) == 0
+}
+
+// RegisterEvents registers KRT events for a collection if metrics are active.
+func RegisterEvents[T any](c krt.Collection[T], f func(o krt.Event[T])) krt.Syncer {
+	if !Active() {
+		return nil
+	}
+
+	return c.Register(f)
 }

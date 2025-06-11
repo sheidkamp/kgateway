@@ -115,9 +115,7 @@ func NewStatusSyncMetricsRecorder(syncerName string) statusSyncMetricsRecorder {
 // collection and returns a function called at the end to complete metrics recording.
 func (m *statusSyncMetrics) StatusSyncStart() func(error) {
 	if !metrics.Active() {
-		return func(err error) {
-			// No-op if metrics are not active.
-		}
+		return func(err error) {}
 	}
 
 	start := time.Now()

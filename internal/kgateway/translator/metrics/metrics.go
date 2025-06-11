@@ -71,9 +71,7 @@ func NewTranslatorMetricsRecorder(translatorName string) TranslatorMetricsRecord
 // collection and returns a function called at the end to complete metrics recording.
 func (m *translatorMetrics) TranslationStart() func(error) {
 	if !metrics.Active() {
-		return func(err error) {
-			// No-op if metrics are not active.
-		}
+		return func(err error) {}
 	}
 
 	start := time.Now()

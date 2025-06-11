@@ -390,34 +390,32 @@ func NewGatewayIndex(
 		return &out
 	}, krtopts.ToOptions("gateways")...)
 
-	if metrics.Active() {
-		h.Gateways.Register(func(o krt.Event[ir.Gateway]) {
-			switch o.Event {
-			case controllers.EventDelete:
-				metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-					Namespace: o.Latest().Namespace,
-					Name:      o.Latest().Name,
-					Resource:  "Gateway",
-				}, 0)
-				metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-					Namespace: o.Latest().Namespace,
-					Name:      o.Latest().Name,
-					Resource:  "Listeners",
-				}, 0)
-			case controllers.EventAdd, controllers.EventUpdate:
-				metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-					Namespace: o.Latest().Namespace,
-					Name:      o.Latest().Name,
-					Resource:  "Gateway",
-				}, 1)
-				metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-					Namespace: o.Latest().Namespace,
-					Name:      o.Latest().Name,
-					Resource:  "Listeners",
-				}, len(o.Latest().Obj.Spec.Listeners))
-			}
-		})
-	}
+	metrics.RegisterEvents(h.Gateways, func(o krt.Event[ir.Gateway]) {
+		switch o.Event {
+		case controllers.EventDelete:
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Gateway",
+			}, 0)
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Listeners",
+			}, 0)
+		case controllers.EventAdd, controllers.EventUpdate:
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Gateway",
+			}, 1)
+			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
+				Namespace: o.Latest().Namespace,
+				Name:      o.Latest().Name,
+				Resource:  "Listeners",
+			}, len(o.Latest().Obj.Spec.Listeners))
+		}
+	})
 
 	return h
 }

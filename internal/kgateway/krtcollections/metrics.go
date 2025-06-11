@@ -96,9 +96,7 @@ func NewCollectionMetricsRecorder(collectionName string) CollectionMetricsRecord
 // collection and returns a function called at the end to complete metrics recording.
 func (m *collectionMetrics) TransformStart() func(error) {
 	if !metrics.Active() {
-		return func(err error) {
-			// No-op if metrics are not active.
-		}
+		return func(err error) {}
 	}
 
 	start := time.Now()
