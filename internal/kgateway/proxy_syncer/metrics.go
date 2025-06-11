@@ -42,25 +42,7 @@ var (
 		},
 		[]string{syncerNameLabel, "name", "namespace", "resource"},
 	)
-	gwResources = metrics.NewGauge(
-		metrics.GaugeOpts{
-			Subsystem: resourceSubsystem,
-			Name:      "gw_resources",
-			Help:      "Current number of gateway resources in the snapshot",
-		},
-		[]string{resourceTypeLabel},
-	)
 )
-
-type GwResourceLabels struct {
-	ResourceType string
-}
-
-func (r GwResourceLabels) toMetricsLabels() []metrics.Label {
-	return []metrics.Label{
-		{Name: resourceTypeLabel, Value: r.ResourceType},
-	}
-}
 
 // StatusSyncResourcesMetricLabels defines the labels for the syncer resources metric.
 type StatusSyncResourcesMetricLabels struct {
@@ -221,5 +203,4 @@ func ResetMetrics() {
 	statusSyncDuration.Reset()
 	statusSyncsTotal.Reset()
 	statusSyncResources.Reset()
-	gwResources.Reset()
 }

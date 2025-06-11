@@ -5,11 +5,15 @@ import (
 	"time"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
+	"istio.io/istio/pkg/kube/controllers"
+	"istio.io/istio/pkg/kube/krt"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	collectionSubsystem = "collection"
-	collectionNameLabel = "collection"
+	collectionSubsystem           = "collection"
+	collectionNameLabel           = "collection"
+	gatewayResourceCollectionName = "gateway_resources"
 )
 
 var (
@@ -32,6 +36,7 @@ var (
 		},
 		[]string{collectionNameLabel},
 	)
+
 	collectionResources = metrics.NewGauge(
 		metrics.GaugeOpts{
 			Subsystem: collectionSubsystem,
@@ -40,9 +45,46 @@ var (
 		},
 		[]string{collectionNameLabel, "name", "namespace", "resource"},
 	)
+
+	// Metric to track the number of gateway resources
+	gatewayResourceCollection = metrics.NewGauge(
+		metrics.GaugeOpts{
+			Subsystem: collectionSubsystem,
+			Name:      "gateway_resources",
+			Help:      "Current number of gateway resources managed by the collection",
+		},
+		[]string{"namespace", "resource"},
+	)
 )
 
-// CollectionResourcesMetricLabels defines the labels for the collection resources metric.
+func gwResourceMetricEventHandler[T client.Object](o krt.Event[T], resourceName string) {
+	switch o.Event {
+	case controllers.EventAdd:
+		gatewayResourceCollection.Add(1, GatewayResourceMetricLabels{
+			Namespace: o.Latest().GetNamespace(),
+			Resource:  resourceName,
+		}.toMetricsLabels()...)
+
+	case controllers.EventDelete:
+		gatewayResourceCollection.Sub(1, GatewayResourceMetricLabels{
+			Namespace: o.Latest().GetNamespace(),
+			Resource:  resourceName,
+		}.toMetricsLabels()...)
+	}
+}
+
+type GatewayResourceMetricLabels struct {
+	Namespace string
+	Resource  string
+}
+
+func (r GatewayResourceMetricLabels) toMetricsLabels() []metrics.Label {
+	return []metrics.Label{
+		{Name: "namespace", Value: r.Namespace},
+		{Name: "resource", Value: r.Resource},
+	}
+}
+
 type CollectionResourcesMetricLabels struct {
 	Name      string
 	Namespace string
