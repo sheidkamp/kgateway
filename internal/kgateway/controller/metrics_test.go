@@ -27,11 +27,6 @@ func (g GinkgoTestReporter) Fatalf(format string, args ...interface{}) {
 }
 
 var _ = Describe("GwControllerMetrics", func() {
-	const (
-		timeout  = time.Second * 10
-		interval = time.Millisecond * 250
-	)
-
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
