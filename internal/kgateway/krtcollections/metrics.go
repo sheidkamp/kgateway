@@ -4,10 +4,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 const (
