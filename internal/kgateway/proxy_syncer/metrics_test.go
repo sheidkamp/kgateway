@@ -60,14 +60,18 @@ func TestStatusSyncStart_Success(t *testing.T) {
 
 	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.AssertMetricLabels("kgateway_status_syncer_status_syncs_total", []metrics.Label{
-		{Name: "result", Value: "success"},
-		{Name: "syncer", Value: "test-syncer"},
+	currentMetrics.AssertMetric("kgateway_status_syncer_status_syncs_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "result", Value: "success"},
+			{Name: "syncer", Value: "test-syncer"},
+		},
+		Value: 1,
 	})
-	currentMetrics.AssertMetricCounterValue("kgateway_status_syncer_status_syncs_total", 1)
 
-	currentMetrics.AssertMetricLabels("kgateway_status_syncer_status_sync_duration_seconds", []metrics.Label{
-		{Name: "syncer", Value: "test-syncer"},
+	currentMetrics.AssertMetric("kgateway_status_syncer_status_sync_duration_seconds", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "syncer", Value: "test-syncer"},
+		},
 	})
 	currentMetrics.AssertHistogramPopulated("kgateway_status_syncer_status_sync_duration_seconds")
 }
@@ -82,11 +86,13 @@ func TesStatusSyncStart_Error(t *testing.T) {
 
 	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.AssertMetricLabels("kgateway_status_syncer_status_syncs_total", []metrics.Label{
-		{Name: "result", Value: "error"},
-		{Name: "syncer", Value: "test-syncer"},
+	currentMetrics.AssertMetric("kgateway_status_syncer_status_syncs_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "result", Value: "error"},
+			{Name: "syncer", Value: "test-syncer"},
+		},
+		Value: 1,
 	})
-	currentMetrics.AssertMetricCounterValue("kgateway_status_syncer_status_syncs_total", 1)
 	currentMetrics.AssertMetricNotExists("kgateway_status_syncer_status_sync_duration_seconds")
 }
 
@@ -99,48 +105,75 @@ func TestStatusSyncResources(t *testing.T) {
 	m.SetResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"}, 5)
 	m.SetResources(StatusSyncResourcesMetricLabels{Namespace: "kube-system", Name: "test", Resource: "gateway"}, 3)
 
-	// Assert.True(t, found, "kgateway_status_syncer_resources metric not found")
-
-	expectedLabels := [][]metrics.Label{
-		{
-			{Name: "name", Value: "test"},
-			{Name: "namespace", Value: "default"},
-			{Name: "resource", Value: "route"},
-			{Name: "syncer", Value: "test-statusSync"},
-		},
-		{
-			{Name: "name", Value: "test"},
-			{Name: "namespace", Value: "kube-system"},
-			{Name: "resource", Value: "gateway"},
-			{Name: "syncer", Value: "test-statusSync"},
-		},
+	expectedRouteLabels := []metrics.Label{
+		{Name: "name", Value: "test"},
+		{Name: "namespace", Value: "default"},
+		{Name: "resource", Value: "route"},
+		{Name: "syncer", Value: "test-statusSync"},
+	}
+	expectedGatewayLabels := []metrics.Label{
+		{Name: "name", Value: "test"},
+		{Name: "namespace", Value: "kube-system"},
+		{Name: "resource", Value: "gateway"},
+		{Name: "syncer", Value: "test-statusSync"},
 	}
 
 	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
-	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{5, 3})
-
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+		&metricstest.ExpectedMetric{
+			Labels: expectedRouteLabels,
+			Value:  5,
+		},
+		&metricstest.ExpectedMetric{
+			Labels: expectedGatewayLabels,
+			Value:  3,
+		},
+	})
 	// Test IncResources.
 	m.IncResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
-	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{6, 3})
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+		&metricstest.ExpectedMetric{
+			Labels: expectedRouteLabels,
+			Value:  6,
+		},
+		&metricstest.ExpectedMetric{
+			Labels: expectedGatewayLabels,
+			Value:  3,
+		},
+	})
 
 	// Test DecResources.
 	m.DecResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
-	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{5, 3})
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+		&metricstest.ExpectedMetric{
+			Labels: expectedRouteLabels,
+			Value:  5,
+		},
+		&metricstest.ExpectedMetric{
+			Labels: expectedGatewayLabels,
+			Value:  3,
+		},
+	})
 
 	// Test ResetResources.
 	m.ResetResources("route")
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetricsLabels("kgateway_status_syncer_resources", expectedLabels)
-	currentMetrics.AssertMetricGaugeValues("kgateway_status_syncer_resources", []float64{0, 3})
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+		&metricstest.ExpectedMetric{
+			Labels: expectedRouteLabels,
+			Value:  0,
+		},
+		&metricstest.ExpectedMetric{
+			Labels: expectedGatewayLabels,
+			Value:  3,
+		},
+	})
 }
 
 func TestStatusSyncMetricsNotActive(t *testing.T) {
