@@ -130,10 +130,19 @@ func deleteGateway(ctx context.Context) {
 	err := k8sClient.Delete(ctx, gw)
 	Expect(err).NotTo(HaveOccurred())
 
+	// The tests in this suite don't do a good job of cleaning up after themselves, which is relevant because of the shared envtest environment
+	// but we can at least that the gateway from this test is deleted
 	Eventually(func() bool {
 		var createdGateways api.GatewayList
 		err := k8sClient.List(ctx, &createdGateways)
-		return err == nil && len(createdGateways.Items) == 0
+		found := false
+		for _, foundGw := range createdGateways.Items {
+			if foundGw.Name == gw.Name {
+				found = true
+				break
+			}
+		}
+		return err == nil && !found
 	}, timeout, interval).Should(BeTrue(), "gateway not deleted")
 }
 
