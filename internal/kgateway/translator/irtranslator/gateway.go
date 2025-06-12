@@ -119,7 +119,7 @@ func (t *Translator) ComputeListener(
 
 			// Record metrics for the number of domains per listener.
 			// Only one domain per virtual host is supported currently, but that may change in the future,
-			//so loop through the virtual hosts and count the domains.
+			// so loop through the virtual hosts and count the domains.
 			domainsOnListener := 0
 			for _, vhost := range rc.GetVirtualHosts() {
 				domainsOnListener += len(vhost.GetDomains())
