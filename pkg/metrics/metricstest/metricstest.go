@@ -21,7 +21,7 @@ type HistogramMetricOutput struct {
 	SampleSum   float64
 }
 
-type IExpectedMetric interface {
+type ExpectMetric interface {
 	GetLabels() []metrics.Label
 	Match(t require.TestingT, value float64) bool
 }
@@ -40,7 +40,7 @@ func (m *ExpectedMetric) Match(t require.TestingT, value float64) bool {
 	return m.Value == value
 }
 
-var _ IExpectedMetric = &ExpectedMetric{}
+var _ ExpectMetric = &ExpectedMetric{}
 
 // ExpectedMetricValueTest is a struct to hold a metric label and a test function to match the value.
 type ExpectedMetricValueTest struct {
@@ -62,7 +62,7 @@ func Between(min, max float64) func(value float64) bool {
 	}
 }
 
-var _ IExpectedMetric = &ExpectedMetricValueTest{}
+var _ ExpectMetric = &ExpectedMetricValueTest{}
 
 // Gathered metrics interface.
 type GatheredMetrics interface {
@@ -73,8 +73,8 @@ type GatheredMetrics interface {
 	AssertHistogramPopulated(name string)
 	AssertMetricExists(name string)
 	AssertMetricNotExists(name string)
-	AssertMetric(name string, expectedMetric IExpectedMetric)
-	AssertMetrics(name string, expectedMetrics []IExpectedMetric)
+	AssertMetric(name string, expectedMetric ExpectMetric)
+	AssertMetrics(name string, expectedMetrics []ExpectMetric)
 }
 
 // MustGatherMetrics gathers metrics and returns them as GatheredMetrics.
@@ -155,7 +155,7 @@ func (g *prometheusGatheredMetrics) metricObjLabelsMatch(metric *dto.Metric, exp
 }
 
 // findMetricObj checks that the labels on a gathered metric match one of the expected sets of labels and returns the match
-func (g *prometheusGatheredMetrics) findMetricObj(metric *dto.Metric, metricsToSearch []IExpectedMetric) IExpectedMetric {
+func (g *prometheusGatheredMetrics) findMetricObj(metric *dto.Metric, metricsToSearch []ExpectMetric) ExpectMetric {
 	for _, m := range metricsToSearch {
 		err := g.metricObjLabelsMatch(metric, m.GetLabels())
 		if err == nil {
@@ -231,11 +231,11 @@ func (g *prometheusGatheredMetrics) AssertMetricNotExists(name string) {
 }
 
 // Works for counters and gauges, but not histograms or summaries.
-func (g *prometheusGatheredMetrics) AssertMetric(name string, expected IExpectedMetric) {
-	g.AssertMetrics(name, []IExpectedMetric{expected})
+func (g *prometheusGatheredMetrics) AssertMetric(name string, expected ExpectMetric) {
+	g.AssertMetrics(name, []ExpectMetric{expected})
 }
 
-func (g *prometheusGatheredMetrics) AssertMetrics(name string, expectedMetrics []IExpectedMetric) {
+func (g *prometheusGatheredMetrics) AssertMetrics(name string, expectedMetrics []ExpectMetric) {
 	for _, m := range g.metrics[name] {
 		matchedExpectedMetric := g.findMetricObj(m, expectedMetrics)
 		assert.NotNil(g.t, matchedExpectedMetric, "Metric %s with labels %v not found", name, m.GetLabel())

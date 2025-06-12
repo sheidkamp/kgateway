@@ -120,7 +120,7 @@ func TestStatusSyncResources(t *testing.T) {
 
 	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  5,
@@ -134,7 +134,7 @@ func TestStatusSyncResources(t *testing.T) {
 	m.IncResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  6,
@@ -149,7 +149,7 @@ func TestStatusSyncResources(t *testing.T) {
 	m.DecResources(StatusSyncResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  5,
@@ -164,7 +164,7 @@ func TestStatusSyncResources(t *testing.T) {
 	m.ResetResources("route")
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_status_syncer_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  0,

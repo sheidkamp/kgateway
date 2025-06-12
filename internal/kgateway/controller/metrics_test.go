@@ -26,7 +26,7 @@ func (g GinkgoTestReporter) Fatalf(format string, args ...interface{}) {
 	Fail(fmt.Sprintf(format, args...))
 }
 
-var _ = FDescribe("GwControllerMetrics", func() {
+var _ = Describe("GwControllerMetrics", func() {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
@@ -58,7 +58,7 @@ var _ = FDescribe("GwControllerMetrics", func() {
 
 		gathered := metricstest.MustGatherMetrics(GinkgoT())
 
-		gathered.AssertMetrics("kgateway_controller_reconciliations_total", []metricstest.IExpectedMetric{
+		gathered.AssertMetrics("kgateway_controller_reconciliations_total", []metricstest.ExpectMetric{
 			&metricstest.ExpectedMetricValueTest{
 				Labels: []metrics.Label{{Name: "controller", Value: "kgateway.dev/kgateway"}, {Name: "result", Value: "success"}},
 				Test:   metricstest.Between(1, 20),

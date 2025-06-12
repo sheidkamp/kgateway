@@ -122,7 +122,7 @@ func TestCollectionResources(t *testing.T) {
 	}
 	currentMetrics := metricstest.MustGatherMetrics(t)
 
-	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  5,
@@ -137,7 +137,7 @@ func TestCollectionResources(t *testing.T) {
 	m.IncResources(CollectionResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  6,
@@ -152,7 +152,7 @@ func TestCollectionResources(t *testing.T) {
 	m.DecResources(CollectionResourcesMetricLabels{Namespace: "default", Name: "test", Resource: "route"})
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  5,
@@ -167,7 +167,7 @@ func TestCollectionResources(t *testing.T) {
 	m.ResetResources("route")
 
 	currentMetrics = metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.IExpectedMetric{
+	currentMetrics.AssertMetrics("kgateway_collection_resources", []metricstest.ExpectMetric{
 		&metricstest.ExpectedMetric{
 			Labels: expectedRouteLabels,
 			Value:  0,
