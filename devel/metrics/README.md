@@ -13,15 +13,15 @@ The underlying implementation is based on [github.com/prometheus/client_golang/p
 ### Best practices and common patterns
 * Metrics are expected to have a namespace and subdomain defined in their options
   * The default namespace of "kgateway" will be used if no namespace is provided. This will likely be the correct namespace.
-* When passing labels order is important. To make code readable, consider creating a struct to hold the label values with a method to convert to a properly ordered array.
+* When passing labels to methods such as `Add(...)` or `Set(...)`, consider creating a struct to hold the label values with a method to convert it into a slice of Labels. This improves readability and ensures that any missed labels are present with a default ("") value.
   * See `GatewayResourceMetricLabels` in [/internal/kgateway/krtcollections/metrics.go](/internal/kgateway/krtcollections/metrics.go) for an example
 * Follow the [Prometheus Metric and Label Naming Guide](https://prometheus.io/docs/practices/naming/) when possible
-* The metrics package supports an `Active() bool` method that defaults to true, and can be set with `metrics.SetActive(bool)`. When this value is `false` metrics will not be registered and metrics should not be collected.
-  * The flag does not affect the behavior of metrics which have already been created.
-
+  * promlinter is now used in static code analysis to validate metric names, types, and metadata
+* The metrics package supports an `Active() bool` method with the underlying value evaluated at startup, and can not be meaningfully changed during execution.
+  * In a test context, the value defaults to `true` and can be set with `metrics.SetActive(bool)`
 
 ## Metric collection packages
-Several packages have frameworks created to standardize collection of metrics around existing frameworks
+Several packages have interfaces created to standardize collection of metrics around existing frameworks
 * [CollectionMetricsRecorder](/internal/kgateway/krtcollections/metrics.go) for [/internal/kgateway/krtcollections](/internal/kgateway/krtcollections/)
   * Created by `NewCollectionMetricsRecorder(collectionName string) CollectionMetricsRecorder`
 * [controllerMetricsRecorder](/internal/kgateway/controller/metrics.go) for [/internal/kgateway/controller](/internal/kgateway/controller/)
@@ -52,8 +52,8 @@ Metric gathering capabilities can be added to KRT collections by a couple of met
 * In the transform function
 As in the example above, when a collection is created with a transform function, metric handling code can be added to the handler function. This code will be run every time a member of the collection is transformed.
 * With `RegisterEvents[T any](c krt.Collection[T], f func(o krt.Event[T]))`
-`RegisterEvents` is a helper function that will register the passed function as an event handler of the collection. This code will run when a
-KRT collection is modified, including adds and deletes. Example:
+Event handlers can be registered for KRT collections for metrics that need to be updated on Add, Delete, and/or Update. `RegisterEvents` is a helper function that will register the passed function as an event handler of the collection. This code will run when a
+KRT collection is modified. Example:
 ```
 	tcproutes := krt.WrapClient(kclient.NewDelayedInformer[*gwv1a2.TCPRoute](istioClient, gvr.TCPRoute, kubetypes.StandardInformer, filter), krtopts.ToOptions("TCPRoute")...)
 	metrics.RegisterEvents(tcproutes, func(o krt.Event[*gwv1a2.TCPRoute]) {
