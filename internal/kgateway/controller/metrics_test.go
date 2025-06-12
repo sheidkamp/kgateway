@@ -26,7 +26,7 @@ func (g GinkgoTestReporter) Fatalf(format string, args ...interface{}) {
 	Fail(fmt.Sprintf(format, args...))
 }
 
-var _ = Describe("GwControllerMetrics", func() {
+var _ = FDescribe("GwControllerMetrics", func() {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
