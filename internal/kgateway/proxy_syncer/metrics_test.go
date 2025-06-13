@@ -68,10 +68,8 @@ func TestStatusSyncStart_Success(t *testing.T) {
 		Value: 1,
 	})
 
-	currentMetrics.AssertMetric("kgateway_status_syncer_status_sync_duration_seconds", &metricstest.ExpectedMetric{
-		Labels: []metrics.Label{
-			{Name: "syncer", Value: "test-syncer"},
-		},
+	currentMetrics.AssertMetricLabels("kgateway_status_syncer_status_sync_duration_seconds", []metrics.Label{
+		{Name: "syncer", Value: "test-syncer"},
 	})
 	currentMetrics.AssertHistogramPopulated("kgateway_status_syncer_status_sync_duration_seconds")
 }
@@ -327,40 +325,57 @@ func TestXDSSnapshotsCollectionMetrics(t *testing.T) {
 
 			gathered := metricstest.MustGatherMetrics(t)
 
-			gathered.AssertMetricsLabels("kgateway_collection_transforms_total", [][]metrics.Label{{
-				{Name: "collection", Value: "ClientXDSSnapshots"},
-				{Name: "result", Value: "success"},
-			}})
-
-			gathered.AssertMetricCounterValues("kgateway_collection_transforms_total", []float64{1})
+			gathered.AssertMetric("kgateway_collection_transforms_total", &metricstest.ExpectedMetric{
+				Labels: []metrics.Label{
+					{Name: "collection", Value: "ClientXDSSnapshots"},
+					{Name: "result", Value: "success"},
+				},
+				Value: 1,
+			})
 
 			gathered.AssertMetricsLabels("kgateway_collection_transform_duration_seconds", [][]metrics.Label{{
 				{Name: "collection", Value: "ClientXDSSnapshots"},
 			}})
 
-			gathered.AssertMetricGaugeValues("kgateway_collection_resources", []float64{1, 1, 1, 1})
+			gathered.AssertMetrics("kgateway_collection_resources", []metricstest.ExpectMetric{
+				&metricstest.ExpectedMetric{
+					Labels: []metrics.Label{
+						{Name: "collection", Value: "ClientXDSSnapshots"},
+						{Name: "name", Value: "test"},
+						{Name: "namespace", Value: "ns"},
+						{Name: "resource", Value: "Cluster"},
+					},
+					Value: 1,
+				},
+				&metricstest.ExpectedMetric{
+					Labels: []metrics.Label{
+						{Name: "collection", Value: "ClientXDSSnapshots"},
+						{Name: "name", Value: "test"},
+						{Name: "namespace", Value: "ns"},
+						{Name: "resource", Value: "Endpoint"},
+					},
+					Value: 1,
+				},
+				&metricstest.ExpectedMetric{
+					Labels: []metrics.Label{
+						{Name: "collection", Value: "ClientXDSSnapshots"},
+						{Name: "name", Value: "test"},
+						{Name: "namespace", Value: "ns"},
+						{Name: "resource", Value: "Listener"},
+					},
+					Value: 1,
+				},
+				&metricstest.ExpectedMetric{
+					Labels: []metrics.Label{
+						{Name: "collection", Value: "ClientXDSSnapshots"},
+						{Name: "name", Value: "test"},
+						{Name: "namespace", Value: "ns"},
+						{Name: "resource", Value: "Route"},
+					},
+					Value: 1,
+				},
+			})
 
-			gathered.AssertMetricsLabels("kgateway_collection_resources", [][]metrics.Label{{
-				{Name: "collection", Value: "ClientXDSSnapshots"},
-				{Name: "name", Value: "test"},
-				{Name: "namespace", Value: "ns"},
-				{Name: "resource", Value: "Cluster"},
-			}, {
-				{Name: "collection", Value: "ClientXDSSnapshots"},
-				{Name: "name", Value: "test"},
-				{Name: "namespace", Value: "ns"},
-				{Name: "resource", Value: "Endpoint"},
-			}, {
-				{Name: "collection", Value: "ClientXDSSnapshots"},
-				{Name: "name", Value: "test"},
-				{Name: "namespace", Value: "ns"},
-				{Name: "resource", Value: "Listener"},
-			}, {
-				{Name: "collection", Value: "ClientXDSSnapshots"},
-				{Name: "name", Value: "test"},
-				{Name: "namespace", Value: "ns"},
-				{Name: "resource", Value: "Route"},
-			}})
 		})
 	}
 }

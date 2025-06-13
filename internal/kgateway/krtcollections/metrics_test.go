@@ -271,30 +271,35 @@ func TestGatewaysCollectionMetrics(t *testing.T) {
 
 			gathered := metricstest.MustGatherMetrics(t)
 
-			gathered.AssertMetricsLabels("kgateway_collection_transforms_total", [][]metrics.Label{{
-				{Name: "collection", Value: "Gateways"},
-				{Name: "result", Value: "success"},
-			}})
+			gathered.AssertMetric("kgateway_collection_transforms_total", &metricstest.ExpectedMetric{
+				Labels: []metrics.Label{
+					{Name: "collection", Value: "Gateways"},
+					{Name: "result", Value: "success"},
+				},
+				Value: 1,
+			})
 
-			gathered.AssertMetricCounterValues("kgateway_collection_transforms_total", []float64{1})
+			gathered.AssertMetrics("kgateway_collection_resources", []metricstest.ExpectMetric{
+				&metricstest.ExpectedMetric{
+					Labels: []metrics.Label{
+						{Name: "collection", Value: "Gateways"},
+						{Name: "name", Value: "test-gateway"},
+						{Name: "namespace", Value: "ns"},
+						{Name: "resource", Value: "Gateway"},
+					},
+					Value: 1,
+				},
+				&metricstest.ExpectedMetric{
+					Labels: []metrics.Label{
+						{Name: "collection", Value: "Gateways"},
+						{Name: "name", Value: "test-gateway"},
+						{Name: "namespace", Value: "ns"},
+						{Name: "resource", Value: "Listeners"},
+					},
+					Value: 1,
+				},
+			})
 
-			gathered.AssertMetricsLabels("kgateway_collection_transform_duration_seconds", [][]metrics.Label{{
-				{Name: "collection", Value: "Gateways"},
-			}})
-
-			gathered.AssertMetricsLabels("kgateway_collection_resources", [][]metrics.Label{{
-				{Name: "collection", Value: "Gateways"},
-				{Name: "name", Value: "test-gateway"},
-				{Name: "namespace", Value: "ns"},
-				{Name: "resource", Value: "Gateway"},
-			}, {
-				{Name: "collection", Value: "Gateways"},
-				{Name: "name", Value: "test-gateway"},
-				{Name: "namespace", Value: "ns"},
-				{Name: "resource", Value: "Listeners"},
-			}})
-
-			gathered.AssertMetricGaugeValues("kgateway_collection_resources", []float64{1, 1})
 		})
 	}
 }
@@ -385,25 +390,27 @@ func TestK8SEndpointsCollectionMetrics(t *testing.T) {
 
 			gathered := metricstest.MustGatherMetrics(t)
 
-			gathered.AssertMetricsLabels("kgateway_collection_transforms_total", [][]metrics.Label{{
-				{Name: "collection", Value: "K8sEndpoints"},
-				{Name: "result", Value: "success"},
-			}})
-
-			gathered.AssertMetricCounterValues("kgateway_collection_transforms_total", []float64{1})
+			gathered.AssertMetric("kgateway_collection_transforms_total", &metricstest.ExpectedMetric{
+				Labels: []metrics.Label{
+					{Name: "collection", Value: "K8sEndpoints"},
+					{Name: "result", Value: "success"},
+				},
+				Value: 1,
+			})
 
 			gathered.AssertMetricsLabels("kgateway_collection_transform_duration_seconds", [][]metrics.Label{{
 				{Name: "collection", Value: "K8sEndpoints"},
 			}})
 
-			gathered.AssertMetricsLabels("kgateway_collection_resources", [][]metrics.Label{{
-				{Name: "collection", Value: "K8sEndpoints"},
-				{Name: "name", Value: "test"},
-				{Name: "namespace", Value: "ns"},
-				{Name: "resource", Value: "Endpoints"},
-			}})
-
-			gathered.AssertMetricGaugeValues("kgateway_collection_resources", []float64{1})
+			gathered.AssertMetric("kgateway_collection_resources", &metricstest.ExpectedMetric{
+				Labels: []metrics.Label{
+					{Name: "collection", Value: "K8sEndpoints"},
+					{Name: "name", Value: "test"},
+					{Name: "namespace", Value: "ns"},
+					{Name: "resource", Value: "Endpoints"},
+				},
+				Value: 1,
+			})
 		})
 	}
 }
