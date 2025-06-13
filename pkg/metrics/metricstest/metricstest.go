@@ -56,6 +56,7 @@ func (m *ExpectedMetricValueTest) GetLabels() []metrics.Label {
 	return m.Labels
 }
 
+// Between returns a function that checks if a value is between or equal to a minimum and maximum value.
 func Between(minVal, maxVal float64) func(value float64) bool {
 	return func(value float64) bool {
 		return value >= minVal && value <= maxVal
@@ -68,7 +69,6 @@ var _ ExpectMetric = &ExpectedMetricValueTest{}
 type GatheredMetrics interface {
 	AssertMetricsLabels(name string, expectedLabels [][]metrics.Label)
 	AssertMetricLabels(name string, expectedLabels []metrics.Label)
-	AssertMetricCounterValuesBetween(name string, expectedValues [][]float64)
 	AssertMetricHistogramValue(name string, expectedValue HistogramMetricOutput)
 	AssertHistogramPopulated(name string)
 	AssertMetricExists(name string)
@@ -178,24 +178,6 @@ func (g *prometheusGatheredMetrics) AssertMetricsLabels(name string, expectedLab
 	metrics := g.MustGetMetrics(name, len(expectedLabels))
 	for i, m := range metrics {
 		g.assertMetricObjLabels(m, expectedLabels[i])
-	}
-}
-
-// AssertMetricCounterValuesBetween asserts that a counter metric has the expected values for multiple instances.
-func (g *prometheusGatheredMetrics) AssertMetricCounterValuesBetween(name string, expectedValues [][]float64) {
-	metrics := g.MustGetMetrics(name, len(expectedValues))
-	for i, m := range metrics {
-		if len(expectedValues[i]) != 2 {
-			assert.Fail(g.t, "Expected exactly two values for value range for metric %s at index %d, got %d",
-				name, i, len(expectedValues[i]))
-		}
-
-		assert.GreaterOrEqual(g.t, m.GetCounter().GetValue(), expectedValues[i][0],
-			"Metric[%d] %s value mismatch - expected greater than or equal to %f, got %f",
-			i, name, expectedValues[i][0], m.GetCounter().GetValue())
-		assert.LessOrEqual(g.t, m.GetCounter().GetValue(), expectedValues[i][1],
-			"Metric[%d] %s value mismatch - expected less than or equal to %f, got %f",
-			i, name, expectedValues[i][1], m.GetCounter().GetValue())
 	}
 }
 
