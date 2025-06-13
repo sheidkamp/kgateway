@@ -5,10 +5,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kgateway.labels" . | nindent 4 }}
-  {{- with .Values.deploymentAnnotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- include "kgateway.annotations" . | nindent 4 }}
 spec:
   replicas: {{ .Values.controller.replicaCount }}
   selector:
