@@ -299,7 +299,6 @@ func TestGatewaysCollectionMetrics(t *testing.T) {
 					Value: 1,
 				},
 			})
-
 		})
 	}
 }

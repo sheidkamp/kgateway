@@ -56,9 +56,9 @@ func (m *ExpectedMetricValueTest) GetLabels() []metrics.Label {
 	return m.Labels
 }
 
-func Between(min, max float64) func(value float64) bool {
+func Between(minVal, maxVal float64) func(value float64) bool {
 	return func(value float64) bool {
-		return value >= min && value <= max
+		return value >= minVal && value <= maxVal
 	}
 }
 

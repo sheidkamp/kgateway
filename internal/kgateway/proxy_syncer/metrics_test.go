@@ -375,7 +375,6 @@ func TestXDSSnapshotsCollectionMetrics(t *testing.T) {
 					Value: 1,
 				},
 			})
-
 		})
 	}
 }
