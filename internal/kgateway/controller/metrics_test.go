@@ -60,19 +60,25 @@ var _ = Describe("GwControllerMetrics", func() {
 
 		gathered.AssertMetrics("kgateway_controller_reconciliations_total", []metricstest.ExpectMetric{
 			&metricstest.ExpectedMetricValueTest{
-				Labels: []metrics.Label{{Name: "controller", Value: "kgateway.dev/kgateway"}, {Name: "result", Value: "success"}},
+				Labels: []metrics.Label{{Name: "controller", Value: "gateway"}, {Name: "result", Value: "success"}},
 				Test:   metricstest.Between(1, 20),
 			},
 			&metricstest.ExpectedMetricValueTest{
-				Labels: []metrics.Label{{Name: "controller", Value: "kgateway.dev/kgateway-gatewayclass-provisioner"}, {Name: "result", Value: "success"}},
+				Labels: []metrics.Label{{Name: "controller", Value: "gatewayclass"}, {Name: "result", Value: "success"}},
+				Test:   metricstest.Between(1, 20),
+			},
+			&metricstest.ExpectedMetricValueTest{
+				Labels: []metrics.Label{{Name: "controller", Value: "gatewayclass-provisioner"}, {Name: "result", Value: "success"}},
 				Test:   metricstest.Between(1, 10),
 			},
 		})
 
 		gathered.AssertMetricsLabels("kgateway_controller_reconcile_duration_seconds", [][]metrics.Label{{
-			{Name: "controller", Value: "kgateway.dev/kgateway"},
+			{Name: "controller", Value: "gateway"},
 		}, {
-			{Name: "controller", Value: "kgateway.dev/kgateway-gatewayclass-provisioner"},
+			{Name: "controller", Value: "gatewayclass"},
+		}, {
+			{Name: "controller", Value: "gatewayclass-provisioner"},
 		}})
 	})
 

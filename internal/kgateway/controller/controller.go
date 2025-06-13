@@ -87,7 +87,7 @@ func NewBaseGatewayController(ctx context.Context, cfg GatewayConfig) error {
 			cli:          cfg.Mgr.GetClient(),
 			scheme:       cfg.Mgr.GetScheme(),
 			customEvents: make(chan event.TypedGenericEvent[ir.Gateway], 1024),
-			metrics:      newControllerMetricsRecorder(cfg.ControllerName),
+			metrics:      newControllerMetricsRecorder("gatewayclass"),
 		},
 	}
 
@@ -117,7 +117,7 @@ func NewBaseInferencePoolController(ctx context.Context, poolCfg *InferencePoolC
 			cli:          poolCfg.Mgr.GetClient(),
 			scheme:       poolCfg.Mgr.GetScheme(),
 			customEvents: make(chan event.TypedGenericEvent[ir.Gateway], 1024),
-			metrics:      newControllerMetricsRecorder(poolCfg.ControllerName),
+			metrics:      newControllerMetricsRecorder("gatewayclass-inferencepool"),
 		},
 	}
 
@@ -319,7 +319,7 @@ func (c *controllerBuilder) watchGw(ctx context.Context) error {
 		controllerName: c.cfg.ControllerName,
 		autoProvision:  c.cfg.AutoProvision,
 		deployer:       d,
-		metrics:        newControllerMetricsRecorder(c.cfg.ControllerName),
+		metrics:        newControllerMetricsRecorder("gateway"),
 	})
 }
 
@@ -445,7 +445,7 @@ func (c *controllerBuilder) watchInferencePool(ctx context.Context) error {
 			cli:      c.cfg.Mgr.GetClient(),
 			scheme:   c.cfg.Mgr.GetScheme(),
 			deployer: d,
-			metrics:  newControllerMetricsRecorder(c.cfg.ControllerName),
+			metrics:  newControllerMetricsRecorder("gateway-inferencepool"),
 		}
 		if err := buildr.Complete(r); err != nil {
 			return err

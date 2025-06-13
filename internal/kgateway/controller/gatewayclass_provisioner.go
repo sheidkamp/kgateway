@@ -52,7 +52,7 @@ func NewGatewayClassProvisioner(mgr ctrl.Manager, controllerName string, classCo
 		controllerName:     controllerName,
 		classConfigs:       classConfigs,
 		initialReconcileCh: initialReconcileCh,
-		metrics:            newControllerMetricsRecorder(controllerName + "-gatewayclass-provisioner"),
+		metrics:            newControllerMetricsRecorder("gatewayclass-provisioner"),
 	}
 	if err := provisioner.SetupWithManager(mgr); err != nil {
 		return err
