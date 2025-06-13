@@ -25,15 +25,23 @@ func TestCounterInterface(t *testing.T) {
 	counter.Inc(metrics.Label{Name: "label1", Value: "value1"}, metrics.Label{Name: "label2", Value: "value2"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("kgateway_test_total", 1.0)
-	gathered.AssertMetricLabels("kgateway_test_total", []metrics.Label{
-		{Name: "label1", Value: "value1"},
-		{Name: "label2", Value: "value2"},
+	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "label1", Value: "value1"},
+			{Name: "label2", Value: "value2"},
+		},
+		Value: 1.0,
 	})
 
 	counter.Add(5.0, metrics.Label{Name: "label1", Value: "value1"}, metrics.Label{Name: "label2", Value: "value2"})
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("kgateway_test_total", 6.0)
+	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "label1", Value: "value1"},
+			{Name: "label2", Value: "value2"},
+		},
+		Value: 6.0,
+	})
 
 	counter.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
@@ -54,11 +62,13 @@ func TestCounterPartialLabels(t *testing.T) {
 	counter.Inc(metrics.Label{Name: "label3", Value: "value3"}, metrics.Label{Name: "label1", Value: "value1"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("kgateway_test_total", 1.0)
-	gathered.AssertMetricLabels("kgateway_test_total", []metrics.Label{
-		{Name: "label1", Value: "value1"},
-		{Name: "label2", Value: ""},
-		{Name: "label3", Value: "value3"},
+	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "label1", Value: "value1"},
+			{Name: "label2", Value: ""},
+			{Name: "label3", Value: "value3"},
+		},
+		Value: 1.0,
 	})
 }
 
@@ -76,7 +86,10 @@ func TestCounterNoLabels(t *testing.T) {
 	counter.Add(2.5)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricCounterValue("kgateway_test_total", 3.5)
+	gathered.AssertMetric("kgateway_test_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{},
+		Value:  3.5,
+	})
 }
 
 func TestCounterRegistrationPanic(t *testing.T) {
@@ -207,16 +220,24 @@ func TestGaugeInterface(t *testing.T) {
 	gauge.Set(10.0, labels...)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("kgateway_tests", 10.0)
-	gathered.AssertMetricLabels("kgateway_tests", labels)
+	gathered.AssertMetric("kgateway_tests", &metricstest.ExpectedMetric{
+		Labels: labels,
+		Value:  10.0,
+	})
 
 	gauge.Add(5.0, labels...)
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("kgateway_tests", 15.0)
+	gathered.AssertMetric("kgateway_tests", &metricstest.ExpectedMetric{
+		Labels: labels,
+		Value:  15.0,
+	})
 
 	gauge.Sub(3.0, labels...)
 	gathered = metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("kgateway_tests", 12.0)
+	gathered.AssertMetric("kgateway_tests", &metricstest.ExpectedMetric{
+		Labels: labels,
+		Value:  12.0,
+	})
 
 	gauge.Reset()
 	gathered = metricstest.MustGatherMetrics(t)
@@ -237,11 +258,13 @@ func TestGaugePartialLabels(t *testing.T) {
 	gauge.Set(42.0, metrics.Label{Name: "label3", Value: "value3"}, metrics.Label{Name: "label1", Value: "value1"})
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("kgateway_tests_partial", 42.0)
-	gathered.AssertMetricLabels("kgateway_tests_partial", []metrics.Label{
-		{Name: "label1", Value: "value1"},
-		{Name: "label2", Value: ""},
-		{Name: "label3", Value: "value3"},
+	gathered.AssertMetric("kgateway_tests_partial", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "label1", Value: "value1"},
+			{Name: "label2", Value: ""},
+			{Name: "label3", Value: "value3"},
+		},
+		Value: 42.0,
 	})
 }
 
@@ -260,7 +283,10 @@ func TestGaugeNoLabels(t *testing.T) {
 	gauge.Sub(25.0)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricGaugeValue("kgateway_tests_no_labels", 125.0)
+	gathered.AssertMetric("kgateway_tests_no_labels", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{},
+		Value:  125.0,
+	})
 }
 
 func TestGaugeRegistrationPanic(t *testing.T) {
@@ -333,10 +359,13 @@ func TestValidateLabelsOrder(t *testing.T) {
 
 	gathered := metricstest.MustGatherMetrics(t)
 	// Labels are provided to the metric in the order they are defined, and gathered in alphabetical order.
-	gathered.AssertMetricLabels("kgateway_test_label_order_total", []metrics.Label{
-		{Name: "a_label", Value: "a_value"},
-		{Name: "m_label", Value: "m_value"},
-		{Name: "z_label", Value: "z_value"},
+	gathered.AssertMetric("kgateway_test_label_order_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "a_label", Value: "a_value"},
+			{Name: "m_label", Value: "m_value"},
+			{Name: "z_label", Value: "z_value"},
+		},
+		Value: 1.0,
 	})
 }
 
@@ -355,10 +384,13 @@ func TestLabelsWithEmptyValues(t *testing.T) {
 	)
 
 	gathered := metricstest.MustGatherMetrics(t)
-	gathered.AssertMetricLabels("kgateway_test_empty_labels_total", []metrics.Label{
-		{Name: "label1", Value: ""},
-		{Name: "label2", Value: "non_empty"},
-		{Name: "label3", Value: ""},
+	gathered.AssertMetric("kgateway_test_empty_labels_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "label1", Value: ""},
+			{Name: "label2", Value: "non_empty"},
+			{Name: "label3", Value: ""},
+		},
+		Value: 1.0,
 	})
 }
 

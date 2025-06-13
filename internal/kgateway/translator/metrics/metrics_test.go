@@ -37,10 +37,12 @@ func TestNewTranslatorRecorder(t *testing.T) {
 }
 
 func assertTranslationsRunning(currentMetrics metricstest.GatheredMetrics, translatorName string, count int) {
-	currentMetrics.AssertMetricLabels("kgateway_translator_translations_running", []metrics.Label{
-		{Name: "translator", Value: translatorName},
+	currentMetrics.AssertMetric("kgateway_translator_translations_running", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "translator", Value: translatorName},
+		},
+		Value: float64(count),
 	})
-	currentMetrics.AssertMetricGaugeValue("kgateway_translator_translations_running", float64(count))
 }
 
 func TestTranslationStart_Success(t *testing.T) {
@@ -64,12 +66,13 @@ func TestTranslationStart_Success(t *testing.T) {
 	// Check the translations_running metric
 	assertTranslationsRunning(currentMetrics, "test-translator", 0)
 
-	// Check the translations_total metric
-	currentMetrics.AssertMetricLabels("kgateway_translator_translations_total", []metrics.Label{
-		{Name: "result", Value: "success"},
-		{Name: "translator", Value: "test-translator"},
+	currentMetrics.AssertMetric("kgateway_translator_translations_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "result", Value: "success"},
+			{Name: "translator", Value: "test-translator"},
+		},
+		Value: 1,
 	})
-	currentMetrics.AssertMetricCounterValue("kgateway_translator_translations_total", 1)
 
 	// Check the translation_duration_seconds metric
 	currentMetrics.AssertMetricLabels("kgateway_translator_translation_duration_seconds", []metrics.Label{
@@ -91,11 +94,17 @@ func TestTranslationStart_Error(t *testing.T) {
 	currentMetrics = metricstest.MustGatherMetrics(t)
 	assertTranslationsRunning(currentMetrics, "test-translator", 0)
 
-	currentMetrics.AssertMetricLabels("kgateway_translator_translations_total", []metrics.Label{
-		{Name: "result", Value: "error"},
-		{Name: "translator", Value: "test-translator"},
-	})
-	currentMetrics.AssertMetricCounterValue("kgateway_translator_translations_total", 1)
+	currentMetrics.AssertMetric(
+		"kgateway_translator_translations_total",
+		&metricstest.ExpectedMetric{
+			Labels: []metrics.Label{
+				{Name: "result", Value: "error"},
+				{Name: "translator", Value: "test-translator"},
+			},
+			Value: 1,
+		},
+	)
+	currentMetrics.AssertHistogramPopulated("kgateway_translator_translation_duration_seconds")
 }
 
 func TestTranslationMetricsNotActive(t *testing.T) {

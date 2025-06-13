@@ -2,6 +2,7 @@
 package metricstest
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -20,19 +21,60 @@ type HistogramMetricOutput struct {
 	SampleSum   float64
 }
 
+type ExpectMetric interface {
+	GetLabels() []metrics.Label
+	Match(t require.TestingT, value float64) bool
+}
+
+// ExpectedMetric is a struct to hold a metric label and value.
+type ExpectedMetric struct {
+	Labels []metrics.Label
+	Value  float64
+}
+
+func (m *ExpectedMetric) GetLabels() []metrics.Label {
+	return m.Labels
+}
+
+func (m *ExpectedMetric) Match(t require.TestingT, value float64) bool {
+	return m.Value == value
+}
+
+var _ ExpectMetric = &ExpectedMetric{}
+
+// ExpectedMetricValueTest is a struct to hold a metric label and a test function to match the value.
+type ExpectedMetricValueTest struct {
+	Labels []metrics.Label
+	Test   func(value float64) bool
+}
+
+func (m *ExpectedMetricValueTest) Match(t require.TestingT, value float64) bool {
+	return m.Test(value)
+}
+
+func (m *ExpectedMetricValueTest) GetLabels() []metrics.Label {
+	return m.Labels
+}
+
+func Between(minVal, maxVal float64) func(value float64) bool {
+	return func(value float64) bool {
+		return value >= minVal && value <= maxVal
+	}
+}
+
+var _ ExpectMetric = &ExpectedMetricValueTest{}
+
 // Gathered metrics interface.
 type GatheredMetrics interface {
 	AssertMetricsLabels(name string, expectedLabels [][]metrics.Label)
 	AssertMetricLabels(name string, expectedLabels []metrics.Label)
-	AssertMetricCounterValue(name string, expectedValue float64)
-	AssertMetricCounterValues(name string, expectedValues []float64)
 	AssertMetricCounterValuesBetween(name string, expectedValues [][]float64)
-	AssertMetricGaugeValue(name string, expectedValue float64)
-	AssertMetricGaugeValues(name string, expectedValues []float64)
 	AssertMetricHistogramValue(name string, expectedValue HistogramMetricOutput)
 	AssertHistogramPopulated(name string)
 	AssertMetricExists(name string)
 	AssertMetricNotExists(name string)
+	AssertMetric(name string, expectedMetric ExpectMetric)
+	AssertMetrics(name string, expectedMetrics []ExpectMetric)
 }
 
 // MustGatherMetrics gathers metrics and returns them as GatheredMetrics.
@@ -40,13 +82,13 @@ func MustGatherMetrics(t require.TestingT) GatheredMetrics {
 	return MustGatherPrometheusMetrics(t)
 }
 
-var _ GatheredMetrics = &prometheusGatheredMetrics{}
-
 // Gathered metrics implementation for prometheus metrics.
 type prometheusGatheredMetrics struct {
 	metrics map[string][]*dto.Metric
 	t       require.TestingT
 }
+
+var _ GatheredMetrics = &prometheusGatheredMetrics{}
 
 // MustGatherPrometheusMetrics gathers metrics from the registry and returns them.
 func MustGatherPrometheusMetrics(t require.TestingT) GatheredMetrics {
@@ -82,43 +124,60 @@ func (g *prometheusGatheredMetrics) MustGetMetrics(name string, expectedCount in
 	return m
 }
 
-// AssertMetricObjLabels asserts that a metric has the expected labels.
-func (g *prometheusGatheredMetrics) AssertMetricObjLabels(metric *dto.Metric, expectedLabels []metrics.Label) {
-	assert.Equal(g.t, len(expectedLabels), len(metric.GetLabel()), "Expected %d labels, got %d", len(expectedLabels), len(metric.GetLabel()))
-	for i, label := range expectedLabels {
-		assert.Equal(g.t, label.Name, metric.GetLabel()[i].GetName(), "Label %d name mismatch - expected %s, got %s", i, label.Name, metric.GetLabel()[i].GetName())
-		assert.Equal(g.t, label.Value, metric.GetLabel()[i].GetValue(), "Label %d value mismatch - expected %s, got %s", i, label.Value, metric.GetLabel()[i].GetValue())
+// assertMetricObjLabels asserts that a metric has the expected labels.
+func (g *prometheusGatheredMetrics) assertMetricObjLabels(metric *dto.Metric, expectedLabels []metrics.Label) {
+	err := g.metricObjLabelsMatch(metric, expectedLabels)
+	assert.NoError(g.t, err)
+}
+
+func (g *prometheusGatheredMetrics) metricObjLabelsMatch(metric *dto.Metric, expectedLabels []metrics.Label) error {
+	if len(expectedLabels) != len(metric.GetLabel()) {
+		return fmt.Errorf("Expected %d labels, got %d", len(expectedLabels), len(metric.GetLabel()))
 	}
+
+	labelMap := make(map[string]string, len(expectedLabels))
+
+	for _, label := range expectedLabels {
+		labelMap[label.Name] = label.Value
+	}
+
+	for _, label := range metric.GetLabel() {
+		labelValue, ok := labelMap[label.GetName()]
+		if !ok {
+			return fmt.Errorf("Label %s not found", label.GetName())
+		}
+		if labelValue != label.GetValue() {
+			return fmt.Errorf("Label %s value mismatch - expected %s, got %s", label.GetName(), labelValue, label.GetValue())
+		}
+	}
+
+	return nil
+}
+
+// findMetricObj checks that the labels on a gathered metric match one of the expected sets of labels and returns the match
+func (g *prometheusGatheredMetrics) findMetricObj(metric *dto.Metric, metricsToSearch []ExpectMetric) ExpectMetric {
+	for _, m := range metricsToSearch {
+		err := g.metricObjLabelsMatch(metric, m.GetLabels())
+		if err == nil {
+			return m
+		}
+	}
+
+	return nil
 }
 
 // AssertMetricLabels asserts that a metric has the expected labels.
 func (g *prometheusGatheredMetrics) AssertMetricLabels(name string, expectedLabels []metrics.Label) {
 	metric := g.MustGetMetric(name)
 
-	g.AssertMetricObjLabels(metric, expectedLabels)
+	g.assertMetricObjLabels(metric, expectedLabels)
 }
 
 // AssertMetricsLabels asserts that multiple metrics have the expected labels.
 func (g *prometheusGatheredMetrics) AssertMetricsLabels(name string, expectedLabels [][]metrics.Label) {
 	metrics := g.MustGetMetrics(name, len(expectedLabels))
 	for i, m := range metrics {
-		g.AssertMetricObjLabels(m, expectedLabels[i])
-	}
-}
-
-// AssertMetricCounterValue asserts that a counter metric has the expected value.
-func (g *prometheusGatheredMetrics) AssertMetricCounterValue(name string, expectedValue float64) {
-	metric := g.MustGetMetric(name)
-	assert.Equal(g.t, expectedValue, metric.GetCounter().GetValue(), "Metric %s value mismatch - expected %f, got %f", name, expectedValue, metric.GetCounter().GetValue())
-}
-
-// AssertMetricCounterValues asserts that a counter metric has the expected values for multiple instances.
-func (g *prometheusGatheredMetrics) AssertMetricCounterValues(name string, expectedValues []float64) {
-	metrics := g.MustGetMetrics(name, len(expectedValues))
-	for i, m := range metrics {
-		assert.Equal(g.t, expectedValues[i], m.GetCounter().GetValue(),
-			"Metric[%d] %s value mismatch - expected %f, got %f",
-			i, name, expectedValues[i], m.GetCounter().GetValue())
+		g.assertMetricObjLabels(m, expectedLabels[i])
 	}
 }
 
@@ -137,20 +196,6 @@ func (g *prometheusGatheredMetrics) AssertMetricCounterValuesBetween(name string
 		assert.LessOrEqual(g.t, m.GetCounter().GetValue(), expectedValues[i][1],
 			"Metric[%d] %s value mismatch - expected less than or equal to %f, got %f",
 			i, name, expectedValues[i][1], m.GetCounter().GetValue())
-	}
-}
-
-// AssertMetricCounterValue asserts that a counter metric has the expected value.
-func (g *prometheusGatheredMetrics) AssertMetricGaugeValue(name string, expectedValue float64) {
-	metric := g.MustGetMetric(name)
-	assert.Equal(g.t, expectedValue, metric.GetGauge().GetValue(), "Metric %s value mismatch - expected %f, got %f", name, expectedValue, metric.GetGauge().GetValue())
-}
-
-// AssertMetricGaugeValues asserts that a gauge metric has the expected values for multiple instances.
-func (g *prometheusGatheredMetrics) AssertMetricGaugeValues(name string, expectedValues []float64) {
-	metrics := g.MustGetMetrics(name, len(expectedValues))
-	for i, m := range metrics {
-		assert.Equal(g.t, expectedValues[i], m.GetGauge().GetValue(), "Metric[%d] %s value mismatch - expected %f, got %f", i, name, expectedValues[i], m.GetGauge().GetValue())
 	}
 }
 
@@ -183,6 +228,32 @@ func (g *prometheusGatheredMetrics) AssertMetricExists(name string) {
 func (g *prometheusGatheredMetrics) AssertMetricNotExists(name string) {
 	_, ok := g.metrics[name]
 	assert.False(g.t, ok, "Metric %s found", name)
+}
+
+// Works for counters and gauges, but not histograms or summaries.
+func (g *prometheusGatheredMetrics) AssertMetric(name string, expected ExpectMetric) {
+	g.AssertMetrics(name, []ExpectMetric{expected})
+}
+
+func (g *prometheusGatheredMetrics) AssertMetrics(name string, expectedMetrics []ExpectMetric) {
+	for _, m := range g.metrics[name] {
+		matchedExpectedMetric := g.findMetricObj(m, expectedMetrics)
+		assert.NotNil(g.t, matchedExpectedMetric, "Metric %s with labels %v not found", name, m.GetLabel())
+		assert.True(g.t, matchedExpectedMetric.Match(g.t, g.mustGetMetricValue(m)), "Metric %s value mismatch -  value is %f", name, g.mustGetMetricValue(m))
+	}
+}
+
+// Both counters and gauges are supported.
+func (g *prometheusGatheredMetrics) mustGetMetricValue(metric *dto.Metric) float64 {
+	switch {
+	case metric.GetCounter() != nil:
+		return metric.GetCounter().GetValue()
+	case metric.GetGauge() != nil:
+		return metric.GetGauge().GetValue()
+	default:
+		assert.Fail(g.t, "Metric is not a counter or gauge")
+		return 0
+	}
 }
 
 // GatherAndLint gathers metrics and runs a linter on them.

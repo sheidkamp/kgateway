@@ -58,21 +58,22 @@ var _ = Describe("GwControllerMetrics", func() {
 
 		gathered := metricstest.MustGatherMetrics(GinkgoT())
 
-		gathered.AssertMetricsLabels("kgateway_controller_reconciliations_total", [][]metrics.Label{{
-			{Name: "controller", Value: "kgateway.dev/kgateway"},
-			{Name: "result", Value: "success"},
-		}, {
-			{Name: "controller", Value: "kgateway.dev/kgateway-gatewayclass-provisioner"},
-			{Name: "result", Value: "success"},
-		}})
+		gathered.AssertMetrics("kgateway_controller_reconciliations_total", []metricstest.ExpectMetric{
+			&metricstest.ExpectedMetricValueTest{
+				Labels: []metrics.Label{{Name: "controller", Value: "kgateway.dev/kgateway"}, {Name: "result", Value: "success"}},
+				Test:   metricstest.Between(1, 20),
+			},
+			&metricstest.ExpectedMetricValueTest{
+				Labels: []metrics.Label{{Name: "controller", Value: "kgateway.dev/kgateway-gatewayclass-provisioner"}, {Name: "result", Value: "success"}},
+				Test:   metricstest.Between(1, 10),
+			},
+		})
 
 		gathered.AssertMetricsLabels("kgateway_controller_reconcile_duration_seconds", [][]metrics.Label{{
 			{Name: "controller", Value: "kgateway.dev/kgateway"},
 		}, {
 			{Name: "controller", Value: "kgateway.dev/kgateway-gatewayclass-provisioner"},
 		}})
-
-		gathered.AssertMetricCounterValuesBetween("kgateway_controller_reconciliations_total", [][]float64{{1, 20}, {1, 10}})
 	})
 
 	Context("when metrics are not active", func() {
