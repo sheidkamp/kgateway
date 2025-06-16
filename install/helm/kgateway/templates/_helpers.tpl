@@ -61,15 +61,3 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
-
-{{/*
-Common annotations
-*/}}
-{{- define "kgateway.annotations" -}}
-{{- if .Values.deploymentAnnotations }}
-{{- toYaml .Values.deploymentAnnotations }}
-{{- end }}
-{{- if .Values.metricsAnnotations }}
-{{- toYaml .Values.metricsAnnotations }}
-{{- end }}
-{{- end }}

@@ -19,14 +19,11 @@ serviceAccount:
 # -- Add annotations to the kgateway deployment.
 deploymentAnnotations: {}
 
-# -- Include prometheus.io annotations for metrics scrapting information.
-metricsAnnotations:
+# -- Add annotations to the kgateway pods.
+podAnnotations:
   prometheus.io/path: "/metrics"
   prometheus.io/port: "9092"
   prometheus.io/scrape: "true"
-
-# -- Add annotations to the kgateway pods.
-podAnnotations: {}
 
 # -- Set the pod-level security context. For example, 'fsGroup: 2000' sets the filesystem group to 2000.
 podSecurityContext: {}
