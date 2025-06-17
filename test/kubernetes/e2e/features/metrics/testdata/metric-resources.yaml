@@ -22,7 +22,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: example1
+  name: example-route-1
   namespace: default
 spec:
   parentRefs:
@@ -39,7 +39,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: example2
+  name: example-route-2
   namespace: default
 spec:
   parentRefs:
@@ -78,7 +78,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: example-ls1
+  name: example-route-ls1
   namespace: default
 spec:
   parentRefs:
