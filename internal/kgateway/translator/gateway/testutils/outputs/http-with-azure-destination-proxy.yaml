@@ -24,7 +24,7 @@ listeners:
                   name: azure-upstream
                   namespace: default
   bindAddress: '::'
-  bindPort: 8080
+  bindPort: 80
   name: http
 metadata:
   labels:

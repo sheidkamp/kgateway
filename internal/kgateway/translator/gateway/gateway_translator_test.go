@@ -17,6 +17,8 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/reporter"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
 	translatortest "github.com/kgateway-dev/kgateway/v2/test/translator"
+
+	"github.com/onsi/gomega/format"
 )
 
 type translatorTestCase struct {
@@ -24,6 +26,10 @@ type translatorTestCase struct {
 	outputFile    string
 	gwNN          types.NamespacedName
 	assertReports translatortest.AssertReports
+}
+
+func init() {
+	format.MaxLength = 1000000
 }
 
 var _ = DescribeTable("Basic GatewayTranslator Tests",
