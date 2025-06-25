@@ -14,7 +14,6 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ports"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/listener"
 )
 
@@ -57,7 +56,7 @@ func appendPortValue(gwPorts []helmPort, port uint16, name string, gwp *v1alpha1
 		return gwPorts
 	}
 
-	targetPort := ports.TranslatePort(port)
+	targetPort := port
 	portName := sanitizePortName(name)
 	protocol := "TCP"
 

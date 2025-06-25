@@ -18,7 +18,6 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ports"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	route "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/httproute"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/routeutils"
@@ -130,7 +129,7 @@ func (ml *MergedListeners) appendHttpListener(
 		parents: []httpFilterChainParent{parent},
 	}
 	listenerName := GenerateListenerName(listener)
-	finalPort := gwv1.PortNumber(ports.TranslatePort(uint16(listener.Port)))
+	finalPort := gwv1.PortNumber(uint16(listener.Port))
 
 	for _, lis := range ml.Listeners {
 		if lis.port == finalPort {
@@ -174,7 +173,7 @@ func (ml *MergedListeners) appendHttpsListener(
 
 	// Perform the port transformation away from privileged ports only once to use
 	// during both lookup and when appending the listener.
-	finalPort := gwv1.PortNumber(ports.TranslatePort(uint16(listener.Port)))
+	finalPort := gwv1.PortNumber(uint16(listener.Port))
 
 	listenerName := GenerateListenerName(listener)
 	for _, lis := range ml.Listeners {
@@ -231,7 +230,7 @@ func (ml *MergedListeners) AppendTcpListener(
 		parents: parent,
 	}
 	listenerName := GenerateListenerName(listener)
-	finalPort := gwv1.PortNumber(ports.TranslatePort(uint16(listener.Port)))
+	finalPort := gwv1.PortNumber(uint16(listener.Port))
 
 	for _, lis := range ml.Listeners {
 		if lis.port == finalPort {
@@ -292,7 +291,7 @@ func (ml *MergedListeners) AppendTlsListener(
 	}
 
 	listenerName := GenerateListenerName(listener)
-	finalPort := gwv1.PortNumber(ports.TranslatePort(uint16(listener.Port)))
+	finalPort := gwv1.PortNumber(uint16(listener.Port))
 
 	for _, lis := range ml.Listeners {
 		if lis.port == finalPort {

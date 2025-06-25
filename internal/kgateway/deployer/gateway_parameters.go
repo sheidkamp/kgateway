@@ -435,6 +435,16 @@ func defaultGatewayParameters(imageInfo *ImageInfo) *v1alpha1.GatewayParameters 
 				Service: &v1alpha1.Service{
 					Type: (*corev1.ServiceType)(ptr.To(string(corev1.ServiceTypeLoadBalancer))),
 				},
+				PodTemplate: &v1alpha1.Pod{
+					SecurityContext: &corev1.PodSecurityContext{
+						Sysctls: []corev1.Sysctl{
+							{
+								Name:  "net.ipv4.ip_unprivileged_port_start",
+								Value: "0",
+							},
+						},
+					},
+				},
 				EnvoyContainer: &v1alpha1.EnvoyContainer{
 					Bootstrap: &v1alpha1.EnvoyBootstrap{
 						LogLevel: ptr.To("info"),
