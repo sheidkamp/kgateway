@@ -1812,14 +1812,14 @@ var _ = Describe("Deployer", func() {
 					return nil
 				},
 			}),
-			Entry("port offset", defaultInput(), &expectedOutput{
+			Entry("no port offset", defaultInput(), &expectedOutput{
 				validationFunc: func(objs clientObjects, inp *input) error {
 					svc := objs.findService(defaultNamespace, defaultServiceName)
 					Expect(svc).NotTo(BeNil())
 
 					port := svc.Spec.Ports[0]
 					Expect(port.Port).To(Equal(int32(80)))
-					Expect(port.TargetPort.IntVal).To(Equal(int32(8080)))
+					Expect(port.TargetPort.IntVal).To(Equal(int32(80)))
 					Expect(port.NodePort).To(Equal(int32(0)))
 					return nil
 				},
@@ -1854,7 +1854,7 @@ var _ = Describe("Deployer", func() {
 
 					port := svc.Spec.Ports[0]
 					Expect(port.Port).To(Equal(int32(80)))
-					Expect(port.TargetPort.IntVal).To(Equal(int32(8080)))
+					Expect(port.TargetPort.IntVal).To(Equal(int32(80)))
 					Expect(port.NodePort).To(Equal(int32(30000)))
 					return nil
 				},
@@ -1894,7 +1894,7 @@ var _ = Describe("Deployer", func() {
 					Expect(svc.Spec.Ports).To(HaveLen(1))
 					port := svc.Spec.Ports[0]
 					Expect(port.Port).To(Equal(int32(80)))
-					Expect(port.TargetPort.IntVal).To(Equal(int32(8080)))
+					Expect(port.TargetPort.IntVal).To(Equal(int32(80)))
 					return nil
 				},
 			}),
