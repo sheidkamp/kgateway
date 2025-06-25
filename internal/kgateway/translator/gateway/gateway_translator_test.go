@@ -12,6 +12,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/reports"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/reporter"
@@ -33,14 +34,14 @@ func init() {
 }
 
 var _ = DescribeTable("Basic GatewayTranslator Tests",
-	func(in translatorTestCase) {
+	func(in translatorTestCase, settingOpts ...translatortest.SettingsOpts) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		dir := fsutils.MustGetThisDir()
 
 		inputFiles := []string{filepath.Join(dir, "testutils/inputs/", in.inputFile)}
 		expectedProxyFile := filepath.Join(dir, "testutils/outputs/", in.outputFile)
-		translatortest.TestTranslation(GinkgoT(), ctx, inputFiles, expectedProxyFile, in.gwNN, in.assertReports)
+		translatortest.TestTranslation(GinkgoT(), ctx, inputFiles, expectedProxyFile, in.gwNN, in.assertReports, settingOpts...)
 	},
 	Entry(
 		"http gateway with basic routing",
@@ -113,7 +114,7 @@ var _ = DescribeTable("Basic GatewayTranslator Tests",
 			},
 		}),
 	Entry(
-		"gateway with correctly sorted routes",
+		"Gateway API route sorting",
 		translatorTestCase{
 			inputFile:  "route-sort.yaml",
 			outputFile: "route-sort.yaml",
@@ -122,6 +123,20 @@ var _ = DescribeTable("Basic GatewayTranslator Tests",
 				Name:      "example-gateway",
 			},
 		}),
+	Entry(
+		"weight based route sorting",
+		translatorTestCase{
+			inputFile:  "route-sort-weighted.yaml",
+			outputFile: "route-sort-weighted.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "infra",
+				Name:      "example-gateway",
+			},
+		},
+		func(s *settings.Settings) {
+			s.WeightedRoutePrecedence = true
+		},
+	),
 	Entry(
 		"httproute with missing backend reports correctly",
 		translatorTestCase{
@@ -776,7 +791,9 @@ var _ = DescribeTable("Discovery Namespace Selector",
 					Expect(translatortest.AreReportsSuccess(gwNN, reportsMap)).To(MatchError(ContainSubstring(errdesc)))
 				}
 			},
-			translatortest.SettingsWithDiscoveryNamespaceSelectors(cfgJSON),
+			func(s *settings.Settings) {
+				s.DiscoveryNamespaceSelectors = cfgJSON
+			},
 		)
 	},
 	Entry("Select all resources",
