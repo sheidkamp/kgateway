@@ -66,10 +66,6 @@ func (gp *GatewayParameters) AllKnownGatewayParameters() []client.Object {
 func (gp *GatewayParameters) GetValues(ctx context.Context, gw *api.Gateway, inputs *Inputs) (map[string]any, error) {
 	logger := log.FromContext(ctx)
 
-	// Check if the gateway uses low ports
-	useLowPorts := gatewayUsesLowPorts(gw)
-	inputs.UseLowPorts = useLowPorts
-
 	ref, err := gp.getGatewayParametersRef(ctx, gw)
 	if err != nil {
 		return nil, err
@@ -192,6 +188,10 @@ func (k *kGatewayParameters) getDefaultGatewayParameters(ctx context.Context, gw
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if the gateway uses low ports
+	useLowPorts := gatewayUsesLowPorts(gw)
+	k.inputs.UseLowPorts = useLowPorts
 
 	// Get the GatewayParameters for the GatewayClass
 	return k.getGatewayParametersForGatewayClass(ctx, gwc)
@@ -365,6 +365,49 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	return vals, nil
 }
 
+type gatewayOpts struct {
+	gatewayClass *api.GatewayClass
+	useLowPorts  bool
+	imageInfo    *ImageInfo
+}
+
+func getGatewayOpts(ctx context.Context, cli client.Client, gw *api.Gateway) (*gatewayOpts, error) {
+	gwc, err := getGatewayClassFromGateway(ctx, cli, gw)
+	if err != nil {
+		return nil, err
+	}
+	return &gatewayOpts{
+		gatewayClass: gwc,
+		useLowPorts:  gatewayUsesLowPorts(gw),
+	}, nil
+}
+
+func gatewayUsesLowPorts(gw *api.Gateway) bool {
+	for _, l := range gw.Spec.Listeners {
+		if int32(l.Port) < 1024 {
+			return true
+		}
+	}
+	return false
+}
+
+func getGatewayClassFromGateway(ctx context.Context, cli client.Client, gw *api.Gateway) (*api.GatewayClass, error) {
+	if gw == nil {
+		return nil, eris.New("nil Gateway")
+	}
+	if gw.Spec.GatewayClassName == "" {
+		return nil, eris.New("GatewayClassName must not be empty")
+	}
+
+	gwc := &api.GatewayClass{}
+	err := cli.Get(ctx, client.ObjectKey{Name: string(gw.Spec.GatewayClassName)}, gwc)
+	if err != nil {
+		return nil, eris.Errorf("failed to get GatewayClass for Gateway %s/%s", gw.GetName(), gw.GetNamespace())
+	}
+
+	return gwc, nil
+}
+
 // getInMemoryGatewayParameters returns an in-memory GatewayParameters based on the name of the gateway class.
 func (k *kGatewayParameters) getInMemoryGatewayParameters(name string) *v1alpha1.GatewayParameters {
 	switch name {
@@ -523,32 +566,6 @@ func (k *kGatewayParameters) defaultGatewayParameters() *v1alpha1.GatewayParamet
 		}
 	}
 	return gwp
-}
-
-func gatewayUsesLowPorts(gw *api.Gateway) bool {
-	for _, l := range gw.Spec.Listeners {
-		if int32(l.Port) < 1024 {
-			return true
-		}
-	}
-	return false
-}
-
-func getGatewayClassFromGateway(ctx context.Context, cli client.Client, gw *api.Gateway) (*api.GatewayClass, error) {
-	if gw == nil {
-		return nil, eris.New("nil Gateway")
-	}
-	if gw.Spec.GatewayClassName == "" {
-		return nil, eris.New("GatewayClassName must not be empty")
-	}
-
-	gwc := &api.GatewayClass{}
-	err := cli.Get(ctx, client.ObjectKey{Name: string(gw.Spec.GatewayClassName)}, gwc)
-	if err != nil {
-		return nil, eris.Errorf("failed to get GatewayClass for Gateway %s/%s", gw.GetName(), gw.GetNamespace())
-	}
-
-	return gwc, nil
 }
 
 func gatewayFrom(gw *api.Gateway) *ir.Gateway {
