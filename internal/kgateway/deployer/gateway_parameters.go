@@ -183,21 +183,26 @@ func (k *kGatewayParameters) getGatewayParametersForGateway(ctx context.Context,
 
 // gets the default GatewayParameters associated with the GatewayClass of the provided Gateway
 func (k *kGatewayParameters) getDefaultGatewayParameters(ctx context.Context, gw *api.Gateway) (*v1alpha1.GatewayParameters, error) {
-	//gwc, err := getGatewayClassFromGateway(ctx, k.cli, gw)
-	gwOpts, err := getGatewayOpts(ctx, k.cli, gw)
+	// Find gateway class
+	gwc, err := getGatewayClassFromGateway(ctx, k.cli, gw)
 	if err != nil {
 		return nil, err
 	}
-	return k.getGatewayParametersForGatewayClass(ctx, gwOpts)
+
+	// Check if the gateway uses low ports
+	useLowPorts := gatewayUsesLowPorts(gw)
+	k.inputs.UseLowPorts = useLowPorts
+
+	// Get the GatewayParameters for the GatewayClass
+	return k.getGatewayParametersForGatewayClass(ctx, gwc)
 }
 
 // Gets the GatewayParameters object associated with a given GatewayClass.
-func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Context, gwOpts *gatewayOpts) (*v1alpha1.GatewayParameters, error) {
+func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Context, gwc *api.GatewayClass) (*v1alpha1.GatewayParameters, error) {
 	logger := log.FromContext(ctx)
 
-	gwOpts.imageInfo = k.inputs.ImageInfo
-	defaultGwp := getInMemoryGatewayParameters(gwOpts)
-	paramRef := gwOpts.gatewayClass.Spec.ParametersRef
+	defaultGwp := k.getInMemoryGatewayParameters(gwc.Name)
+	paramRef := gwc.Spec.ParametersRef
 	if paramRef == nil {
 		// when there is no parametersRef, just return the defaults
 		return defaultGwp, nil
@@ -207,8 +212,8 @@ func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Con
 	if gwpName == "" {
 		err := eris.New("parametersRef.name cannot be empty when parametersRef is specified")
 		logger.Error(err,
-			"gatewayClassName", gwOpts.gatewayClass.GetName(),
-			"gatewayClassNamespace", gwOpts.gatewayClass.GetNamespace(),
+			"gatewayClassName", gwc.GetName(),
+			"gatewayClassNamespace", gwc.GetNamespace(),
 		)
 		return nil, err
 	}
@@ -224,7 +229,7 @@ func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Con
 		return nil, getGatewayParametersError(
 			err,
 			gwpNamespace, gwpName,
-			gwOpts.gatewayClass.GetNamespace(), gwOpts.gatewayClass.GetName(),
+			gwc.GetNamespace(), gwc.GetName(),
 			"GatewayClass",
 		)
 	}
@@ -404,31 +409,31 @@ func getGatewayClassFromGateway(ctx context.Context, cli client.Client, gw *api.
 }
 
 // getInMemoryGatewayParameters returns an in-memory GatewayParameters based on the name of the gateway class.
-func getInMemoryGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
-	switch gwOpts.gatewayClass.Name {
+func (k *kGatewayParameters) getInMemoryGatewayParameters(name string) *v1alpha1.GatewayParameters {
+	switch name {
 	case wellknown.WaypointClassName:
-		return defaultWaypointGatewayParameters(gwOpts)
+		return k.defaultWaypointGatewayParameters()
 	case wellknown.GatewayClassName:
-		return defaultGatewayParameters(gwOpts)
+		return k.defaultGatewayParameters()
 	case wellknown.AgentGatewayClassName:
-		return defaultAgentGatewayParameters(gwOpts)
+		return k.defaultAgentGatewayParameters()
 	default:
-		return defaultGatewayParameters(gwOpts)
+		return k.defaultGatewayParameters()
 	}
 }
 
 // defaultAgentGatewayParameters returns an in-memory GatewayParameters with default values
 // set for the agentgateway deployment.
-func defaultAgentGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
-	gwp := defaultGatewayParameters(gwOpts)
+func (k *kGatewayParameters) defaultAgentGatewayParameters() *v1alpha1.GatewayParameters {
+	gwp := k.defaultGatewayParameters()
 	gwp.Spec.Kube.AgentGateway.Enabled = ptr.To(true)
 	return gwp
 }
 
 // defaultWaypointGatewayParameters returns an in-memory GatewayParameters with default values
 // set for the waypoint deployment.
-func defaultWaypointGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
-	gwp := defaultGatewayParameters(gwOpts)
+func (k *kGatewayParameters) defaultWaypointGatewayParameters() *v1alpha1.GatewayParameters {
+	gwp := k.defaultGatewayParameters()
 	gwp.Spec.Kube.Service.Type = ptr.To(corev1.ServiceTypeClusterIP)
 
 	if gwp.Spec.Kube.PodTemplate == nil {
@@ -452,7 +457,7 @@ func defaultWaypointGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayPara
 
 // defaultGatewayParameters returns an in-memory GatewayParameters with the default values
 // set for the gateway.
-func defaultGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
+func (k *kGatewayParameters) defaultGatewayParameters() *v1alpha1.GatewayParameters {
 	gwp := &v1alpha1.GatewayParameters{
 		Spec: v1alpha1.GatewayParametersSpec{
 			SelfManaged: nil,
@@ -468,10 +473,10 @@ func defaultGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
 						LogLevel: ptr.To("info"),
 					},
 					Image: &v1alpha1.Image{
-						Registry:   ptr.To(gwOpts.imageInfo.Registry),
-						Tag:        ptr.To(gwOpts.imageInfo.Tag),
+						Registry:   ptr.To(k.inputs.ImageInfo.Registry),
+						Tag:        ptr.To(k.inputs.ImageInfo.Tag),
 						Repository: ptr.To(EnvoyWrapperImage),
-						PullPolicy: (*corev1.PullPolicy)(ptr.To(gwOpts.imageInfo.PullPolicy)),
+						PullPolicy: (*corev1.PullPolicy)(ptr.To(k.inputs.ImageInfo.PullPolicy)),
 					},
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: ptr.To(false),
@@ -492,10 +497,10 @@ func defaultGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
 				},
 				SdsContainer: &v1alpha1.SdsContainer{
 					Image: &v1alpha1.Image{
-						Registry:   ptr.To(gwOpts.imageInfo.Registry),
-						Tag:        ptr.To(gwOpts.imageInfo.Tag),
+						Registry:   ptr.To(k.inputs.ImageInfo.Registry),
+						Tag:        ptr.To(k.inputs.ImageInfo.Tag),
 						Repository: ptr.To(SdsImage),
-						PullPolicy: (*corev1.PullPolicy)(ptr.To(gwOpts.imageInfo.PullPolicy)),
+						PullPolicy: (*corev1.PullPolicy)(ptr.To(k.inputs.ImageInfo.PullPolicy)),
 					},
 					Bootstrap: &v1alpha1.SdsBootstrap{
 						LogLevel: ptr.To("info"),
@@ -507,7 +512,7 @@ func defaultGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
 							Registry:   ptr.To("docker.io/istio"),
 							Repository: ptr.To("proxyv2"),
 							Tag:        ptr.To("1.22.0"),
-							PullPolicy: (*corev1.PullPolicy)(ptr.To(gwOpts.imageInfo.PullPolicy)),
+							PullPolicy: (*corev1.PullPolicy)(ptr.To(k.inputs.ImageInfo.PullPolicy)),
 						},
 						LogLevel:              ptr.To("warning"),
 						IstioDiscoveryAddress: ptr.To("istiod.istio-system.svc:15012"),
@@ -519,9 +524,9 @@ func defaultGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
 					Enabled: ptr.To(false),
 					Image: &v1alpha1.Image{
 						Repository: ptr.To(KgatewayAIContainerName),
-						Registry:   ptr.To(gwOpts.imageInfo.Registry),
-						Tag:        ptr.To(gwOpts.imageInfo.Tag),
-						PullPolicy: (*corev1.PullPolicy)(ptr.To(gwOpts.imageInfo.PullPolicy)),
+						Registry:   ptr.To(k.inputs.ImageInfo.Registry),
+						Tag:        ptr.To(k.inputs.ImageInfo.Tag),
+						PullPolicy: (*corev1.PullPolicy)(ptr.To(k.inputs.ImageInfo.PullPolicy)),
 					},
 				},
 				AgentGateway: &v1alpha1.AgentGateway{
@@ -531,7 +536,7 @@ func defaultGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
 						Registry:   ptr.To(AgentgatewayRegistry),
 						Tag:        ptr.To(AgentgatewayDefaultTag),
 						Repository: ptr.To(AgentgatewayImage),
-						PullPolicy: (*corev1.PullPolicy)(ptr.To(gwOpts.imageInfo.PullPolicy)),
+						PullPolicy: (*corev1.PullPolicy)(ptr.To(k.inputs.ImageInfo.PullPolicy)),
 					},
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: ptr.To(false),
@@ -548,7 +553,7 @@ func defaultGatewayParameters(gwOpts *gatewayOpts) *v1alpha1.GatewayParameters {
 		},
 	}
 
-	if gwOpts.useLowPorts {
+	if k.inputs.UseLowPorts {
 		gwp.Spec.Kube.PodTemplate = &v1alpha1.Pod{
 			SecurityContext: &corev1.PodSecurityContext{
 				Sysctls: []corev1.Sysctl{

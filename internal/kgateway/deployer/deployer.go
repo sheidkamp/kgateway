@@ -72,6 +72,7 @@ type Inputs struct {
 	InferenceExtension   *InferenceExtInfo
 	ImageInfo            *ImageInfo
 	CommonCollections    *common.CommonCollections
+	UseLowPorts          bool
 }
 
 type ImageInfo struct {
