@@ -1439,7 +1439,7 @@ var _ = Describe("Deployer", func() {
 			Expect(dep.Spec.Replicas).ToNot(BeNil())
 			Expect(*dep.Spec.Replicas).To(Equal(int32(*expectedGwp.Deployment.Replicas)))
 
-			// Calculate expected PodSecurityContext. The deployer conditionall addes the net.ipv4.ip_unprivileged_port_start=0 sysctl
+			// Calculate expected PodSecurityContext. The deployer conditional addes the net.ipv4.ip_unprivileged_port_start=0 sysctl
 			// to the default parameters if the gateway uses low ports.
 			expectedPodSecurityContext := expectedGwp.PodTemplate.SecurityContext
 
