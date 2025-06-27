@@ -7,10 +7,11 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	api "sigs.k8s.io/gateway-api/apis/v1"
+
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	common "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"
-	api "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // Inputs is the set of options used to configure gateway/ineference pool deployment.
