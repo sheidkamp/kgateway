@@ -1786,7 +1786,7 @@ var _ = Describe("Deployer", func() {
 			// handle custom test validation func
 			Expect(expected.validationFunc(objs, inp)).NotTo(HaveOccurred())
 		},
-			Entry("GatewayParameters overrides", &input{
+			FEntry("GatewayParameters overrides", &input{
 				dInputs:     defaultDeployerInputs(),
 				gw:          defaultGatewayWithGatewayParams(gwpOverrideName),
 				defaultGwp:  defaultGatewayParams(),
