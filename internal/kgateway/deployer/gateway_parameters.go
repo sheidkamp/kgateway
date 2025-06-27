@@ -195,7 +195,6 @@ func (k *kGatewayParameters) getGatewayParametersForGateway(ctx context.Context,
 
 // gets the default GatewayParameters associated with the GatewayClass of the provided Gateway
 func (k *kGatewayParameters) getDefaultGatewayParameters(ctx context.Context, gw *api.Gateway) (*v1alpha1.GatewayParameters, error) {
-
 	gwc, err := getGatewayClassFromGateway(ctx, k.cli, gw)
 	if err != nil {
 		return nil, err
