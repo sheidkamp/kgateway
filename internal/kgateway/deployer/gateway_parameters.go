@@ -195,18 +195,27 @@ func (k *kGatewayParameters) getGatewayParametersForGateway(ctx context.Context,
 
 // gets the default GatewayParameters associated with the GatewayClass of the provided Gateway
 func (k *kGatewayParameters) getDefaultGatewayParameters(ctx context.Context, gw *api.Gateway) (*v1alpha1.GatewayParameters, error) {
+
 	gwc, err := getGatewayClassFromGateway(ctx, k.cli, gw)
 	if err != nil {
 		return nil, err
 	}
-	return k.getGatewayParametersForGatewayClass(ctx, gwc)
+
+	gwpArgs := deployer.NewGatewayParametersArgs().
+		WithGatewayClass(gwc).
+		WithImageInfo(k.inputs.ImageInfo).
+		WithUseLowPorts(gatewayUsesLowPorts(gw))
+
+	return k.getGatewayParametersForGatewayClass(ctx, gwpArgs)
 }
 
 // Gets the GatewayParameters object associated with a given GatewayClass.
-func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Context, gwc *api.GatewayClass) (*v1alpha1.GatewayParameters, error) {
+func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Context, gwpArgs *deployer.GatewayParametersArgs) (*v1alpha1.GatewayParameters, error) {
 	logger := log.FromContext(ctx)
 
-	defaultGwp := deployer.GetInMemoryGatewayParameters(gwc.GetName(), k.inputs.ImageInfo)
+	defaultGwp := deployer.GetInMemoryGatewayParameters(gwpArgs)
+
+	gwc := gwpArgs.GetGatewayClass()
 	paramRef := gwc.Spec.ParametersRef
 	if paramRef == nil {
 		// when there is no parametersRef, just return the defaults
@@ -376,4 +385,13 @@ func getGatewayClassFromGateway(ctx context.Context, cli client.Client, gw *api.
 	}
 
 	return gwc, nil
+}
+
+func gatewayUsesLowPorts(gw *api.Gateway) bool {
+	for _, l := range gw.Spec.Listeners {
+		if int32(l.Port) < 1024 {
+			return true
+		}
+	}
+	return false
 }
