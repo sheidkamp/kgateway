@@ -116,6 +116,10 @@ type Settings struct {
 	// If two routes have the same weight, Gateway API route precedence rules apply.
 	// When enabled, the default weight for a route is 0.
 	WeightedRoutePrecedence bool `split_words:"true" default:"false"`
+
+	// DisablePortMapping disables the port mapping feature where ports < 1024 are mapped to port + 8000.
+	// Defaults to false, i.e. port mapping is enabled.
+	DisablePortMapping bool `split_words:"true" default:"false"`
 }
 
 // BuildSettings returns a zero-valued Settings obj if error is encountered when parsing env

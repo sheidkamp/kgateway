@@ -9,15 +9,46 @@ import (
 
 var _ = Describe("Ports", func() {
 
-	// It("should translate privileged port", func() {
-	// 	Expect(ports.TranslatePort(80)).To(Equal(uint16(8080)))
-	// 	Expect(ports.TranslatePort(443)).To(Equal(uint16(8443)))
-	// 	Expect(ports.TranslatePort(1023)).To(Equal(uint16(9023)))
-	// })
-	It("should NOT translate unprivileged port", func() {
-		Expect(ports.TranslatePort(8080)).To(Equal(uint16(8080)))
-		Expect(ports.TranslatePort(8443)).To(Equal(uint16(8443)))
-		Expect(ports.TranslatePort(1024)).To(Equal(uint16(1024)))
+	When("port mapping is enabled", func() {
+		BeforeEach(func() {
+			ports.Init(false)
+		})
+
+		It("should translate privileged port", func() {
+			expectPortTranslated(80)
+			expectPortTranslated(443)
+			expectPortTranslated(1023)
+		})
+		It("should NOT translate unprivileged port", func() {
+			expectPortNotTranslated(8080)
+			expectPortNotTranslated(8443)
+			expectPortNotTranslated(1024)
+		})
+	})
+
+	When("port mapping is disabled", func() {
+		BeforeEach(func() {
+			ports.Init(true)
+		})
+
+		It("should NOT translate privileged port", func() {
+			expectPortNotTranslated(80)
+			expectPortNotTranslated(443)
+			expectPortNotTranslated(1023)
+		})
+		It("should NOT translate unprivileged port", func() {
+			expectPortNotTranslated(8080)
+			expectPortNotTranslated(8443)
+			expectPortNotTranslated(1024)
+		})
 	})
 
 })
+
+func expectPortTranslated(port uint16) {
+	Expect(ports.TranslatePort(port)).To(Equal(port + ports.PortOffset))
+}
+
+func expectPortNotTranslated(port uint16) {
+	Expect(ports.TranslatePort(port)).To(Equal(port))
+}

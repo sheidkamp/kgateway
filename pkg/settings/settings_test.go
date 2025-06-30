@@ -49,6 +49,7 @@ func TestSettings(t *testing.T) {
 				DiscoveryNamespaceSelectors: "[]",
 				EnableAgentGateway:          false,
 				WeightedRoutePrecedence:     false,
+				DisablePortMapping:          false,
 			},
 		},
 		{
@@ -75,6 +76,7 @@ func TestSettings(t *testing.T) {
 				"KGW_DISCOVERY_NAMESPACE_SELECTORS": `[{"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"In","values":["infra"]}]},{"matchLabels":{"app":"a"}}]`,
 				"KGW_ENABLE_AGENT_GATEWAY":          "true",
 				"KGW_WEIGHTED_ROUTE_PRECEDENCE":     "true",
+				"KGW_DISABLE_PORT_MAPPING":          "true",
 			},
 			expectedSettings: &settings.Settings{
 				DnsLookupFamily:             settings.DnsLookupFamilyV4Only,
@@ -97,6 +99,7 @@ func TestSettings(t *testing.T) {
 				DiscoveryNamespaceSelectors: `[{"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"In","values":["infra"]}]},{"matchLabels":{"app":"a"}}]`,
 				EnableAgentGateway:          true,
 				WeightedRoutePrecedence:     true,
+				DisablePortMapping:          true,
 			},
 		},
 		{

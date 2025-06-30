@@ -17,6 +17,7 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ports"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	route "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/httproute"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/routeutils"
@@ -113,7 +114,7 @@ func (ml *MergedListeners) AppendListener(
 }
 
 func getListenerPort(listener ir.Listener) gwv1.PortNumber {
-	return gwv1.PortNumber(listener.Port)
+	return gwv1.PortNumber(ports.TranslatePort(uint16(listener.Port)))
 }
 
 func (ml *MergedListeners) appendHttpListener(
