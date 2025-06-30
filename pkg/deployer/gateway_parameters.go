@@ -10,17 +10,19 @@ import (
 	api "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	common "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"
 )
 
 // Inputs is the set of options used to configure gateway/ineference pool deployment.
 type Inputs struct {
-	Dev                  bool
-	IstioAutoMtlsEnabled bool
-	ControlPlane         ControlPlaneInfo
-	ImageInfo            *ImageInfo
-	CommonCollections    *common.CommonCollections
+	Dev                      bool
+	IstioAutoMtlsEnabled     bool
+	ControlPlane             ControlPlaneInfo
+	ImageInfo                *ImageInfo
+	CommonCollections        *common.CommonCollections
+	GatewayClassName         string
+	WaypointGatewayClassName string
+	AgentGatewayClassName    string
 }
 
 type ExtraGatewayParameters struct {
@@ -96,6 +98,14 @@ func GetInMemoryGatewayParameters(gwpArgs *GatewayParametersArgs) *v1alpha1.Gate
 		return defaultGatewayParameters(gwpArgs)
 	case wellknown.AgentGatewayClassName:
 		return defaultAgentGatewayParameters(gwpArgs)
+// func GetInMemoryGatewayParameters(name string, imageInfo *ImageInfo, gatewayClassName, waypointClassName, agentGatewayClassName string) *v1alpha1.GatewayParameters {
+// 	switch name {
+// 	case waypointClassName:
+// 		return defaultWaypointGatewayParameters(imageInfo)
+// 	case gatewayClassName:
+// 		return defaultGatewayParameters(imageInfo)
+// 	case agentGatewayClassName:
+// 		return defaultAgentGatewayParameters(imageInfo)
 	default:
 		return defaultGatewayParameters(gwpArgs)
 	}

@@ -147,10 +147,10 @@ var _ = Describe("Deployer", func() {
 		defaultGatewayClass = func() *api.GatewayClass {
 			return &api.GatewayClass{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: wellknown.GatewayClassName,
+					Name: wellknown.DefaultGatewayClassName,
 				},
 				Spec: api.GatewayClassSpec{
-					ControllerName: wellknown.GatewayControllerName,
+					ControllerName: wellknown.DefaultGatewayControllerName,
 				},
 			}
 		}
@@ -178,7 +178,7 @@ var _ = Describe("Deployer", func() {
 					APIVersion: "gateway.networking.k8s.io",
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 					Listeners: []api.Listener{{
 						Name: "listener-1",
 						Port: 80,
@@ -332,10 +332,10 @@ var _ = Describe("Deployer", func() {
 		It("should work with empty params", func() {
 			gwc := &api.GatewayClass{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: wellknown.GatewayClassName,
+					Name: wellknown.DefaultGatewayClassName,
 				},
 				Spec: api.GatewayClassSpec{
-					ControllerName: wellknown.GatewayControllerName,
+					ControllerName: wellknown.DefaultGatewayControllerName,
 					ParametersRef: &api.ParametersReference{
 						Group:     gw2_v1alpha1.GroupName,
 						Kind:      api.Kind(wellknown.GatewayParametersGVK.Kind),
@@ -368,7 +368,7 @@ var _ = Describe("Deployer", func() {
 					APIVersion: "gateway.networking.k8s.io",
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 				},
 			}
 
@@ -383,10 +383,13 @@ var _ = Describe("Deployer", func() {
 					Registry: "foo",
 					Tag:      "bar",
 				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
 			})
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
-			d := deployer.NewDeployer(wellknown.GatewayControllerName, newFakeClientWithObjs(gwc, gwParams), chart,
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, gwParams), chart,
 				gwp,
 				internaldeployer.GatewayReleaseNameAndNamespace)
 
@@ -412,10 +415,10 @@ var _ = Describe("Deployer", func() {
 			gwp = selfManagedGatewayParam("self-managed-gateway-params")
 			gwc = &api.GatewayClass{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: wellknown.GatewayClassName,
+					Name: wellknown.DefaultGatewayClassName,
 				},
 				Spec: api.GatewayClassSpec{
-					ControllerName: wellknown.GatewayControllerName,
+					ControllerName: wellknown.DefaultGatewayControllerName,
 					ParametersRef: &api.ParametersReference{
 						Group:     gw2_v1alpha1.GroupName,
 						Kind:      api.Kind(wellknown.GatewayParametersGVK.Kind),
@@ -433,7 +436,7 @@ var _ = Describe("Deployer", func() {
 					Namespace: defaultNamespace,
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 					Infrastructure: &api.GatewayInfrastructure{
 						ParametersRef: &api.LocalParametersReference{
 							Group: gw2_v1alpha1.GroupName,
@@ -459,10 +462,13 @@ var _ = Describe("Deployer", func() {
 					Registry: "foo",
 					Tag:      "bar",
 				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
 			})
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
-			d = deployer.NewDeployer(wellknown.GatewayControllerName, newFakeClientWithObjs(gwc, gwp), chart,
+			d = deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, gwp), chart,
 				gwParams,
 				internaldeployer.GatewayReleaseNameAndNamespace)
 
@@ -485,7 +491,7 @@ var _ = Describe("Deployer", func() {
 					Name: "agentgateway",
 				},
 				Spec: api.GatewayClassSpec{
-					ControllerName: wellknown.GatewayControllerName,
+					ControllerName: wellknown.DefaultGatewayControllerName,
 					ParametersRef: &api.ParametersReference{
 						Group:     gw2_v1alpha1.GroupName,
 						Kind:      api.Kind(wellknown.GatewayParametersGVK.Kind),
@@ -528,10 +534,13 @@ var _ = Describe("Deployer", func() {
 					Registry: "foo",
 					Tag:      "bar",
 				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
 			})
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
-			d := deployer.NewDeployer(wellknown.GatewayControllerName, newFakeClientWithObjs(gwc, gwp), chart,
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, gwp), chart,
 				gwParams,
 				internaldeployer.GatewayReleaseNameAndNamespace)
 
@@ -586,7 +595,7 @@ var _ = Describe("Deployer", func() {
 					APIVersion: "gateway.networking.k8s.io",
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 				},
 			}
 
@@ -601,7 +610,7 @@ var _ = Describe("Deployer", func() {
 					APIVersion: "gateway.networking.k8s.io",
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 				},
 			}
 
@@ -616,10 +625,13 @@ var _ = Describe("Deployer", func() {
 					Registry: "foo",
 					Tag:      "bar",
 				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
 			})
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
-			d1 := deployer.NewDeployer(wellknown.GatewayControllerName,
+			d1 := deployer.NewDeployer(wellknown.DefaultGatewayControllerName,
 				newFakeClientWithObjs(gwc, defaultGatewayParams()), chart,
 				gwParams1,
 				internaldeployer.GatewayReleaseNameAndNamespace)
@@ -635,8 +647,11 @@ var _ = Describe("Deployer", func() {
 					Registry: "foo",
 					Tag:      "bar",
 				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
 			})
-			d2 := deployer.NewDeployer(wellknown.GatewayControllerName, newFakeClientWithObjs(gwc, defaultGatewayParams()), chart,
+			d2 := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, defaultGatewayParams()), chart,
 				gwParams2,
 				internaldeployer.GatewayReleaseNameAndNamespace)
 
@@ -677,7 +692,7 @@ var _ = Describe("Deployer", func() {
 					UID:       "1235",
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 					Infrastructure: &api.GatewayInfrastructure{
 						ParametersRef: &api.LocalParametersReference{
 							Group: "invalid.group",
@@ -702,7 +717,7 @@ var _ = Describe("Deployer", func() {
 			})
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
-			d := deployer.NewDeployer(wellknown.GatewayControllerName,
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName,
 				newFakeClientWithObjs(defaultGatewayClass()), chart,
 				gwParams,
 				internaldeployer.GatewayReleaseNameAndNamespace)
@@ -719,7 +734,7 @@ var _ = Describe("Deployer", func() {
 					UID:       "1235",
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 					Infrastructure: &api.GatewayInfrastructure{
 						ParametersRef: &api.LocalParametersReference{
 							Group: gw2_v1alpha1.GroupName,
@@ -745,7 +760,7 @@ var _ = Describe("Deployer", func() {
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
 			d := deployer.NewDeployer(
-				wellknown.GatewayControllerName,
+				wellknown.DefaultGatewayControllerName,
 				newFakeClientWithObjs(defaultGatewayClass()), chart,
 				gwParams,
 				internaldeployer.GatewayReleaseNameAndNamespace)
@@ -784,7 +799,7 @@ var _ = Describe("Deployer", func() {
 						APIVersion: "gateway.networking.k8s.io",
 					},
 					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
+						GatewayClassName: wellknown.DefaultGatewayClassName,
 						Listeners: []api.Listener{{
 							Name: "listener-1",
 							Port: 80,
@@ -807,7 +822,7 @@ var _ = Describe("Deployer", func() {
 				chart, err := internaldeployer.LoadGatewayChart()
 				Expect(err).NotTo(HaveOccurred())
 				d = deployer.NewDeployer(
-					wellknown.GatewayControllerName,
+					wellknown.DefaultGatewayControllerName,
 					newFakeClientWithObjs(gwc), chart,
 					gwParams,
 					internaldeployer.GatewayReleaseNameAndNamespace)
@@ -867,7 +882,7 @@ var _ = Describe("Deployer", func() {
 						UID:       "1235",
 					},
 					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
+						GatewayClassName: wellknown.DefaultGatewayClassName,
 						Infrastructure: &api.GatewayInfrastructure{
 							ParametersRef: &api.LocalParametersReference{
 								Group: gw2_v1alpha1.GroupName,
@@ -897,7 +912,7 @@ var _ = Describe("Deployer", func() {
 				chart, err := internaldeployer.LoadGatewayChart()
 				Expect(err).NotTo(HaveOccurred())
 				d = deployer.NewDeployer(
-					wellknown.GatewayControllerName,
+					wellknown.DefaultGatewayControllerName,
 					newFakeClientWithObjs(gwc, gwp), chart,
 					gwParams,
 					internaldeployer.GatewayReleaseNameAndNamespace)
@@ -966,7 +981,7 @@ var _ = Describe("Deployer", func() {
 						UID:       "1235",
 					},
 					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
+						GatewayClassName: wellknown.DefaultGatewayClassName,
 						Infrastructure: &api.GatewayInfrastructure{
 							ParametersRef: &api.LocalParametersReference{
 								Group: "gateway.kgateway.dev",
@@ -995,7 +1010,7 @@ var _ = Describe("Deployer", func() {
 				chart, err := internaldeployer.LoadGatewayChart()
 				Expect(err).NotTo(HaveOccurred())
 				d = deployer.NewDeployer(
-					wellknown.GatewayControllerName,
+					wellknown.DefaultGatewayControllerName,
 					newFakeClientWithObjs(gwc, gwp), chart,
 					gwParams,
 					internaldeployer.GatewayReleaseNameAndNamespace)
@@ -1341,6 +1356,9 @@ var _ = Describe("Deployer", func() {
 						Registry: "foo",
 						Tag:      "bar",
 					},
+					GatewayClassName:         wellknown.DefaultGatewayClassName,
+					WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+					AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
 				}
 			}
 			istioEnabledDeployerInputs = func() *deployer.Inputs {
@@ -1777,7 +1795,7 @@ var _ = Describe("Deployer", func() {
 			gwParams := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, defaultGwp, overrideGwp), inp.dInputs)
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
-			d := deployer.NewDeployer(wellknown.GatewayControllerName, newFakeClientWithObjs(gwc, defaultGwp, overrideGwp), chart,
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, defaultGwp, overrideGwp), chart,
 				gwParams,
 				internaldeployer.GatewayReleaseNameAndNamespace)
 
@@ -1868,7 +1886,7 @@ var _ = Describe("Deployer", func() {
 						APIVersion: "gateway.networking.k8s.io",
 					},
 					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
+						GatewayClassName: wellknown.DefaultGatewayClassName,
 					},
 				},
 				defaultGwp: defaultGatewayParams(),
@@ -1938,7 +1956,7 @@ var _ = Describe("Deployer", func() {
 						APIVersion: "gateway.networking.k8s.io",
 					},
 					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
+						GatewayClassName: wellknown.DefaultGatewayClassName,
 						Listeners: []api.Listener{
 							{
 								Name: "listener-1",
@@ -2119,7 +2137,7 @@ var _ = Describe("Deployer", func() {
 			chart, err := internaldeployer.LoadInferencePoolChart()
 			Expect(err).NotTo(HaveOccurred())
 			cli := newFakeClientWithObjs(pool)
-			d := deployer.NewDeployer(wellknown.GatewayControllerName, cli, chart,
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, cli, chart,
 				ie,
 				internaldeployer.InferenceExtensionReleaseNameAndNamespace)
 
@@ -2218,7 +2236,7 @@ var _ = Describe("Deployer", func() {
 					APIVersion: "gateway.networking.k8s.io",
 				},
 				Spec: api.GatewaySpec{
-					GatewayClassName: wellknown.GatewayClassName,
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 					AllowedListeners: &api.AllowedListeners{
 						Namespaces: &api.ListenerNamespaces{
 							From: &allNamespaces,
@@ -2269,7 +2287,7 @@ var _ = Describe("Deployer", func() {
 			chart, err := internaldeployer.LoadGatewayChart()
 			Expect(err).NotTo(HaveOccurred())
 			d := deployer.NewDeployer(
-				wellknown.GatewayControllerName,
+				wellknown.DefaultGatewayControllerName,
 				newFakeClientWithObjs(defaultGatewayClass(), defaultGatewayParams()),
 				chart, gwParams, internaldeployer.GatewayReleaseNameAndNamespace)
 
@@ -2534,7 +2552,7 @@ func newCommonCols(t test.Failer, initObjs ...client.Object) *common.CommonColle
 	nsCol := krtcollections.NewNamespaceCollectionFromCol(ctx, krttest.GetMockCollection[*corev1.Namespace](mock), krtutil.KrtOptions{})
 
 	krtopts := krtutil.NewKrtOptions(ctx.Done(), nil)
-	gateways := krtcollections.NewGatewayIndex(krtopts, wellknown.GatewayControllerName, policies, kubeRawGateways, kubeRawListenerSets, gatewayClasses, nsCol)
+	gateways := krtcollections.NewGatewayIndex(krtopts, wellknown.DefaultGatewayControllerName, policies, kubeRawGateways, kubeRawListenerSets, gatewayClasses, nsCol)
 
 	commonCols := &common.CommonCollections{
 		GatewayIndex: gateways,
