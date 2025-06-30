@@ -90,22 +90,14 @@ func (gwpArgs *GatewayParametersArgs) GetGatewayClass() *api.GatewayClass {
 }
 
 // GetInMemoryGatewayParameters returns an in-memory GatewayParameters based on the name of the gateway class.
-func GetInMemoryGatewayParameters(gwpArgs *GatewayParametersArgs) *v1alpha1.GatewayParameters {
+func GetInMemoryGatewayParameters(gwpArgs *GatewayParametersArgs, gatewayClassName, waypointClassName, agentGatewayClassName string) *v1alpha1.GatewayParameters {
 	switch gwpArgs.gatewayClass.Name {
-	case wellknown.WaypointClassName:
+	case waypointClassName:
 		return defaultWaypointGatewayParameters(gwpArgs)
-	case wellknown.GatewayClassName:
+	case gatewayClassName:
 		return defaultGatewayParameters(gwpArgs)
-	case wellknown.AgentGatewayClassName:
+	case agentGatewayClassName:
 		return defaultAgentGatewayParameters(gwpArgs)
-// func GetInMemoryGatewayParameters(name string, imageInfo *ImageInfo, gatewayClassName, waypointClassName, agentGatewayClassName string) *v1alpha1.GatewayParameters {
-// 	switch name {
-// 	case waypointClassName:
-// 		return defaultWaypointGatewayParameters(imageInfo)
-// 	case gatewayClassName:
-// 		return defaultGatewayParameters(imageInfo)
-// 	case agentGatewayClassName:
-// 		return defaultAgentGatewayParameters(imageInfo)
 	default:
 		return defaultGatewayParameters(gwpArgs)
 	}
