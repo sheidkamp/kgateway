@@ -94,7 +94,7 @@ spec:
   {{- range $p := $gateway.ports }}
     - name: {{ $p.name }}
       protocol: {{ $p.protocol }}
-      targetPort: {{ $p.targetPort }}
+      targetPort: {{ $p.name }}
       port: {{ $p.port }}
     {{- if $p.nodePort }}
       nodePort: {{ $p.nodePort }}
