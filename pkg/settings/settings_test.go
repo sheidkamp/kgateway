@@ -50,6 +50,7 @@ func TestSettings(t *testing.T) {
 				EnableAgentGateway:          false,
 				WeightedRoutePrecedence:     false,
 				DisablePortMapping:          false,
+				RouteReplacementMode:        settings.RouteReplacementStandard,
 			},
 		},
 		{
@@ -77,6 +78,7 @@ func TestSettings(t *testing.T) {
 				"KGW_ENABLE_AGENT_GATEWAY":          "true",
 				"KGW_WEIGHTED_ROUTE_PRECEDENCE":     "true",
 				"KGW_DISABLE_PORT_MAPPING":          "true",
+				"KGW_ROUTE_REPLACEMENT_MODE":        string(settings.RouteReplacementStrict),
 			},
 			expectedSettings: &settings.Settings{
 				DnsLookupFamily:             settings.DnsLookupFamilyV4Only,
@@ -100,6 +102,7 @@ func TestSettings(t *testing.T) {
 				EnableAgentGateway:          true,
 				WeightedRoutePrecedence:     true,
 				DisablePortMapping:          true,
+				RouteReplacementMode:        settings.RouteReplacementStrict,
 			},
 		},
 		{
@@ -124,6 +127,13 @@ func TestSettings(t *testing.T) {
 			expectedErrorStr: `invalid DNS lookup family: "invalid"`,
 		},
 		{
+			name: "errors on invalid route replacement mode",
+			envVars: map[string]string{
+				"KGW_ROUTE_REPLACEMENT_MODE": "invalid",
+			},
+			expectedErrorStr: `invalid route replacement mode: "invalid"`,
+		},
+		{
 			name: "ignores other env vars",
 			envVars: map[string]string{
 				"KGW_DOES_NOT_EXIST":         "true",
@@ -144,6 +154,7 @@ func TestSettings(t *testing.T) {
 				LogLevel:                    "info",
 				DiscoveryNamespaceSelectors: "[]",
 				EnableAgentGateway:          false,
+				RouteReplacementMode:        settings.RouteReplacementStandard,
 			},
 		},
 	}

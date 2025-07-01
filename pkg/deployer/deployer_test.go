@@ -153,14 +153,6 @@ func containMapElements[keyT comparable, valT any](m map[keyT]valT) types.Gomega
 	return And(subMatchers...)
 }
 
-// initialize a fake controller-runtime client with the given list of objects
-func newFakeClientWithObjs(objs ...client.Object) client.Client {
-	scheme := schemes.GatewayScheme()
-
-	// Ensure the rbac types are registered.
-	if err := rbacv1.AddToScheme(scheme); err != nil {
-		panic(fmt.Sprintf("failed to add rbacv1 scheme: %v", err))
-	}
 
 	// Check if any object is an InferencePool, and add its scheme if needed.
 	for _, obj := range objs {
@@ -204,18 +196,107 @@ func fullyDefinedGatewayParameters(name, namespace string) *gw2_v1alpha1.Gateway
 							"listener": "warn",
 						},
 					},
-					Image: &gw2_v1alpha1.Image{
-						Registry:   ptr.To("foo"),
-						Repository: ptr.To("bar"),
-						Tag:        ptr.To("bat"),
-						PullPolicy: ptr.To(corev1.PullAlways),
+				},
+			}
+		}
+	)
+
+	Context("default case", func() {
+		It("should work with empty params", func() {
+			gwc := &api.GatewayClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: wellknown.DefaultGatewayClassName,
+				},
+				Spec: api.GatewayClassSpec{
+					ControllerName: wellknown.DefaultGatewayControllerName,
+					ParametersRef: &api.ParametersReference{
+						Group:     gw2_v1alpha1.GroupName,
+						Kind:      api.Kind(wellknown.GatewayParametersGVK.Kind),
+						Name:      wellknown.DefaultGatewayParametersName,
+						Namespace: ptr.To(api.Namespace(defaultNamespace)),
 					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser: ptr.To(int64(111)),
-					},
-					Resources: &corev1.ResourceRequirements{
-						Limits:   corev1.ResourceList{"cpu": resource.MustParse("101m")},
-						Requests: corev1.ResourceList{"cpu": resource.MustParse("103m")},
+				},
+			}
+			gwParams := &gw2_v1alpha1.GatewayParameters{
+				TypeMeta: metav1.TypeMeta{
+					Kind: wellknown.GatewayParametersGVK.Kind,
+					// The parsing expects GROUP/VERSION format in this field
+					APIVersion: gw2_v1alpha1.GroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      wellknown.DefaultGatewayParametersName,
+					Namespace: defaultNamespace,
+					UID:       "1237",
+				},
+			}
+
+			gw := &api.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: defaultNamespace,
+					UID:       "1235",
+				},
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Gateway",
+					APIVersion: "gateway.networking.k8s.io",
+				},
+				Spec: api.GatewaySpec{
+					GatewayClassName: wellknown.DefaultGatewayClassName,
+				},
+			}
+
+			gwp := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, gwParams), &deployer.Inputs{
+				CommonCollections: newCommonCols(GinkgoT(), gwc, gw),
+				Dev:               false,
+				ControlPlane: deployer.ControlPlaneInfo{
+					XdsHost: "something.cluster.local",
+					XdsPort: 1234,
+				},
+				ImageInfo: &deployer.ImageInfo{
+					Registry: "foo",
+					Tag:      "bar",
+				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
+			})
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, gwParams), chart,
+				gwp,
+				internaldeployer.GatewayReleaseNameAndNamespace)
+
+			var objs clientObjects
+			objs, err = d.GetObjsToDeploy(context.Background(), gw)
+			Expect(err).NotTo(HaveOccurred())
+			objs = d.SetNamespaceAndOwner(gw, objs)
+			Expect(objs).To(HaveLen(4))
+			Expect(objs.findDeployment(defaultNamespace, gw.Name)).ToNot(BeNil())
+			Expect(objs.findService(defaultNamespace, gw.Name)).ToNot(BeNil())
+			Expect(objs.findConfigMap(defaultNamespace, gw.Name)).ToNot(BeNil())
+			Expect(objs.findServiceAccount(defaultNamespace, gw.Name)).ToNot(BeNil())
+		})
+	})
+
+	Context("self managed gateway", func() {
+		var (
+			d   *deployer.Deployer
+			gwp *gw2_v1alpha1.GatewayParameters
+			gwc *api.GatewayClass
+		)
+		BeforeEach(func() {
+			gwp = selfManagedGatewayParam("self-managed-gateway-params")
+			gwc = &api.GatewayClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: wellknown.DefaultGatewayClassName,
+				},
+				Spec: api.GatewayClassSpec{
+					ControllerName: wellknown.DefaultGatewayControllerName,
+					ParametersRef: &api.ParametersReference{
+						Group:     gw2_v1alpha1.GroupName,
+						Kind:      api.Kind(wellknown.GatewayParametersGVK.Kind),
+						Name:      gwp.GetName(),
+						Namespace: ptr.To(api.Namespace(defaultNamespace)),
 					},
 				},
 				SdsContainer: &gw2_v1alpha1.SdsContainer{
@@ -237,38 +318,13 @@ func fullyDefinedGatewayParameters(name, namespace string) *gw2_v1alpha1.Gateway
 						LogLevel: ptr.To("debug"),
 					},
 				},
-				PodTemplate: &gw2_v1alpha1.Pod{
-					ExtraAnnotations: map[string]string{
-						"pod-anno": "foo",
-					},
-					ExtraLabels: map[string]string{
-						"pod-label": "foo",
-					},
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsUser: ptr.To(int64(333)),
-					},
-					ImagePullSecrets: []corev1.LocalObjectReference{{
-						Name: "pod-image-pull-secret",
-					}},
-					NodeSelector: map[string]string{
-						"pod-node-selector": "foo",
-					},
-					Affinity: &corev1.Affinity{
-						NodeAffinity: &corev1.NodeAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-								NodeSelectorTerms: []corev1.NodeSelectorTerm{{
-									MatchExpressions: []corev1.NodeSelectorRequirement{{
-										Key:      "pod-affinity-nodeAffinity-required-expression-key",
-										Operator: "pod-affinity-nodeAffinity-required-expression-operator",
-										Values:   []string{"foo"},
-									}},
-									MatchFields: []corev1.NodeSelectorRequirement{{
-										Key:      "pod-affinity-nodeAffinity-required-field-key",
-										Operator: "pod-affinity-nodeAffinity-required-field-operator",
-										Values:   []string{"foo"},
-									}},
-								}},
-							},
+				Spec: api.GatewaySpec{
+					GatewayClassName: wellknown.DefaultGatewayClassName,
+					Infrastructure: &api.GatewayInfrastructure{
+						ParametersRef: &api.LocalParametersReference{
+							Group: gw2_v1alpha1.GroupName,
+							Kind:  api.Kind(wellknown.GatewayParametersGVK.Kind),
+							Name:  gwp.GetName(),
 						},
 					},
 					Tolerations: []corev1.Toleration{{
@@ -279,14 +335,54 @@ func fullyDefinedGatewayParameters(name, namespace string) *gw2_v1alpha1.Gateway
 						TolerationSeconds: ptr.To(int64(1)),
 					}},
 				},
-				Service: &gw2_v1alpha1.Service{
-					Type:      ptr.To(corev1.ServiceTypeClusterIP),
-					ClusterIP: ptr.To("99.99.99.99"),
-					ExtraAnnotations: map[string]string{
-						"service-anno": "foo",
-					},
-					ExtraLabels: map[string]string{
-						"service-label": "foo",
+			}
+			var err error
+			gwParams := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, gwp), &deployer.Inputs{
+				CommonCollections: newCommonCols(GinkgoT(), gwc, gw),
+				Dev:               false,
+				ControlPlane: deployer.ControlPlaneInfo{
+					XdsHost: "something.cluster.local",
+					XdsPort: 1234,
+				},
+				ImageInfo: &deployer.ImageInfo{
+					Registry: "foo",
+					Tag:      "bar",
+				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
+			})
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d = deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, gwp), chart,
+				gwParams,
+				internaldeployer.GatewayReleaseNameAndNamespace)
+
+			objs, err := d.GetObjsToDeploy(context.Background(), gw)
+			Expect(err).NotTo(HaveOccurred())
+			objs = d.SetNamespaceAndOwner(gw, objs)
+			Expect(objs).To(BeEmpty())
+		})
+	})
+
+	Context("agentgateway", func() {
+		var (
+			gwp *gw2_v1alpha1.GatewayParameters
+			gwc *api.GatewayClass
+		)
+		BeforeEach(func() {
+			gwp = agentGatewayParam("agent-gateway-params")
+			gwc = &api.GatewayClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "agentgateway",
+				},
+				Spec: api.GatewayClassSpec{
+					ControllerName: wellknown.DefaultGatewayControllerName,
+					ParametersRef: &api.ParametersReference{
+						Group:     gw2_v1alpha1.GroupName,
+						Kind:      api.Kind(wellknown.GatewayParametersGVK.Kind),
+						Name:      gwp.GetName(),
+						Namespace: ptr.To(api.Namespace(defaultNamespace)),
 					},
 				},
 				ServiceAccount: &gw2_v1alpha1.ServiceAccount{
@@ -319,36 +415,86 @@ func fullyDefinedGatewayParameters(name, namespace string) *gw2_v1alpha1.Gateway
 						IstioMetaClusterId:    ptr.To("istioMetaClusterId"),
 					},
 				},
-				AiExtension: &gw2_v1alpha1.AiExtension{
-					Enabled: ptr.To(true),
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "foo",
-							ContainerPort: 80,
-						},
-					},
-					Image: &gw2_v1alpha1.Image{
-						Registry:   ptr.To("ai-extension-registry"),
-						Repository: ptr.To("ai-extension-repository"),
-						Tag:        ptr.To("ai-extension-tag"),
-						Digest:     ptr.To("ai-extension-digest"),
-						PullPolicy: ptr.To(corev1.PullAlways),
-					},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
+			})
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, gwp), chart,
+				gwParams,
+				internaldeployer.GatewayReleaseNameAndNamespace)
+
+			var objs clientObjects
+			objs, err = d.GetObjsToDeploy(context.Background(), gw)
+			Expect(err).NotTo(HaveOccurred())
+			objs = d.SetNamespaceAndOwner(gw, objs)
+			// check the image is using the agentgateway image
+			deployment := objs.findDeployment(defaultNamespace, "agent-gateway")
+			Expect(deployment).ToNot(BeNil())
+			// check the image uses the override tag
+			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("agentgateway"))
+			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("0.4.0"))
+			// check security context and resource requirements are correctly set
+			expectedSecurityContext := deployment.Spec.Template.Spec.Containers[0].SecurityContext
+			Expect(expectedSecurityContext).ToNot(BeNil())
+			Expect(expectedSecurityContext.RunAsUser).ToNot(BeNil())
+			Expect(*expectedSecurityContext.RunAsUser).To(Equal(int64(333)))
+			Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().Equal(resource.MustParse("101m"))).To(BeTrue())
+			// check env values are appended to the end of the list
+			Expect(deployment.Spec.Template.Spec.Containers[0].Env[6].Name).To(Equal("test"))
+			Expect(deployment.Spec.Template.Spec.Containers[0].Env[6].Value).To(Equal("value"))
+			// check the service is using the agentgateway port
+			svc := objs.findService(defaultNamespace, "agent-gateway")
+			Expect(svc).ToNot(BeNil())
+			Expect(svc.Spec.Ports[0].Port).To(Equal(int32(80)))
+			// check the config map is using the xds address and port
+			cm := objs.findConfigMap(defaultNamespace, "agent-gateway")
+			Expect(cm).ToNot(BeNil())
+			Expect(cm.Data["config.json"]).To(ContainSubstring(`"xds_address": "http://something.cluster.local:1234"`))
+			Expect(cm.Data["config.json"]).To(ContainSubstring(`"alt_xds_hostname": "agent-gateway.default.svc.cluster.local"`))
+		})
+	})
+
+	Context("special cases", func() {
+		var (
+			gwc *api.GatewayClass
+		)
+		BeforeEach(func() {
+			gwc = defaultGatewayClass()
+		})
+
+		It("deploys multiple GWs with the same GWP", func() {
+			gw1 := &api.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: defaultNamespace,
+					UID:       "1235",
+				},
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Gateway",
+					APIVersion: "gateway.networking.k8s.io",
+				},
+				Spec: api.GatewaySpec{
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 				},
 			},
 		},
 	}
 }
 
-func generateLivenessProbe() *corev1.Probe {
-	return &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			Exec: &corev1.ExecAction{
-				Command: []string{
-					"wget",
-					"-O",
-					"/dev/null",
-					"127.0.0.1:19000/server_info",
+			gw2 := &api.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: defaultNamespace,
+					UID:       "1235",
+				},
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Gateway",
+					APIVersion: "gateway.networking.k8s.io",
+				},
+				Spec: api.GatewaySpec{
+					GatewayClassName: wellknown.DefaultGatewayClassName,
 				},
 			},
 		},
@@ -358,43 +504,161 @@ func generateLivenessProbe() *corev1.Probe {
 	}
 }
 
-func generateReadinessProbe() *corev1.Probe {
-	return &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Scheme: "HTTP",
-				Port: intstr.IntOrString{
-					IntVal: 8082,
+			gwParams1 := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, defaultGatewayParams()), &deployer.Inputs{
+				CommonCollections: newCommonCols(GinkgoT(), gwc, gw1, gw2),
+				Dev:               false,
+				ControlPlane: deployer.ControlPlaneInfo{
+					XdsHost: "something.cluster.local",
+					XdsPort: 1234,
 				},
-				Path: "/envoy-hc",
-			},
-		},
-		InitialDelaySeconds: 5,
-		PeriodSeconds:       5,
-		FailureThreshold:    2,
-	}
-}
+				ImageInfo: &deployer.ImageInfo{
+					Registry: "foo",
+					Tag:      "bar",
+				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
+			})
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d1 := deployer.NewDeployer(wellknown.DefaultGatewayControllerName,
+				newFakeClientWithObjs(gwc, defaultGatewayParams()), chart,
+				gwParams1,
+				internaldeployer.GatewayReleaseNameAndNamespace)
 
-func newCommonCols(t test.Failer, initObjs ...client.Object) *common.CommonCollections {
-	ctx := context.Background()
-	var anys []any
-	for _, obj := range initObjs {
-		anys = append(anys, obj)
-	}
-	mock := krttest.NewMock(t, anys)
+			gwParams2 := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, defaultGatewayParams()), &deployer.Inputs{
+				CommonCollections: newCommonCols(GinkgoT(), gwc, gw1, gw2),
+				Dev:               false,
+				ControlPlane: deployer.ControlPlaneInfo{
+					XdsHost: "something.cluster.local",
+					XdsPort: 1234,
+				},
+				ImageInfo: &deployer.ImageInfo{
+					Registry: "foo",
+					Tag:      "bar",
+				},
+				GatewayClassName:         wellknown.DefaultGatewayClassName,
+				WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+				AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
+			})
+			d2 := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, defaultGatewayParams()), chart,
+				gwParams2,
+				internaldeployer.GatewayReleaseNameAndNamespace)
 
-	policies := krtcollections.NewPolicyIndex(krtutil.KrtOptions{}, extensionsplug.ContributesPolicies{})
-	kubeRawGateways := krttest.GetMockCollection[*api.Gateway](mock)
-	kubeRawListenerSets := krttest.GetMockCollection[*apixv1a1.XListenerSet](mock)
-	gatewayClasses := krttest.GetMockCollection[*api.GatewayClass](mock)
-	nsCol := krtcollections.NewNamespaceCollectionFromCol(ctx, krttest.GetMockCollection[*corev1.Namespace](mock), krtutil.KrtOptions{})
+			var objs1, objs2 clientObjects
+			objs1, err = d1.GetObjsToDeploy(context.Background(), gw1)
+			Expect(err).NotTo(HaveOccurred())
+			objs1 = d1.SetNamespaceAndOwner(gw1, objs1)
+			Expect(objs1).NotTo(BeEmpty())
+			Expect(objs1.findDeployment(defaultNamespace, gw1.Name)).ToNot(BeNil())
+			Expect(objs1.findService(defaultNamespace, gw1.Name)).ToNot(BeNil())
+			Expect(objs1.findConfigMap(defaultNamespace, gw1.Name)).ToNot(BeNil())
+			Expect(objs1.findServiceAccount(defaultNamespace, gw1.Name)).ToNot(BeNil())
 
-	krtopts := krtutil.NewKrtOptions(ctx.Done(), nil)
-	gateways := krtcollections.NewGatewayIndex(krtopts, wellknown.GatewayControllerName, policies, kubeRawGateways, kubeRawListenerSets, gatewayClasses, nsCol)
+			objs2, err = d2.GetObjsToDeploy(context.Background(), gw2)
+			Expect(err).NotTo(HaveOccurred())
+			objs2 = d2.SetNamespaceAndOwner(gw2, objs2)
+			Expect(objs2).NotTo(BeEmpty())
+			Expect(objs2.findDeployment(defaultNamespace, gw2.Name)).ToNot(BeNil())
+			Expect(objs2.findService(defaultNamespace, gw2.Name)).ToNot(BeNil())
+			Expect(objs2.findConfigMap(defaultNamespace, gw2.Name)).ToNot(BeNil())
+			Expect(objs2.findServiceAccount(defaultNamespace, gw2.Name)).ToNot(BeNil())
 
-	commonCols := &common.CommonCollections{
-		GatewayIndex: gateways,
-	}
+			for _, obj := range objs1 {
+				Expect(obj.GetName()).To(Equal(gw1.Name))
+			}
+			for _, obj := range objs2 {
+				Expect(obj.GetName()).To(Equal(gw2.Name))
+			}
+		})
+	})
+
+	Context("Gateway API infrastructure field", func() {
+		It("rejects invalid group in spec.infrastructure.parametersRef", func() {
+			gw := &api.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: defaultNamespace,
+					UID:       "1235",
+				},
+				Spec: api.GatewaySpec{
+					GatewayClassName: wellknown.DefaultGatewayClassName,
+					Infrastructure: &api.GatewayInfrastructure{
+						ParametersRef: &api.LocalParametersReference{
+							Group: "invalid.group",
+							Kind:  api.Kind(wellknown.GatewayParametersGVK.Kind),
+							Name:  "test-gwp",
+						},
+					},
+				},
+			}
+
+			gwParams := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(defaultGatewayClass()), &deployer.Inputs{
+				CommonCollections: newCommonCols(GinkgoT(), defaultGatewayClass(), gw),
+				Dev:               false,
+				ControlPlane: deployer.ControlPlaneInfo{
+					XdsHost: "something.cluster.local",
+					XdsPort: 1234,
+				},
+				ImageInfo: &deployer.ImageInfo{
+					Registry: "foo",
+					Tag:      "bar",
+				},
+			})
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName,
+				newFakeClientWithObjs(defaultGatewayClass()), chart,
+				gwParams,
+				internaldeployer.GatewayReleaseNameAndNamespace)
+
+			_, err = d.GetObjsToDeploy(context.Background(), gw)
+			Expect(err).To(MatchError(ContainSubstring("invalid group invalid.group for GatewayParameters")))
+		})
+
+		It("rejects invalid kind in spec.infrastructure.parametersRef", func() {
+			gw := &api.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: defaultNamespace,
+					UID:       "1235",
+				},
+				Spec: api.GatewaySpec{
+					GatewayClassName: wellknown.DefaultGatewayClassName,
+					Infrastructure: &api.GatewayInfrastructure{
+						ParametersRef: &api.LocalParametersReference{
+							Group: gw2_v1alpha1.GroupName,
+							Kind:  "InvalidKind",
+							Name:  "test-gwp",
+						},
+					},
+				},
+			}
+
+			gwParams := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(defaultGatewayClass()), &deployer.Inputs{
+				CommonCollections: newCommonCols(GinkgoT(), defaultGatewayClass(), gw),
+				Dev:               false,
+				ControlPlane: deployer.ControlPlaneInfo{
+					XdsHost: "something.cluster.local",
+					XdsPort: 1234,
+				},
+				ImageInfo: &deployer.ImageInfo{
+					Registry: "foo",
+					Tag:      "bar",
+				},
+			})
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d := deployer.NewDeployer(
+				wellknown.DefaultGatewayControllerName,
+				newFakeClientWithObjs(defaultGatewayClass()), chart,
+				gwParams,
+				internaldeployer.GatewayReleaseNameAndNamespace)
+
+			_, err = d.GetObjsToDeploy(context.Background(), gw)
+			Expect(err).To(MatchError(ContainSubstring("invalid kind InvalidKind for GatewayParameters")))
+		})
+	})
 
 	for !kubeRawGateways.HasSynced() || !kubeRawListenerSets.HasSynced() || !gatewayClasses.HasSynced() {
 		time.Sleep(time.Second / 10)
@@ -449,7 +713,7 @@ func runDeployerTests(usePortMapping bool) {
 						APIVersion: "gateway.networking.k8s.io",
 					},
 					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
+						GatewayClassName: wellknown.DefaultGatewayClassName,
 						Listeners: []api.Listener{{
 							Name: "listener-1",
 							Port: maybeMappedPort80,
@@ -458,14 +722,41 @@ func runDeployerTests(usePortMapping bool) {
 				}
 			}
 
-			highPortGateway = func() *api.Gateway {
-				gw := defaultGateway()
-				gw.Spec.Listeners = []api.Listener{{
-					Name: "listener-1",
-					Port: 8088,
-				}}
-				return gw
-			}
+				gwParams := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc), &deployer.Inputs{
+					CommonCollections: newCommonCols(GinkgoT(), gwc, gw),
+					Dev:               false,
+					ControlPlane: deployer.ControlPlaneInfo{
+						XdsHost: "something.cluster.local",
+						XdsPort: 1234,
+					},
+					ImageInfo: &deployer.ImageInfo{
+						Registry: registry,
+						Tag:      tag,
+					},
+				})
+				chart, err := internaldeployer.LoadGatewayChart()
+				Expect(err).NotTo(HaveOccurred())
+				d = deployer.NewDeployer(
+					wellknown.DefaultGatewayControllerName,
+					newFakeClientWithObjs(gwc), chart,
+					gwParams,
+					internaldeployer.GatewayReleaseNameAndNamespace)
+
+				objs, err = d.GetObjsToDeploy(context.Background(), gw)
+				Expect(err).NotTo(HaveOccurred())
+				objs = d.SetNamespaceAndOwner(gw, objs)
+
+				By("validating the expected objects are deployed")
+				Expect(objs).NotTo(BeEmpty())
+				Expect(objs.findDeployment(defaultNamespace, "foo")).NotTo(BeNil())
+				Expect(objs.findService(defaultNamespace, "foo")).NotTo(BeNil())
+				Expect(objs.findServiceAccount(defaultNamespace, "foo")).NotTo(BeNil())
+				Expect(objs.findConfigMap(defaultNamespace, "foo")).NotTo(BeNil())
+
+				By("validating the default values are used")
+				Expect(objs.findDeployment(defaultNamespace, "foo").Spec.Template.Spec.Containers[0].Image).To(Equal(fmt.Sprintf("%s/%s:%s", registry, deployer.EnvoyWrapperImage, tag)))
+			})
+		})
 
 			// Note that this is NOT meant to reflect the actual defaults defined in install/helm/kgateway/templates/gatewayparameters.yaml
 			defaultGatewayParams = func() *gw2_v1alpha1.GatewayParameters {
@@ -555,8 +846,19 @@ func runDeployerTests(usePortMapping bool) {
 						Namespace: defaultNamespace,
 						UID:       "1237",
 					},
-					Spec: gw2_v1alpha1.GatewayParametersSpec{
-						SelfManaged: &gw2_v1alpha1.SelfManagedGateway{},
+					Spec: api.GatewaySpec{
+						GatewayClassName: wellknown.DefaultGatewayClassName,
+						Infrastructure: &api.GatewayInfrastructure{
+							ParametersRef: &api.LocalParametersReference{
+								Group: gw2_v1alpha1.GroupName,
+								Kind:  api.Kind(wellknown.GatewayParametersGVK.Kind),
+								Name:  gwp.GetName(),
+							},
+						},
+						Listeners: []api.Listener{{
+							Name: "listener-1",
+							Port: 80,
+						}},
 					},
 				}
 			}
@@ -573,96 +875,13 @@ func runDeployerTests(usePortMapping bool) {
 						Namespace: defaultNamespace,
 						UID:       "1237",
 					},
-					Spec: gw2_v1alpha1.GatewayParametersSpec{
-						Kube: &gw2_v1alpha1.KubernetesProxyConfig{
-							AgentGateway: &gw2_v1alpha1.AgentGateway{
-								Enabled: ptr.To(true),
-								Image: &gw2_v1alpha1.Image{
-									Tag: ptr.To("0.4.0"),
-								},
-								SecurityContext: &corev1.SecurityContext{
-									RunAsUser: ptr.To(int64(333)),
-								},
-								Resources: &corev1.ResourceRequirements{
-									Limits: corev1.ResourceList{"cpu": resource.MustParse("101m")},
-								},
-								Env: []corev1.EnvVar{
-									{
-										Name:  "test",
-										Value: "value",
-									},
-								},
-							},
-						},
-					},
-				}
-			}
-		)
-
-		BeforeEach(func() {
-			ports.Init(true)
-		})
-
-		Context("default case", func() {
-			It("should work with empty params", func() {
-				gwc := &api.GatewayClass{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: wellknown.GatewayClassName,
-					},
-					Spec: api.GatewayClassSpec{
-						ControllerName: wellknown.GatewayControllerName,
-						ParametersRef: &api.ParametersReference{
-							Group:     gw2_v1alpha1.GroupName,
-							Kind:      api.Kind(wellknown.GatewayParametersGVK.Kind),
-							Name:      wellknown.DefaultGatewayParametersName,
-							Namespace: ptr.To(api.Namespace(defaultNamespace)),
-						},
-					},
-				}
-				gwParams := &gw2_v1alpha1.GatewayParameters{
-					TypeMeta: metav1.TypeMeta{
-						Kind: wellknown.GatewayParametersGVK.Kind,
-						// The parsing expects GROUP/VERSION format in this field
-						APIVersion: gw2_v1alpha1.GroupVersion.String(),
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      wellknown.DefaultGatewayParametersName,
-						Namespace: defaultNamespace,
-						UID:       "1237",
-					},
-				}
-
-				gw := &api.Gateway{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "foo",
-						Namespace: defaultNamespace,
-						UID:       "1235",
-					},
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Gateway",
-						APIVersion: "gateway.networking.k8s.io",
-					},
-					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
-					},
-				}
-
-				gwp := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, gwParams), &deployer.Inputs{
-					CommonCollections: newCommonCols(GinkgoT(), gwc, gw),
-					Dev:               false,
-					ControlPlane: deployer.ControlPlaneInfo{
-						XdsHost: "something.cluster.local",
-						XdsPort: 1234,
-					},
-					ImageInfo: &deployer.ImageInfo{
-						Registry: "foo",
-						Tag:      "bar",
-					},
 				})
 				chart, err := internaldeployer.LoadGatewayChart()
 				Expect(err).NotTo(HaveOccurred())
-				d := deployer.NewDeployer(wellknown.GatewayControllerName, newFakeClientWithObjs(gwc, gwParams), chart,
-					gwp,
+				d = deployer.NewDeployer(
+					wellknown.DefaultGatewayControllerName,
+					newFakeClientWithObjs(gwc, gwp), chart,
+					gwParams,
 					internaldeployer.GatewayReleaseNameAndNamespace)
 
 				var objs clientObjects
@@ -708,7 +927,7 @@ func runDeployerTests(usePortMapping bool) {
 						Namespace: defaultNamespace,
 					},
 					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
+						GatewayClassName: wellknown.DefaultGatewayClassName,
 						Infrastructure: &api.GatewayInfrastructure{
 							ParametersRef: &api.LocalParametersReference{
 								Group: gw2_v1alpha1.GroupName,
@@ -737,7 +956,9 @@ func runDeployerTests(usePortMapping bool) {
 				})
 				chart, err := internaldeployer.LoadGatewayChart()
 				Expect(err).NotTo(HaveOccurred())
-				d = deployer.NewDeployer(wellknown.GatewayControllerName, newFakeClientWithObjs(gwc, gwp), chart,
+				d = deployer.NewDeployer(
+					wellknown.DefaultGatewayControllerName,
+					newFakeClientWithObjs(gwc, gwp), chart,
 					gwParams,
 					internaldeployer.GatewayReleaseNameAndNamespace)
 
@@ -1016,14 +1237,24 @@ func runDeployerTests(usePortMapping bool) {
 						Registry: "foo",
 						Tag:      "bar",
 					},
-				})
-				chart, err := internaldeployer.LoadGatewayChart()
-				Expect(err).NotTo(HaveOccurred())
-				d := deployer.NewDeployer(
-					wellknown.GatewayControllerName,
-					newFakeClientWithObjs(defaultGatewayClass()), chart,
-					gwParams,
-					internaldeployer.GatewayReleaseNameAndNamespace)
+					GatewayClassName:         wellknown.DefaultGatewayClassName,
+					WaypointGatewayClassName: wellknown.DefaultWaypointClassName,
+					AgentGatewayClassName:    wellknown.DefaultAgentGatewayClassName,
+				}
+			}
+			istioEnabledDeployerInputs = func() *deployer.Inputs {
+				inp := defaultDeployerInputs()
+				inp.IstioAutoMtlsEnabled = true
+				return inp
+			}
+			defaultInput = func() *input {
+				return &input{
+					dInputs:    defaultDeployerInputs(),
+					defaultGwp: defaultGatewayParams(),
+					gw:         defaultGateway(),
+					gwc:        defaultGatewayClassWithParamsRef(),
+				}
+			}
 
 				_, err = d.GetObjsToDeploy(context.Background(), gw)
 				Expect(err).To(MatchError(ContainSubstring("invalid kind InvalidKind for GatewayParameters")))
@@ -2035,10 +2266,12 @@ func runDeployerTests(usePortMapping bool) {
 					inp.dInputs.CommonCollections = newCommonCols(GinkgoT(), inputObjs...)
 				}
 
-				// run break-glass setup
-				if inp.arbitrarySetup != nil {
-					inp.arbitrarySetup()
-				}
+			gwParams := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, defaultGwp, overrideGwp), inp.dInputs)
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, newFakeClientWithObjs(gwc, defaultGwp, overrideGwp), chart,
+				gwParams,
+				internaldeployer.GatewayReleaseNameAndNamespace)
 
 				// Catch nil objs so the fake client doesn't choke
 				gwc := inp.gwc
@@ -2046,16 +2279,91 @@ func runDeployerTests(usePortMapping bool) {
 					gwc = defaultGatewayClassWithParamsRef()
 				}
 
-				// default these to empty objects so we can test behavior when one or both
-				// resources don't exist
-				defaultGwp := inp.defaultGwp
-				if defaultGwp == nil {
-					defaultGwp = &gw2_v1alpha1.GatewayParameters{}
-				}
-				overrideGwp := inp.overrideGwp
-				if overrideGwp == nil {
-					overrideGwp = &gw2_v1alpha1.GatewayParameters{}
-				}
+			// handle custom test validation func
+			Expect(expected.validationFunc(objs, inp)).NotTo(HaveOccurred())
+		},
+			Entry("GatewayParameters overrides", &input{
+				dInputs:     defaultDeployerInputs(),
+				gw:          defaultGatewayWithGatewayParams(gwpOverrideName),
+				defaultGwp:  defaultGatewayParams(),
+				overrideGwp: defaultGatewayParamsOverride(),
+			}, &expectedOutput{
+				validationFunc: func(objs clientObjects, inp *input) error {
+					return validateGatewayParametersPropagation(objs, mergedGatewayParams())
+				},
+			}),
+			Entry("Fully defined GatewayParameters", &input{
+				dInputs:    istioEnabledDeployerInputs(),
+				gw:         defaultGateway(),
+				defaultGwp: fullyDefinedGatewayParams(),
+			}, &expectedOutput{
+				validationFunc: fullyDefinedValidation,
+			}),
+			Entry("Fully defined GatewayParameters with probes", &input{
+				dInputs:    istioEnabledDeployerInputs(),
+				gw:         defaultGateway(),
+				defaultGwp: fullyDefinedGatewayParamsWithProbes(),
+			}, &expectedOutput{
+				validationFunc: fullyDefinedValidationWithProbes,
+			}),
+			Entry("Fully defined GatewayParameters with custom env vars", &input{
+				dInputs:    istioEnabledDeployerInputs(),
+				gw:         defaultGateway(),
+				defaultGwp: fullyDefinedGatewayParamsWithCustomEnv(),
+			}, &expectedOutput{
+				validationFunc: fullyDefinedValidationCustomEnv,
+			}),
+
+			Entry("Fully defined GatewayParameters with floating user id", &input{
+				dInputs:    istioEnabledDeployerInputs(),
+				gw:         defaultGateway(),
+				defaultGwp: fullyDefinedGatewayParamsWithFloatingUserId(),
+			}, &expectedOutput{
+				validationFunc: fullyDefinedValidationFloatingUserId,
+			}),
+			Entry("correct deployment with sds and AI extension enabled", &input{
+				dInputs:     istioEnabledDeployerInputs(),
+				gw:          defaultGatewayWithGatewayParams(gwpOverrideName),
+				defaultGwp:  defaultGatewayParams(),
+				overrideGwp: gatewayParamsOverrideWithSds(),
+			}, &expectedOutput{
+				validationFunc: aiAndSdsValidationFunc,
+			}),
+			Entry("correct deployment with sds, AI extension, and floatinguUserId enabled", &input{
+				dInputs:     istioEnabledDeployerInputs(),
+				gw:          defaultGatewayWithGatewayParams(gwpOverrideName),
+				defaultGwp:  defaultGatewayParams(),
+				overrideGwp: gatewayParamsOverrideWithSdsAndFloatingUserId(),
+			}, &expectedOutput{
+				validationFunc: aiSdsAndFloatingUserIdValidationFunc,
+			}),
+			Entry("no listeners on gateway", &input{
+				dInputs: defaultDeployerInputs(),
+				gw: &api.Gateway{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "foo",
+						Namespace: defaultNamespace,
+						UID:       "1235",
+					},
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Gateway",
+						APIVersion: "gateway.networking.k8s.io",
+					},
+					Spec: api.GatewaySpec{
+						GatewayClassName: wellknown.DefaultGatewayClassName,
+					},
+				},
+				defaultGwp: defaultGatewayParams(),
+			}, &expectedOutput{
+				validationFunc: func(objs clientObjects, inp *input) error {
+					Expect(objs).NotTo(BeEmpty())
+					return nil
+				},
+			}),
+			Entry("port offset", defaultInput(), &expectedOutput{
+				validationFunc: func(objs clientObjects, inp *input) error {
+					svc := objs.findService(defaultNamespace, defaultServiceName)
+					Expect(svc).NotTo(BeNil())
 
 				gwParams := internaldeployer.NewGatewayParameters(newFakeClientWithObjs(gwc, defaultGwp, overrideGwp), inp.dInputs)
 				chart, err := internaldeployer.LoadGatewayChart()
@@ -2196,41 +2504,41 @@ func runDeployerTests(usePortMapping bool) {
 							},
 						},
 					},
-				}, &expectedOutput{
-					validationFunc: func(objs clientObjects, inp *input) error {
-						svc := objs.findService(defaultNamespace, defaultServiceName)
-						Expect(svc).NotTo(BeNil())
+				},
+			}, &expectedOutput{
+				validationFunc: func(objs clientObjects, inp *input) error {
+					svc := objs.findService(defaultNamespace, defaultServiceName)
+					Expect(svc).NotTo(BeNil())
 
-						port := svc.Spec.Ports[0]
-						Expect(port.Port).To(Equal(int32(maybeMappedPort80)))
-						Expect(port.TargetPort.String()).To(Equal(port.Name))
-						Expect(port.NodePort).To(Equal(int32(30000)))
-						return nil
+					port := svc.Spec.Ports[0]
+					Expect(port.Port).To(Equal(int32(80)))
+					Expect(port.TargetPort.IntVal).To(Equal(int32(8080)))
+					Expect(port.NodePort).To(Equal(int32(30000)))
+					return nil
+				},
+			}),
+			Entry("duplicate ports", &input{
+				dInputs: defaultDeployerInputs(),
+				gw: &api.Gateway{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "foo",
+						Namespace: defaultNamespace,
+						UID:       "1235",
 					},
-				}),
-				Entry("duplicate ports", &input{
-					dInputs: defaultDeployerInputs(),
-					gw: &api.Gateway{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "foo",
-							Namespace: defaultNamespace,
-							UID:       "1235",
-						},
-						TypeMeta: metav1.TypeMeta{
-							Kind:       "Gateway",
-							APIVersion: "gateway.networking.k8s.io",
-						},
-						Spec: api.GatewaySpec{
-							GatewayClassName: wellknown.GatewayClassName,
-							Listeners: []api.Listener{
-								{
-									Name: "listener-1",
-									Port: maybeMappedPort80,
-								},
-								{
-									Name: "listener-2",
-									Port: maybeMappedPort80,
-								},
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Gateway",
+						APIVersion: "gateway.networking.k8s.io",
+					},
+					Spec: api.GatewaySpec{
+						GatewayClassName: wellknown.DefaultGatewayClassName,
+						Listeners: []api.Listener{
+							{
+								Name: "listener-1",
+								Port: 80,
+							},
+							{
+								Name: "listener-2",
+								Port: 80,
 							},
 						},
 					},
@@ -2421,22 +2729,45 @@ func runDeployerTests(usePortMapping bool) {
 				Expect(objs).NotTo(BeEmpty(), "expected non-empty objects for endpoint picker deployment")
 				Expect(objs).To(HaveLen(4))
 
-				// Find the child objects.
-				var sa *corev1.ServiceAccount
-				var crb *rbacv1.ClusterRoleBinding
-				var dep *appsv1.Deployment
-				var svc *corev1.Service
-				for _, obj := range objs {
-					switch t := obj.(type) {
-					case *corev1.ServiceAccount:
-						sa = t
-					case *rbacv1.ClusterRoleBinding:
-						crb = t
-					case *appsv1.Deployment:
-						dep = t
-					case *corev1.Service:
-						svc = t
-					}
+			// Initialize a new deployer with InferenceExtension inputs.
+			ie := &internaldeployer.InferenceExtension{}
+			chart, err := internaldeployer.LoadInferencePoolChart()
+			Expect(err).NotTo(HaveOccurred())
+			cli := newFakeClientWithObjs(pool)
+			d := deployer.NewDeployer(wellknown.DefaultGatewayControllerName, cli, chart,
+				ie,
+				internaldeployer.InferenceExtensionReleaseNameAndNamespace)
+
+			// Simulate reconciliation so that the pool gets its finalizer added.
+			err = controller.EnsureFinalizer(context.Background(), cli, pool)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that the pool itself has the finalizer set.
+			Expect(pool.GetFinalizers()).To(ContainElement(wellknown.InferencePoolFinalizer))
+
+			// Get the endpoint picker objects for the InferencePool.
+			objs, err := d.GetObjsToDeploy(nil, pool)
+			Expect(err).NotTo(HaveOccurred())
+			objs = d.SetNamespaceAndOwner(pool, objs)
+
+			Expect(objs).NotTo(BeEmpty(), "expected non-empty objects for endpoint picker deployment")
+			Expect(objs).To(HaveLen(4))
+
+			// Find the child objects.
+			var sa *corev1.ServiceAccount
+			var crb *rbacv1.ClusterRoleBinding
+			var dep *appsv1.Deployment
+			var svc *corev1.Service
+			for _, obj := range objs {
+				switch t := obj.(type) {
+				case *corev1.ServiceAccount:
+					sa = t
+				case *rbacv1.ClusterRoleBinding:
+					crb = t
+				case *appsv1.Deployment:
+					dep = t
+				case *corev1.Service:
+					svc = t
 				}
 				Expect(sa).NotTo(BeNil(), "expected a ServiceAccount to be rendered")
 				Expect(crb).NotTo(BeNil(), "expected a ClusterRoleBinding to be rendered")
@@ -2483,10 +2814,59 @@ func runDeployerTests(usePortMapping bool) {
 
 		Context("with listener sets", func() {
 
-			var (
-				listenerSetPort int32 = 4567
-				listenerPort    int32 = 1234
-			)
+		var (
+			listenerSetPort int32 = 4567
+			listenerPort    int32 = 1234
+		)
+
+		It("exposes all necessary ports", func() {
+			allNamespaces := api.NamespacesFromAll
+			gw := &api.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "foo",
+					Namespace: defaultNamespace,
+					UID:       "1235",
+				},
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Gateway",
+					APIVersion: "gateway.networking.k8s.io",
+				},
+				Spec: api.GatewaySpec{
+					GatewayClassName: wellknown.DefaultGatewayClassName,
+					AllowedListeners: &api.AllowedListeners{
+						Namespaces: &api.ListenerNamespaces{
+							From: &allNamespaces,
+						},
+					},
+					Listeners: []api.Listener{
+						{
+							Name: "gateway-listener",
+							Port: api.PortNumber(listenerPort),
+						},
+					},
+				},
+			}
+
+			ls := &apixv1a1.XListenerSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ls",
+					Namespace: defaultNamespace,
+				},
+				Spec: apixv1a1.ListenerSetSpec{
+					Listeners: []apixv1a1.ListenerEntry{
+						{
+							Name: "listenerset-listener",
+							Port: apixv1a1.PortNumber(listenerSetPort),
+						},
+					},
+					ParentRef: apixv1a1.ParentGatewayReference{
+						Kind:      (*apixv1a1.Kind)(&gw.Kind),
+						Group:     (*apixv1a1.Group)(&gw.APIVersion),
+						Name:      apixv1a1.ObjectName(gw.Name),
+						Namespace: (*apixv1a1.Namespace)(&gw.Namespace),
+					},
+				},
+			}
 
 			It("exposes all necessary ports", func() {
 				allNamespaces := api.NamespacesFromAll
@@ -2500,12 +2880,87 @@ func runDeployerTests(usePortMapping bool) {
 						Kind:       "Gateway",
 						APIVersion: "gateway.networking.k8s.io",
 					},
-					Spec: api.GatewaySpec{
-						GatewayClassName: wellknown.GatewayClassName,
-						AllowedListeners: &api.AllowedListeners{
-							Namespaces: &api.ListenerNamespaces{
-								From: &allNamespaces,
-							},
+				})
+			chart, err := internaldeployer.LoadGatewayChart()
+			Expect(err).NotTo(HaveOccurred())
+			d := deployer.NewDeployer(
+				wellknown.DefaultGatewayControllerName,
+				newFakeClientWithObjs(defaultGatewayClass(), defaultGatewayParams()),
+				chart, gwParams, internaldeployer.GatewayReleaseNameAndNamespace)
+
+			var objs clientObjects
+			objs, err = d.GetObjsToDeploy(context.Background(), gw)
+			Expect(err).NotTo(HaveOccurred())
+			objs = d.SetNamespaceAndOwner(gw, objs)
+
+			Expect(objs).To(HaveLen(4))
+			Expect(objs.findConfigMap(defaultNamespace, gw.Name)).ToNot(BeNil())
+			Expect(objs.findServiceAccount(defaultNamespace, gw.Name)).ToNot(BeNil())
+
+			servicePorts := objs.findService(defaultNamespace, gw.Name).Spec.Ports
+			Expect(servicePorts[0].Name).To(Equal(fmt.Sprintf("listener-%d", listenerPort)))
+			Expect(servicePorts[0].Port).To(Equal(listenerPort))
+			Expect(servicePorts[1].Name).To(Equal(fmt.Sprintf("listener-%d", listenerSetPort)))
+			Expect(servicePorts[1].Port).To(Equal(listenerSetPort))
+
+			deploymentPorts := objs.findDeployment(defaultNamespace, gw.Name).Spec.Template.Spec.Containers[0].Ports
+			Expect(deploymentPorts[0].Name).To(Equal(fmt.Sprintf("listener-%d", listenerPort)))
+			Expect(deploymentPorts[0].ContainerPort).To(Equal(listenerPort))
+			Expect(deploymentPorts[1].Name).To(Equal(fmt.Sprintf("listener-%d", listenerSetPort)))
+			Expect(deploymentPorts[1].ContainerPort).To(Equal(listenerSetPort))
+		})
+	})
+})
+
+// initialize a fake controller-runtime client with the given list of objects
+func newFakeClientWithObjs(objs ...client.Object) client.Client {
+	scheme := schemes.GatewayScheme()
+
+	// Ensure the rbac types are registered.
+	if err := rbacv1.AddToScheme(scheme); err != nil {
+		panic(fmt.Sprintf("failed to add rbacv1 scheme: %v", err))
+	}
+
+	// Check if any object is an InferencePool, and add its scheme if needed.
+	for _, obj := range objs {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Kind == wellknown.InferencePoolKind {
+			if err := infextv1a2.AddToScheme(scheme); err != nil {
+				panic(fmt.Sprintf("failed to add InferenceExtension scheme: %v", err))
+			}
+			break
+		}
+	}
+
+	return fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objs...).
+		Build()
+}
+
+func fullyDefinedGatewayParameters(name, namespace string) *gw2_v1alpha1.GatewayParameters {
+	return &gw2_v1alpha1.GatewayParameters{
+		TypeMeta: metav1.TypeMeta{
+			Kind: wellknown.GatewayParametersGVK.Kind,
+			// The parsing expects GROUP/VERSION format in this field
+			APIVersion: gw2_v1alpha1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			UID:       "1236",
+		},
+		Spec: gw2_v1alpha1.GatewayParametersSpec{
+			Kube: &gw2_v1alpha1.KubernetesProxyConfig{
+				Deployment: &gw2_v1alpha1.ProxyDeployment{
+					Replicas: ptr.To[uint32](3),
+				},
+				EnvoyContainer: &gw2_v1alpha1.EnvoyContainer{
+					Bootstrap: &gw2_v1alpha1.EnvoyBootstrap{
+						LogLevel: ptr.To("debug"),
+						ComponentLogLevels: map[string]string{
+							"router":   "info",
+							"listener": "warn",
 						},
 						Listeners: []api.Listener{
 							{
@@ -2537,24 +2992,8 @@ func runDeployerTests(usePortMapping bool) {
 					},
 				}
 
-				gwParams := internaldeployer.NewGatewayParameters(
-					newFakeClientWithObjs(defaultGatewayClass(), defaultGatewayParams()), &deployer.Inputs{
-						CommonCollections: newCommonCols(GinkgoT(), defaultGatewayClass(), gw, ls),
-						Dev:               false,
-						ControlPlane: deployer.ControlPlaneInfo{
-							XdsHost: "something.cluster.local", XdsPort: 1234,
-						},
-						ImageInfo: &deployer.ImageInfo{
-							Registry: "foo",
-							Tag:      "bar",
-						},
-					})
-				chart, err := internaldeployer.LoadGatewayChart()
-				Expect(err).NotTo(HaveOccurred())
-				d := deployer.NewDeployer(
-					wellknown.GatewayControllerName,
-					newFakeClientWithObjs(defaultGatewayClass(), defaultGatewayParams()),
-					chart, gwParams, internaldeployer.GatewayReleaseNameAndNamespace)
+	krtopts := krtutil.NewKrtOptions(ctx.Done(), nil)
+	gateways := krtcollections.NewGatewayIndex(krtopts, wellknown.DefaultGatewayControllerName, policies, kubeRawGateways, kubeRawListenerSets, gatewayClasses, nsCol)
 
 				var objs clientObjects
 				objs, err = d.GetObjsToDeploy(context.Background(), gw)
