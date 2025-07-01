@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"helm.sh/helm/v3/pkg/chart"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -378,31 +377,4 @@ func getGatewayClassFromGateway(ctx context.Context, cli client.Client, gw *api.
 	}
 
 	return gwc, nil
-}
-
-func updatePodSecurityContext(podSecurityContext *corev1.PodSecurityContext, ports []deployer.HelmPort) *corev1.PodSecurityContext {
-	usePrivilegedPorts := false
-	for _, p := range ports {
-		if int32(*p.Port) < 1024 {
-			usePrivilegedPorts = true
-		}
-	}
-
-	if usePrivilegedPorts {
-		if podSecurityContext == nil {
-			podSecurityContext = &corev1.PodSecurityContext{}
-		}
-
-		sysctls := podSecurityContext.Sysctls
-		if sysctls == nil {
-			sysctls = []corev1.Sysctl{}
-		}
-		sysctls = append(sysctls, corev1.Sysctl{
-			Name:  "net.ipv4.ip_unprivileged_port_start",
-			Value: "0",
-		})
-		podSecurityContext.Sysctls = sysctls
-	}
-
-	return podSecurityContext
 }
