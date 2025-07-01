@@ -33,42 +33,38 @@ type ExtraGatewayParameters struct {
 // UpdateSecurityContexts updates the security contexts for the gateway parameters.
 // It applies the floating user ID if it is set and adds the sysctl to allow the privileged ports if the gateway uses them.
 func UpdateSecurityContexts(gwp *v1alpha1.GatewayParameters, vals *HelmConfig) {
+	// If the floating user ID is set, unset the RunAsUser field from all security contexts
 	if gwp.Spec.Kube.GetFloatingUserId() != nil && *gwp.Spec.Kube.GetFloatingUserId() {
 		applyFloatingUserId(gwp.Spec.Kube)
 	}
 
-	pss := applyPrivilegedPorts(gwp.Spec.Kube.PodTemplate.GetSecurityContext(), vals.Gateway.Ports)
-	if gwp.Spec.Kube.PodTemplate == nil {
-		gwp.Spec.Kube.PodTemplate = &v1alpha1.Pod{}
-	}
-	gwp.Spec.Kube.PodTemplate.SecurityContext = pss
-}
-
-func applyPrivilegedPorts(podSecurityContext *corev1.PodSecurityContext, ports []HelmPort) *corev1.PodSecurityContext {
+	// Check if privileged ports are used
 	usePrivilegedPorts := false
-	for _, p := range ports {
+	for _, p := range vals.Gateway.Ports {
 		if int32(*p.Port) < 1024 {
 			usePrivilegedPorts = true
 		}
 	}
 
 	if usePrivilegedPorts {
-		if podSecurityContext == nil {
-			podSecurityContext = &corev1.PodSecurityContext{}
-		}
-
-		sysctls := podSecurityContext.Sysctls
-		if sysctls == nil {
-			sysctls = []corev1.Sysctl{}
-		}
-		sysctls = append(sysctls, corev1.Sysctl{
-			Name:  "net.ipv4.ip_unprivileged_port_start",
-			Value: "0",
-		})
-		podSecurityContext.Sysctls = sysctls
+		allowPrivilegedPorts(gwp.Spec.Kube)
 	}
 
-	return podSecurityContext
+}
+
+func allowPrivilegedPorts(cfg *v1alpha1.KubernetesProxyConfig) {
+	if cfg.PodTemplate == nil {
+		cfg.PodTemplate = &v1alpha1.Pod{}
+	}
+
+	if cfg.PodTemplate.SecurityContext == nil {
+		cfg.PodTemplate.SecurityContext = &corev1.PodSecurityContext{}
+	}
+
+	cfg.PodTemplate.SecurityContext.Sysctls = append(cfg.PodTemplate.SecurityContext.Sysctls, corev1.Sysctl{
+		Name:  "net.ipv4.ip_unprivileged_port_start",
+		Value: "0",
+	})
 }
 
 // applyFloatingUserId will set the RunAsUser field from all security contexts to null if the floatingUserId field is set
@@ -149,7 +145,7 @@ func defaultWaypointGatewayParameters(imageInfo *ImageInfo) *v1alpha1.GatewayPar
 // defaultGatewayParameters returns an in-memory GatewayParameters with the default values
 // set for the gateway.
 func defaultGatewayParameters(imageInfo *ImageInfo) *v1alpha1.GatewayParameters {
-	gwp := &v1alpha1.GatewayParameters{
+	return &v1alpha1.GatewayParameters{
 		Spec: v1alpha1.GatewayParametersSpec{
 			SelfManaged: nil,
 			Kube: &v1alpha1.KubernetesProxyConfig{
@@ -243,6 +239,4 @@ func defaultGatewayParameters(imageInfo *ImageInfo) *v1alpha1.GatewayParameters 
 			},
 		},
 	}
-
-	return gwp
 }

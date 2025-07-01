@@ -199,7 +199,6 @@ func (k *kGatewayParameters) getDefaultGatewayParameters(ctx context.Context, gw
 	if err != nil {
 		return nil, err
 	}
-
 	return k.getGatewayParametersForGatewayClass(ctx, gwc)
 }
 
@@ -307,7 +306,6 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	gateway.ExtraPodLabels = podConfig.GetExtraLabels()
 	gateway.ImagePullSecrets = podConfig.GetImagePullSecrets()
 	gateway.PodSecurityContext = podConfig.GetSecurityContext()
-
 	gateway.NodeSelector = podConfig.GetNodeSelector()
 	gateway.Affinity = podConfig.GetAffinity()
 	gateway.Tolerations = podConfig.GetTolerations()

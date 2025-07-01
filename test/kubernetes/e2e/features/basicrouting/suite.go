@@ -75,7 +75,6 @@ func (s *testingSuite) TestGatewayWithRoute() {
 
 	// Should have a successful response
 	for _, port := range []int{listenerHighPort, listenerLowPort} {
-		// Should have a successful response
 		s.testInstallation.Assertions.AssertEventualCurlResponse(
 			s.ctx,
 			testdefaults.CurlPodExecOpt,
