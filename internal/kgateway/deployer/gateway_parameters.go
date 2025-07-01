@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"helm.sh/helm/v3/pkg/chart"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -200,21 +201,14 @@ func (k *kGatewayParameters) getDefaultGatewayParameters(ctx context.Context, gw
 		return nil, err
 	}
 
-	gwpArgs := deployer.NewGatewayParametersArgs().
-		WithGatewayClass(gwc).
-		WithImageInfo(k.inputs.ImageInfo).
-		WithUseLowPorts(gatewayUsesLowPorts(gw))
-
-	return k.getGatewayParametersForGatewayClass(ctx, gwpArgs)
+	return k.getGatewayParametersForGatewayClass(ctx, gwc)
 }
 
 // Gets the GatewayParameters object associated with a given GatewayClass.
-func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Context, gwpArgs *deployer.GatewayParametersArgs) (*v1alpha1.GatewayParameters, error) {
+func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Context, gwc *api.GatewayClass) (*v1alpha1.GatewayParameters, error) {
 	logger := log.FromContext(ctx)
 
-	defaultGwp := deployer.GetInMemoryGatewayParameters(gwpArgs, k.inputs.GatewayClassName, k.inputs.WaypointGatewayClassName, k.inputs.AgentGatewayClassName)
-
-	gwc := gwpArgs.GetGatewayClass()
+	defaultGwp := deployer.GetInMemoryGatewayParameters(gwc.Name, k.inputs.ImageInfo, k.inputs.GatewayClassName, k.inputs.WaypointGatewayClassName, k.inputs.AgentGatewayClassName)
 
 	paramRef := gwc.Spec.ParametersRef
 	if paramRef == nil {
@@ -257,6 +251,7 @@ func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Con
 }
 
 func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.GatewayParameters) (*deployer.HelmConfig, error) {
+	fmt.Printf("In getValues\n")
 	irGW := deployer.GetGatewayIR(gw, k.inputs.CommonCollections)
 
 	// construct the default values
@@ -284,11 +279,6 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	// (note: if we add new fields to GatewayParameters, they will
 	// need to be plumbed through here as well)
 
-	// Apply the floating user ID if it is set
-	if gwParam.Spec.Kube.GetFloatingUserId() != nil && *gwParam.Spec.Kube.GetFloatingUserId() {
-		deployer.ApplyFloatingUserId(gwParam.Spec.Kube)
-	}
-
 	kubeProxyConfig := gwParam.Spec.Kube
 	deployConfig := kubeProxyConfig.GetDeployment()
 	podConfig := kubeProxyConfig.GetPodTemplate()
@@ -315,7 +305,8 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	gateway.ExtraPodAnnotations = podConfig.GetExtraAnnotations()
 	gateway.ExtraPodLabels = podConfig.GetExtraLabels()
 	gateway.ImagePullSecrets = podConfig.GetImagePullSecrets()
-	gateway.PodSecurityContext = podConfig.GetSecurityContext()
+	gateway.PodSecurityContext = deployer.UpdateSecurityContexts(gwParam, vals)
+
 	gateway.NodeSelector = podConfig.GetNodeSelector()
 	gateway.Affinity = podConfig.GetAffinity()
 	gateway.Tolerations = podConfig.GetTolerations()
@@ -387,11 +378,29 @@ func getGatewayClassFromGateway(ctx context.Context, cli client.Client, gw *api.
 	return gwc, nil
 }
 
-func gatewayUsesLowPorts(gw *api.Gateway) bool {
-	for _, l := range gw.Spec.Listeners {
-		if int32(l.Port) < 1024 {
-			return true
+func updatePodSecurityContext(podSecurityContext *corev1.PodSecurityContext, ports []deployer.HelmPort) *corev1.PodSecurityContext {
+	usePrivilegedPorts := false
+	for _, p := range ports {
+		if int32(*p.Port) < 1024 {
+			usePrivilegedPorts = true
 		}
 	}
-	return false
+
+	if usePrivilegedPorts {
+		if podSecurityContext == nil {
+			podSecurityContext = &corev1.PodSecurityContext{}
+		}
+
+		sysctls := podSecurityContext.Sysctls
+		if sysctls == nil {
+			sysctls = []corev1.Sysctl{}
+		}
+		sysctls = append(sysctls, corev1.Sysctl{
+			Name:  "net.ipv4.ip_unprivileged_port_start",
+			Value: "0",
+		})
+		podSecurityContext.Sysctls = sysctls
+	}
+
+	return podSecurityContext
 }
