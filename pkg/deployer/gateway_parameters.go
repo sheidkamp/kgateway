@@ -32,13 +32,16 @@ type ExtraGatewayParameters struct {
 
 // UpdateSecurityContexts updates the security contexts for the gateway parameters.
 // It applies the floating user ID if it is set and adds the sysctl to allow the privileged ports if the gateway uses them.
-func UpdateSecurityContexts(gwp *v1alpha1.GatewayParameters, vals *HelmConfig) *corev1.PodSecurityContext {
+func UpdateSecurityContexts(gwp *v1alpha1.GatewayParameters, vals *HelmConfig) {
 	if gwp.Spec.Kube.GetFloatingUserId() != nil && *gwp.Spec.Kube.GetFloatingUserId() {
 		applyFloatingUserId(gwp.Spec.Kube)
 	}
 
-	pss := applyPrivilegedPorts(vals.Gateway.PodSecurityContext, vals.Gateway.Ports)
-	return pss
+	pss := applyPrivilegedPorts(gwp.Spec.Kube.PodTemplate.GetSecurityContext(), vals.Gateway.Ports)
+	if gwp.Spec.Kube.PodTemplate == nil {
+		gwp.Spec.Kube.PodTemplate = &v1alpha1.Pod{}
+	}
+	gwp.Spec.Kube.PodTemplate.SecurityContext = pss
 }
 
 func applyPrivilegedPorts(podSecurityContext *corev1.PodSecurityContext, ports []HelmPort) *corev1.PodSecurityContext {

@@ -251,7 +251,6 @@ func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Con
 }
 
 func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.GatewayParameters) (*deployer.HelmConfig, error) {
-	fmt.Printf("In getValues\n")
 	irGW := deployer.GetGatewayIR(gw, k.inputs.CommonCollections)
 
 	// construct the default values
@@ -274,6 +273,9 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	if gwParam == nil {
 		return vals, nil
 	}
+
+	deployer.UpdateSecurityContexts(gwParam, vals)
+	// deployer.ApplyFloatingUserId(gwParam.Spec.Kube)
 
 	// extract all the custom values from the GatewayParameters
 	// (note: if we add new fields to GatewayParameters, they will
@@ -305,7 +307,7 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	gateway.ExtraPodAnnotations = podConfig.GetExtraAnnotations()
 	gateway.ExtraPodLabels = podConfig.GetExtraLabels()
 	gateway.ImagePullSecrets = podConfig.GetImagePullSecrets()
-	gateway.PodSecurityContext = deployer.UpdateSecurityContexts(gwParam, vals)
+	gateway.PodSecurityContext = podConfig.GetSecurityContext()
 
 	gateway.NodeSelector = podConfig.GetNodeSelector()
 	gateway.Affinity = podConfig.GetAffinity()
