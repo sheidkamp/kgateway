@@ -262,7 +262,7 @@ func (s *testingSuite) expectListenerSetAccepted(obj client.Object) {
 			Listeners: []gwxv1a1.ListenerEntryStatus{
 				{
 					Name:           "http",
-					Port:           lsListener1Port,
+					Port:           gwxv1a1.PortNumber(lsListener1Port),
 					AttachedRoutes: 2,
 					Conditions: []metav1.Condition{
 						{
@@ -289,7 +289,7 @@ func (s *testingSuite) expectListenerSetAccepted(obj client.Object) {
 				},
 				{
 					Name:           "http-2",
-					Port:           lsListener2Port,
+					Port:           gwxv1a1.PortNumber(lsListener2Port),
 					AttachedRoutes: 3,
 					Conditions: []metav1.Condition{
 						{
