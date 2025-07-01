@@ -273,7 +273,6 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	}
 
 	deployer.UpdateSecurityContexts(gwParam, vals)
-	// deployer.ApplyFloatingUserId(gwParam.Spec.Kube)
 
 	// extract all the custom values from the GatewayParameters
 	// (note: if we add new fields to GatewayParameters, they will
