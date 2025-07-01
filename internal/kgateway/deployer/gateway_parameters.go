@@ -206,7 +206,7 @@ func (k *kGatewayParameters) getDefaultGatewayParameters(ctx context.Context, gw
 func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Context, gwc *api.GatewayClass) (*v1alpha1.GatewayParameters, error) {
 	logger := log.FromContext(ctx)
 
-	defaultGwp := deployer.GetInMemoryGatewayParameters(gwc.Name, k.inputs.ImageInfo, k.inputs.GatewayClassName, k.inputs.WaypointGatewayClassName, k.inputs.AgentGatewayClassName)
+	defaultGwp := deployer.GetInMemoryGatewayParameters(gwc.GetName(), k.inputs.ImageInfo, k.inputs.GatewayClassName, k.inputs.WaypointGatewayClassName, k.inputs.AgentGatewayClassName)
 
 	paramRef := gwc.Spec.ParametersRef
 	if paramRef == nil {
