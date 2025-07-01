@@ -49,7 +49,6 @@ func UpdateSecurityContexts(gwp *v1alpha1.GatewayParameters, vals *HelmConfig) {
 	if usePrivilegedPorts {
 		allowPrivilegedPorts(gwp.Spec.Kube)
 	}
-
 }
 
 func allowPrivilegedPorts(cfg *v1alpha1.KubernetesProxyConfig) {
