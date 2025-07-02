@@ -272,6 +272,7 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 		return vals, nil
 	}
 
+	// The security contexts may need to be updated if floating user ID is set or if privileged ports are used
 	deployer.UpdateSecurityContexts(gwParam, vals)
 
 	// extract all the custom values from the GatewayParameters
