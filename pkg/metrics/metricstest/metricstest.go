@@ -138,7 +138,7 @@ func (g *prometheusGatheredMetrics) assertMetricObjLabels(metric *dto.Metric, ex
 
 func (g *prometheusGatheredMetrics) metricObjLabelsMatch(metric *dto.Metric, expectedLabels []metrics.Label) error {
 	if len(expectedLabels) != len(metric.GetLabel()) {
-		return fmt.Errorf("Expected %d labels, got %d", len(expectedLabels), len(metric.GetLabel()))
+		return fmt.Errorf("expected %d labels, got %d", len(expectedLabels), len(metric.GetLabel()))
 	}
 
 	labelMap := make(map[string]string, len(expectedLabels))
@@ -150,10 +150,10 @@ func (g *prometheusGatheredMetrics) metricObjLabelsMatch(metric *dto.Metric, exp
 	for _, label := range metric.GetLabel() {
 		labelValue, ok := labelMap[label.GetName()]
 		if !ok {
-			return fmt.Errorf("Label %s not found", label.GetName())
+			return fmt.Errorf("label %s not found", label.GetName())
 		}
 		if labelValue != label.GetValue() {
-			return fmt.Errorf("Label %s value mismatch - expected %s, got %s", label.GetName(), labelValue, label.GetValue())
+			return fmt.Errorf("label %s value mismatch - expected %s, got %s", label.GetName(), labelValue, label.GetValue())
 		}
 	}
 
@@ -224,6 +224,8 @@ func (g *prometheusGatheredMetrics) AssertMetric(name string, expected ExpectMet
 }
 
 func (g *prometheusGatheredMetrics) AssertMetrics(name string, expectedMetrics []ExpectMetric) {
+	require.NotEmpty(g.t, g.metrics[name], "Expected metrics %s not found", name)
+
 	for _, m := range g.metrics[name] {
 		matchedExpectedMetric := g.findMetricObj(m, expectedMetrics)
 		assert.NotNil(g.t, matchedExpectedMetric, "Metric %s with labels %v not found", name, m.GetLabel())
