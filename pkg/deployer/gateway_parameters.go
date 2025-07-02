@@ -30,7 +30,7 @@ type ExtraGatewayParameters struct {
 	Generator HelmValuesGenerator
 }
 
-// UpdateSecurityContexts updates the security contexts for the gateway parameters.
+// UpdateSecurityContexts updates the security contexts in the gateway parameters.
 // It applies the floating user ID if it is set and adds the sysctl to allow the privileged ports if the gateway uses them.
 func UpdateSecurityContexts(gwp *v1alpha1.GatewayParameters, vals *HelmConfig) {
 	// If the floating user ID is set, unset the RunAsUser field from all security contexts

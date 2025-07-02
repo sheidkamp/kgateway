@@ -272,9 +272,6 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 		return vals, nil
 	}
 
-	// The security contexts may need to be updated if floating user ID is set or if privileged ports are used
-	deployer.UpdateSecurityContexts(gwParam, vals)
-
 	// extract all the custom values from the GatewayParameters
 	// (note: if we add new fields to GatewayParameters, they will
 	// need to be plumbed through here as well)
@@ -306,6 +303,9 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	gateway.ExtraPodLabels = podConfig.GetExtraLabels()
 	gateway.ImagePullSecrets = podConfig.GetImagePullSecrets()
 	gateway.PodSecurityContext = podConfig.GetSecurityContext()
+	// The security contexts may need to be updated if floating user ID is set or if privileged ports are used
+	// This may affect both the PodSecurityContext and the SecurityContexts for the containers defined in gwParam
+	deployer.UpdateSecurityContexts(gwParam, vals)
 	gateway.NodeSelector = podConfig.GetNodeSelector()
 	gateway.Affinity = podConfig.GetAffinity()
 	gateway.Tolerations = podConfig.GetTolerations()
