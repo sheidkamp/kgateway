@@ -1860,7 +1860,7 @@ var _ = Describe("Deployer", func() {
 			}, &expectedOutput{
 				validationFunc: fullyDefinedValidationWithProbes,
 			}),
-			FEntry("Fully defined GatewayParameters with unprivileged port start sysctl", &input{
+			Entry("Fully defined GatewayParameters with unprivileged port start sysctl", &input{
 				dInputs:    istioEnabledDeployerInputs(),
 				gw:         defaultGateway(),
 				defaultGwp: fullyDefinedGatewayParamsWithUnprivilegedPortStartSysctl(),
