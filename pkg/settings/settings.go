@@ -155,6 +155,10 @@ type Settings struct {
 	// EnableBuiltinDefaultMetrics enables the default builtin controller-runtime metrics and go runtime metrics.
 	// Since these metrics can be numerous, it is disabled by default.
 	EnableBuiltinDefaultMetrics bool `split_words:"true" default:"false"`
+
+	// ScaleBuiltinDefaultMetrics scales the default builtin controller-runtime metrics and go runtime metrics.
+	// This is useful when running kgateway in a container with limited resources.
+	ScaleMetricsBuckets float64 `split_words:"true" default:"1"`
 }
 
 // BuildSettings returns a zero-valued Settings obj if error is encountered when parsing env

@@ -2,10 +2,12 @@
 package metrics
 
 import (
+	"log/slog"
 	"reflect"
 	"sync"
 	"sync/atomic"
 
+	"github.com/kgateway-dev/kgateway/v2/pkg/settings"
 	"github.com/prometheus/client_golang/prometheus"
 	"istio.io/istio/pkg/kube/krt"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -23,7 +25,19 @@ var (
 
 	// DefaultBuckets defines the default buckets used for histograms.
 	DefaultBuckets = prometheus.DefBuckets
+
+	// scaleMetricsBuckets is the factor by which to scale the default buckets used for histograms.
+	scaleMetricsBuckets = 1.0
 )
+
+func init() {
+	// Set scaleMetricsBuckets in the init so that it is set before any metrics are created.
+	st, err := settings.BuildSettings()
+	if err != nil {
+		slog.Error("error loading settings from env", "error", err)
+	}
+	scaleMetricsBuckets = st.ScaleMetricsBuckets
+}
 
 // Metric defines a base interface for metrics.
 type Metric interface {
@@ -146,6 +160,15 @@ func NewHistogram(opts HistogramOpts, labels []string) Histogram {
 
 	if len(opts.Buckets) == 0 {
 		opts.Buckets = DefaultBuckets
+	}
+
+	if scaleMetricsBuckets != 1 {
+		// Make a copy of the buckets so that we don't modify the original. Important for when the defaults are used.
+		newBuckets := make([]float64, len(opts.Buckets))
+		for i := range opts.Buckets {
+			newBuckets[i] = opts.Buckets[i] * scaleMetricsBuckets
+		}
+		opts.Buckets = newBuckets
 	}
 
 	h := &prometheusHistogram{
