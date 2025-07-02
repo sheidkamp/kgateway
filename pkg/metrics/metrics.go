@@ -36,7 +36,7 @@ func init() {
 	if err != nil {
 		slog.Error("error loading settings from env", "error", err)
 	}
-	scaleMetricsBuckets = st.ScaleMetricsBuckets
+	scaleMetricsBuckets = st.MetricsScaleBuckets
 }
 
 // Metric defines a base interface for metrics.
