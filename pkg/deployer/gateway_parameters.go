@@ -38,19 +38,23 @@ func UpdateSecurityContexts(gwp *v1alpha1.GatewayParameters, vals *HelmConfig) {
 		applyFloatingUserId(gwp.Spec.Kube)
 	}
 
-	// Check if privileged ports are used
-	usePrivilegedPorts := false
-	for _, p := range vals.Gateway.Ports {
-		if int32(*p.Port) < 1024 {
-			usePrivilegedPorts = true
-		}
-	}
-
-	if usePrivilegedPorts {
+	if usesPrivilegedPorts(vals.Gateway.Ports) {
 		allowPrivilegedPorts(gwp.Spec.Kube)
 	}
 }
 
+// usesPrivilegedPorts checks if the gateway uses privileged ports by checking the ports in the HelmConfig
+func usesPrivilegedPorts(ports []HelmPort) bool {
+	for _, p := range ports {
+		if int32(*p.Port) < 1024 {
+			return true
+		}
+	}
+	return false
+}
+
+// allowPrivilegedPorts allows the use of privileged ports by appending the "net.ipv4.ip_unprivileged_port_start" sysctl with a value of 0
+// to the PodTemplate.SecurityContext.Sysctls, or updating the value if it already exists.
 func allowPrivilegedPorts(cfg *v1alpha1.KubernetesProxyConfig) {
 	if cfg.PodTemplate == nil {
 		cfg.PodTemplate = &v1alpha1.Pod{}
@@ -60,6 +64,16 @@ func allowPrivilegedPorts(cfg *v1alpha1.KubernetesProxyConfig) {
 		cfg.PodTemplate.SecurityContext = &corev1.PodSecurityContext{}
 	}
 
+	// If the sysctl already exists, update the value
+	for i, sysctl := range cfg.PodTemplate.SecurityContext.Sysctls {
+		if sysctl.Name == "net.ipv4.ip_unprivileged_port_start" {
+			sysctl.Value = "0"
+			cfg.PodTemplate.SecurityContext.Sysctls[i] = sysctl
+			return
+		}
+	}
+
+	// If the sysctl does not exist, append it
 	cfg.PodTemplate.SecurityContext.Sysctls = append(cfg.PodTemplate.SecurityContext.Sysctls, corev1.Sysctl{
 		Name:  "net.ipv4.ip_unprivileged_port_start",
 		Value: "0",

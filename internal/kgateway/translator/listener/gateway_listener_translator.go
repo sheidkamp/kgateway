@@ -112,7 +112,7 @@ func (ml *MergedListeners) AppendListener(
 	return nil
 }
 
-func getListenerPort(listener ir.Listener) gwv1.PortNumber {
+func getListenerPortNumber(listener ir.Listener) gwv1.PortNumber {
 	return gwv1.PortNumber(listener.Port)
 }
 
@@ -132,7 +132,7 @@ func (ml *MergedListeners) appendHttpListener(
 		parents: []httpFilterChainParent{parent},
 	}
 	listenerName := GenerateListenerName(listener)
-	finalPort := getListenerPort(listener)
+	finalPort := getListenerPortNumber(listener)
 
 	for _, lis := range ml.Listeners {
 		if lis.port == finalPort {
@@ -176,7 +176,7 @@ func (ml *MergedListeners) appendHttpsListener(
 
 	// Perform the port transformation away from privileged ports only once to use
 	// during both lookup and when appending the listener.
-	finalPort := getListenerPort(listener)
+	finalPort := getListenerPortNumber(listener)
 
 	listenerName := GenerateListenerName(listener)
 	for _, lis := range ml.Listeners {
@@ -233,7 +233,7 @@ func (ml *MergedListeners) AppendTcpListener(
 		parents: parent,
 	}
 	listenerName := GenerateListenerName(listener)
-	finalPort := getListenerPort(listener)
+	finalPort := getListenerPortNumber(listener)
 
 	for _, lis := range ml.Listeners {
 		if lis.port == finalPort {
@@ -294,7 +294,7 @@ func (ml *MergedListeners) AppendTlsListener(
 	}
 
 	listenerName := GenerateListenerName(listener)
-	finalPort := getListenerPort(listener)
+	finalPort := getListenerPortNumber(listener)
 
 	for _, lis := range ml.Listeners {
 		if lis.port == finalPort {

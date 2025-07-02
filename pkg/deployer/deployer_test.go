@@ -1297,6 +1297,17 @@ var _ = Describe("Deployer", func() {
 				return fullyDefinedGatewayParameters(wellknown.DefaultGatewayParametersName, defaultNamespace)
 			}
 
+			fullyDefinedGatewayParamsWithUnprivilegedPortStartSysctl = func() *gw2_v1alpha1.GatewayParameters {
+				params := fullyDefinedGatewayParameters(wellknown.DefaultGatewayParametersName, defaultNamespace)
+				params.Spec.Kube.PodTemplate.SecurityContext.Sysctls = []corev1.Sysctl{
+					{
+						Name:  "net.ipv4.ip_unprivileged_port_start",
+						Value: "100",
+					},
+				}
+				return params
+			}
+
 			fullyDefinedGatewayParamsWithProbes = func() *gw2_v1alpha1.GatewayParameters {
 				params := fullyDefinedGatewayParameters(wellknown.DefaultGatewayParametersName, defaultNamespace)
 				params.Spec.Kube.PodTemplate.LivenessProbe = generateLivenessProbe()
@@ -1835,12 +1846,26 @@ var _ = Describe("Deployer", func() {
 			}, &expectedOutput{
 				validationFunc: fullyDefinedValidation,
 			}),
+			Entry("Fully defined GatewayParameters with ip_unprivileged_port_start sysctl already defined", &input{
+				dInputs:    istioEnabledDeployerInputs(),
+				gw:         defaultGateway(),
+				defaultGwp: fullyDefinedGatewayParams(),
+			}, &expectedOutput{
+				validationFunc: fullyDefinedValidation,
+			}),
 			Entry("Fully defined GatewayParameters with probes", &input{
 				dInputs:    istioEnabledDeployerInputs(),
 				gw:         defaultGateway(),
 				defaultGwp: fullyDefinedGatewayParamsWithProbes(),
 			}, &expectedOutput{
 				validationFunc: fullyDefinedValidationWithProbes,
+			}),
+			FEntry("Fully defined GatewayParameters with unprivileged port start sysctl", &input{
+				dInputs:    istioEnabledDeployerInputs(),
+				gw:         defaultGateway(),
+				defaultGwp: fullyDefinedGatewayParamsWithUnprivilegedPortStartSysctl(),
+			}, &expectedOutput{
+				validationFunc: fullyDefinedValidation,
 			}),
 			Entry("Fully defined GatewayParameters with custom env vars", &input{
 				dInputs:    istioEnabledDeployerInputs(),
