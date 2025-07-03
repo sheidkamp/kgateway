@@ -15,6 +15,8 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/settings"
 )
 
+// allEnvVarsSet returns a map which contains keys corresponding to every ENV var that can be used to configure settings,
+// with values set to a non-default value.
 func allEnvVarsSet() map[string]string {
 	return map[string]string{
 		"KGW_DNS_LOOKUP_FAMILY":             string(settings.DnsLookupFamilyV4Only),
@@ -195,39 +197,43 @@ func TestSettings(t *testing.T) {
 		})
 	}
 
-	t.Run("all settings are tested", func(t *testing.T) {
-		s := settings.Settings{}
-		settingsValue := reflect.ValueOf(s)
+}
 
-		allEnvVars := allEnvVarsSet()
-		// Check for the right number of env vars defined
-		require.Equal(t, settingsValue.NumField(), len(allEnvVars), "Number of fields in Settings does not match number of tested env vars")
+// TestEnvVarCoverage tests that all settings are tested with non-default values.
+func TestEnvVarCoverage(t *testing.T) {
+	s := settings.Settings{}
+	settingsValue := reflect.ValueOf(s)
 
-		// Check that each field of Settings has a corresponding env var set in the test map
-		// This protects against typos when adding new settings to the test map.
-		for envVar, defaultValue := range expectedEnvVars(settingsValue) {
-			require.Contains(t, allEnvVars, envVar, "Env var %s is not tested", envVar)
-			require.NotEqual(t, allEnvVars[envVar], defaultValue, "Env var %s is set to the default value", envVar)
-		}
-	})
+	allEnvVars := allEnvVarsSet()
+	// Check for the right number of env vars defined
+	require.Equal(t, settingsValue.NumField(), len(allEnvVars), "Number of fields in Settings does not match number of tested env vars")
 
-	// This test is used to validate that the expectedEnvVars function parses the field tags correctly to calculate the env var names.
-	t.Run("expectedEnvVars", func(t *testing.T) {
-		validateValue := reflect.ValueOf(validateExpectedEnvs{})
+	// Check that each field of Settings has a corresponding env var set in the test map
+	// This protects against typos when adding new settings to the test map.
+	for envVar, defaultValue := range expectedEnvVars(settingsValue) {
+		require.Contains(t, allEnvVars, envVar, "Env var %s is not tested", envVar)
+		require.NotEqual(t, allEnvVars[envVar], defaultValue, "Env var %s is set to the default value", envVar)
+	}
 
-		expectedEnvVars := expectedEnvVars(validateValue)
-		require.Equal(t, len(expectedEnvVars), validateValue.NumField())
+}
 
-		// Check that the env vars are correct
-		require.Contains(t, expectedEnvVars, "KGW_FIELD_ONE", "Env var KGW_FIELD_ONE is not set")
-		require.Equal(t, expectedEnvVars["KGW_FIELD_ONE"], "default_value_1", "Env var KGW_FIELD_ONE is not set to the default value")
-		require.Contains(t, expectedEnvVars, "KGW_FIELDTWO", "Env var KGW_FIELDTWO is not set")
-		require.Equal(t, expectedEnvVars["KGW_FIELDTWO"], "", "Env var KGW_FIELDTWO is not set to the default value")
-		require.Contains(t, expectedEnvVars, "ALT_FIELD_3", "Env var ALT_FIELD_3 is not set")
-		require.Contains(t, expectedEnvVars, "ALT_FIELD_4", "Env var ALT_FIELD_4 is not set")
-		require.Contains(t, expectedEnvVars, "KGW_FIELD_SSL_CONFIG", "Env var KGW_FIELD_SSL_CONFIG is not set")
-		require.Contains(t, expectedEnvVars, "KGW_FIELDHTTPCONFIG", "Env var KGW_FIELDHTTPCONFIG is not set")
-	})
+// TestExpectedEnvVars tests that the expectedEnvVars function, which is used only in this test file, parses the field tags correctly to calculate the env var names.
+func TestExpectedEnvVars(t *testing.T) {
+	validateValue := reflect.ValueOf(validateExpectedEnvs{})
+
+	expectedEnvVars := expectedEnvVars(validateValue)
+	require.Equal(t, len(expectedEnvVars), validateValue.NumField())
+
+	// Check that the env vars are correct
+	require.Contains(t, expectedEnvVars, "KGW_FIELD_ONE", "Env var KGW_FIELD_ONE is not set")
+	require.Equal(t, expectedEnvVars["KGW_FIELD_ONE"], "default_value_1", "Env var KGW_FIELD_ONE is not set to the default value")
+	require.Contains(t, expectedEnvVars, "KGW_FIELDTWO", "Env var KGW_FIELDTWO is not set")
+	require.Equal(t, expectedEnvVars["KGW_FIELDTWO"], "", "Env var KGW_FIELDTWO is not set to the default value")
+	require.Contains(t, expectedEnvVars, "ALT_FIELD_3", "Env var ALT_FIELD_3 is not set")
+	require.Contains(t, expectedEnvVars, "ALT_FIELD_4", "Env var ALT_FIELD_4 is not set")
+	require.Contains(t, expectedEnvVars, "KGW_FIELD_SSL_CONFIG", "Env var KGW_FIELD_SSL_CONFIG is not set")
+	require.Contains(t, expectedEnvVars, "KGW_FIELDHTTPCONFIG", "Env var KGW_FIELDHTTPCONFIG is not set")
+
 }
 
 func cleanupEnvVars(t *testing.T, envVars map[string]string) {
@@ -242,7 +248,7 @@ func cleanupEnvVars(t *testing.T, envVars map[string]string) {
 var gatherRegexp = regexp.MustCompile("([^A-Z]+|[A-Z]+[^A-Z]+|[A-Z]+)")
 var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
 
-// expectedEnvVars returns a map of all the env vars that should be set for the given settings value.
+// expectedEnvVars returns a map of all the env vars that should be set for the given Settings value.
 // The value of the map is the default value of the field.
 func expectedEnvVars(settingsValue reflect.Value) map[string]interface{} {
 	// This is a modified version of the code in https://github.com/kelseyhightower/envconfig/blob/7834011875d613aec60c606b52c2b0fe8949fe91/envconfig.go#L102-L128
