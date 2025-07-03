@@ -57,7 +57,7 @@ func TestSettings(t *testing.T) {
 	}{
 		{
 			// This test will pass if a new field is added to Settings and the default value is null value for the type.
-			// In this case the test will still be testing that expected default values are set, though it
+			// In this case the test will still be testing that expected default values are set, though our convvention is to set it explicitly.
 			name:    "defaults to empty or default values",
 			envVars: map[string]string{},
 			expectedSettings: &settings.Settings{
