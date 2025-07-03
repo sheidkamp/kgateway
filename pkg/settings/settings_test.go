@@ -197,25 +197,25 @@ func TestSettings(t *testing.T) {
 
 	t.Run("all settings are tested", func(t *testing.T) {
 		s := settings.Settings{}
-		v := reflect.ValueOf(s)
+		settingsValue := reflect.ValueOf(s)
 
 		allEnvVars := allEnvVarsSet()
 		// Check for the right number of env vars defined
-		require.Equal(t, v.NumField(), len(allEnvVars), "Number of fields in Settings does not match number of tested env vars")
+		require.Equal(t, settingsValue.NumField(), len(allEnvVars), "Number of fields in Settings does not match number of tested env vars")
 
 		// Check that each field of Settings has a corresponding env var set in the test map
 		// This protects against typos when adding new settings to the test map.
-		for envVar, defaultValue := range expectedEnvVars(v) {
+		for envVar, defaultValue := range expectedEnvVars(settingsValue) {
 			require.Contains(t, allEnvVars, envVar, "Env var %s is not tested", envVar)
 			require.NotEqual(t, allEnvVars[envVar], defaultValue, "Env var %s is set to the default value", envVar)
 		}
 	})
 
 	t.Run("expectedEnvVars", func(t *testing.T) {
-		v := reflect.ValueOf(validateExpectedEnvs{})
+		validateValue := reflect.ValueOf(validateExpectedEnvs{})
 
-		expectedEnvVars := expectedEnvVars(v)
-		require.Equal(t, len(expectedEnvVars), v.NumField())
+		expectedEnvVars := expectedEnvVars(validateValue)
+		require.Equal(t, len(expectedEnvVars), validateValue.NumField())
 
 		// Check that the env vars are correct
 		require.Contains(t, expectedEnvVars, "KGW_FIELD_ONE", "Env var KGW_FIELD_ONE is not set")
@@ -242,8 +242,6 @@ func cleanupEnvVars(t *testing.T, envVars map[string]string) {
 // The value of the map is the default value of the field.
 func expectedEnvVars(settingsValue reflect.Value) map[string]interface{} {
 	// This is a modified version of the code in https://github.com/kelseyhightower/envconfig/blob/7834011875d613aec60c606b52c2b0fe8949fe91/envconfig.go#L102-L128
-	var gatherRegexp = regexp.MustCompile("([^A-Z]+|[A-Z]+[^A-Z]+|[A-Z]+)")
-	var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
 	expectedEnvVars := make(map[string]interface{}, settingsValue.NumField())
 	for i := 0; i < settingsValue.NumField(); i++ {
 		fieldType := settingsValue.Type().Field(i)
