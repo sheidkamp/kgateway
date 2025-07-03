@@ -211,6 +211,7 @@ func TestSettings(t *testing.T) {
 		}
 	})
 
+	// This test is used to validate that the expectedEnvVars function parses the field tags correctly to calculate the env var names.
 	t.Run("expectedEnvVars", func(t *testing.T) {
 		v := reflect.ValueOf(validateExpectedEnvs{})
 
