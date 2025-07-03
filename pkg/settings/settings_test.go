@@ -241,7 +241,7 @@ func cleanupEnvVars(t *testing.T, envVars map[string]string) {
 // expectedEnvVars returns a map of all the env vars that should be set for the given settings value.
 // The value of the map is the default value of the field.
 func expectedEnvVars(settingsValue reflect.Value) map[string]interface{} {
-	// This is a modified version of the code in envconfig.go
+	// This is a modified version of the code in https://github.com/kelseyhightower/envconfig/blob/7834011875d613aec60c606b52c2b0fe8949fe91/envconfig.go#L102-L128
 	var gatherRegexp = regexp.MustCompile("([^A-Z]+|[A-Z]+[^A-Z]+|[A-Z]+)")
 	var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
 	expectedEnvVars := make(map[string]interface{}, settingsValue.NumField())
