@@ -239,6 +239,9 @@ func cleanupEnvVars(t *testing.T, envVars map[string]string) {
 	}
 }
 
+var gatherRegexp = regexp.MustCompile("([^A-Z]+|[A-Z]+[^A-Z]+|[A-Z]+)")
+var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
+
 // expectedEnvVars returns a map of all the env vars that should be set for the given settings value.
 // The value of the map is the default value of the field.
 func expectedEnvVars(settingsValue reflect.Value) map[string]interface{} {
