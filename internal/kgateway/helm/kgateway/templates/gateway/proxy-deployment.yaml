@@ -465,6 +465,7 @@ data:
                           route:
                             cluster: admin_port_cluster
                 http_filters:
+{{/* TODO: remove this when we can add health check via httplistenerpolicy? */}}
 {{- if $gateway.readinessProbe }}
                   - name: envoy.filters.http.health_check
                     typed_config:

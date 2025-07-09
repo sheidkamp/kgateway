@@ -88,6 +88,10 @@ type HTTPListenerPolicySpec struct {
 	// See here for more information: https://www.envoyproxy.io/docs/envoy/latest/api-v3/extensions/filters/network/http_connection_manager/v3/http_connection_manager.proto#envoy-v3-api-field-extensions-filters-network-http-connection-manager-v3-httpconnectionmanager-stream-idle-timeout
 	// +optional
 	StreamIdleTimeout *metav1.Duration `json:"streamIdleTimeout,omitempty"`
+
+	// HealthCheck is the health check configuration for the HTTP listener policy.
+	// +optional
+	HealthCheck *EnvoyHealthCheck `json:"healthCheck,omitempty"`
 }
 
 // AccessLog represents the top-level access log configuration.
@@ -629,3 +633,9 @@ const (
 	// PassThroughServerHeaderTransformation passes through the server header unchanged.
 	PassThroughServerHeaderTransformation ServerHeaderTransformation = "PassThrough"
 )
+
+// Todo: how to name this `HealthCheck` without conflicting with the existing `HealthCheck` type in the `v1alpha1` package?
+type EnvoyHealthCheck struct {
+	// +kubebuilder:validation:Required
+	Path string `json:"path"`
+}

@@ -615,6 +615,13 @@ spec:
                   type: object
                 maxItems: 16
                 type: array
+              healthCheck:
+                properties:
+                  path:
+                    type: string
+                required:
+                - path
+                type: object
               serverHeaderTransformation:
                 enum:
                 - Overwrite

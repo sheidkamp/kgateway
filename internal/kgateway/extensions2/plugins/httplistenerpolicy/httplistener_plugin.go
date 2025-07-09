@@ -7,7 +7,11 @@ import (
 	"time"
 
 	envoyaccesslog "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
+	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	healthcheckv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/health_check/v3"
 	envoy_hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -23,6 +27,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/common"
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/plugins"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/reports"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/client/clientset/versioned"
@@ -41,6 +46,7 @@ type httpListenerPolicy struct {
 	xffNumTrustedHops          *uint32
 	serverHeaderTransformation *envoy_hcm.HttpConnectionManager_ServerHeaderTransformation
 	streamIdleTimeout          *time.Duration
+	healthCheckPolicy          *healthcheckv3.HealthCheck
 }
 
 func (d *httpListenerPolicy) CreationTime() time.Time {
@@ -110,12 +116,25 @@ func (d *httpListenerPolicy) Equals(in any) bool {
 		return false
 	}
 
+	// Check healthCheckPolicy
+	if d.healthCheckPolicy == nil && d2.healthCheckPolicy != nil {
+		return false
+	}
+	if d.healthCheckPolicy != nil && d2.healthCheckPolicy == nil {
+		return false
+	}
+	if d.healthCheckPolicy != nil && d2.healthCheckPolicy != nil && !proto.Equal(d.healthCheckPolicy, d2.healthCheckPolicy) {
+		return false
+	}
+
 	return true
 }
 
 type httpListenerPolicyPluginGwPass struct {
 	ir.UnimplementedProxyTranslationPass
 	reporter reports.Reporter
+
+	healthCheckPolicy *healthcheckv3.HealthCheck
 }
 
 var _ ir.ProxyTranslationPass = &httpListenerPolicyPluginGwPass{}
@@ -171,6 +190,8 @@ func NewPlugin(ctx context.Context, commoncol *common.CommonCollections) extensi
 			streamIdleTimeout = &duration
 		}
 
+		healthCheckPolicy := convertHealthCheckPolicy(i)
+
 		pol := &ir.PolicyWrapper{
 			ObjectSource: objSrc,
 			Policy:       i,
@@ -183,6 +204,7 @@ func NewPlugin(ctx context.Context, commoncol *common.CommonCollections) extensi
 				xffNumTrustedHops:          i.Spec.XffNumTrustedHops,
 				serverHeaderTransformation: serverHeaderTransformation,
 				streamIdleTimeout:          streamIdleTimeout,
+				healthCheckPolicy:          healthCheckPolicy,
 			},
 			TargetRefs: pluginsdkutils.TargetRefsToPolicyRefs(i.Spec.TargetRefs, i.Spec.TargetSelectors),
 			Errors:     errs,
@@ -258,6 +280,36 @@ func (p *httpListenerPolicyPluginGwPass) ApplyHCM(
 	return nil
 }
 
+func (p *httpListenerPolicyPluginGwPass) HttpFilters(ctx context.Context, fc ir.FilterChainCommon) ([]plugins.StagedHttpFilter, error) {
+	if p.healthCheckPolicy == nil {
+		return nil, nil
+	}
+
+	stagedFilter, err := plugins.NewStagedFilter(
+		"envoy.filters.http.health_check",
+		p.healthCheckPolicy,
+		plugins.AfterStage(plugins.AuthZStage),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return []plugins.StagedHttpFilter{stagedFilter}, nil
+}
+
+func (p *httpListenerPolicyPluginGwPass) ApplyListenerPlugin(
+	ctx context.Context,
+	pCtx *ir.ListenerContext,
+	out *listenerv3.Listener,
+) {
+	policy, ok := pCtx.Policy.(*httpListenerPolicy)
+	if !ok {
+		return
+	}
+
+	p.healthCheckPolicy = policy.healthCheckPolicy
+}
+
 func convertUpgradeConfig(policy *v1alpha1.HTTPListenerPolicy) []*envoy_hcm.HttpConnectionManager_UpgradeConfig {
 	if policy.Spec.UpgradeConfig == nil {
 		return nil
@@ -290,4 +342,19 @@ func convertServerHeaderTransformation(transformation *v1alpha1.ServerHeaderTran
 	default:
 		return nil
 	}
+}
+
+func convertHealthCheckPolicy(policy *v1alpha1.HTTPListenerPolicy) *healthcheckv3.HealthCheck {
+	if policy.Spec.HealthCheck != nil {
+		return &healthcheckv3.HealthCheck{
+			PassThroughMode: &wrappers.BoolValue{Value: false},
+			Headers: []*routev3.HeaderMatcher{{
+				Name: ":path",
+				HeaderMatchSpecifier: &routev3.HeaderMatcher_ExactMatch{
+					ExactMatch: policy.Spec.HealthCheck.Path,
+				},
+			}},
+		}
+	}
+	return nil
 }
