@@ -89,7 +89,7 @@ type HTTPListenerPolicySpec struct {
 	// +optional
 	StreamIdleTimeout *metav1.Duration `json:"streamIdleTimeout,omitempty"`
 
-	// HealthCheck is the health check configuration for the HTTP listener policy.
+	// HealthCheck configures [Envoy health checks](https://www.envoyproxy.io/docs/envoy/latest/api-v3/extensions/filters/http/health_check/v3/health_check.proto)
 	// +optional
 	HealthCheck *EnvoyHealthCheck `json:"healthCheck,omitempty"`
 }
@@ -634,8 +634,10 @@ const (
 	PassThroughServerHeaderTransformation ServerHeaderTransformation = "PassThrough"
 )
 
-// Todo: how to name this `HealthCheck` without conflicting with the existing `HealthCheck` type in the `v1alpha1` package?
+// EnvoyHealthCheck represents configuration for Envoy's health check filter.
+// The filter will be configured in No pass through mode, and will only match requests with the specified path.
 type EnvoyHealthCheck struct {
+	// Path matches health check requests using this exact path
 	// +kubebuilder:validation:Required
 	Path string `json:"path"`
 }

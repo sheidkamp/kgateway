@@ -2868,14 +2868,15 @@ func schema_kgateway_v2_api_v1alpha1_EnvoyHealthCheck(ref common.ReferenceCallba
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Todo: how to name this `HealthCheck` without conflicting with the existing `HealthCheck` type in the `v1alpha1` package?",
+				Description: "EnvoyHealthCheck represents configuration for Envoy's health check filter. The filter will be configured in No pass through mode, and will only match requests with the specified path.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"path": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "Path matches health check requests using this exact path",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
@@ -3757,7 +3758,7 @@ func schema_kgateway_v2_api_v1alpha1_HTTPListenerPolicySpec(ref common.Reference
 					},
 					"healthCheck": {
 						SchemaProps: spec.SchemaProps{
-							Description: "HealthCheck is the health check configuration for the HTTP listener policy.",
+							Description: "HealthCheck configures [Envoy health checks](https://www.envoyproxy.io/docs/envoy/latest/api-v3/extensions/filters/http/health_check/v3/health_check.proto)",
 							Ref:         ref("github.com/kgateway-dev/kgateway/v2/api/v1alpha1.EnvoyHealthCheck"),
 						},
 					},
