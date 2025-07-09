@@ -637,7 +637,7 @@ const (
 // EnvoyHealthCheck represents configuration for Envoy's health check filter.
 // The filter will be configured in No pass through mode, and will only match requests with the specified path.
 type EnvoyHealthCheck struct {
-	// Path matches health check requests using this exact path
+	// Path defines the exact path that will be matched for health check requests.
 	// +kubebuilder:validation:Required
 	Path string `json:"path"`
 }
