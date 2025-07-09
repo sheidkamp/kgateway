@@ -293,11 +293,7 @@ func NewGatewayIndex(
 		}}
 	})
 
-	metricsRecorder := NewCollectionMetricsRecorder("Gateways")
-
 	h.Gateways = krt.NewCollection(gws, func(kctx krt.HandlerContext, i *gwv1.Gateway) *ir.Gateway {
-		defer metricsRecorder.TransformStart()(nil)
-
 		// only care about gateways use a class controlled by us
 		gwClass := ptr.Flatten(krt.FetchOne(kctx, gwClasses, krt.FilterKey(string(i.Spec.GatewayClassName))))
 		if gwClass == nil || controllerName != string(gwClass.Spec.ControllerName) {
@@ -406,33 +402,6 @@ func NewGatewayIndex(
 
 		return &out
 	}, krtopts.ToOptions("gateways")...)
-
-	metrics.RegisterEvents(h.Gateways, func(o krt.Event[ir.Gateway]) {
-		switch o.Event {
-		case controllers.EventDelete:
-			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-				Namespace: o.Latest().Namespace,
-				Name:      o.Latest().Name,
-				Resource:  "Gateway",
-			}, 0)
-			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-				Namespace: o.Latest().Namespace,
-				Name:      o.Latest().Name,
-				Resource:  "Listeners",
-			}, 0)
-		case controllers.EventAdd, controllers.EventUpdate:
-			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-				Namespace: o.Latest().Namespace,
-				Name:      o.Latest().Name,
-				Resource:  "Gateway",
-			}, 1)
-			metricsRecorder.SetResources(CollectionResourcesMetricLabels{
-				Namespace: o.Latest().Namespace,
-				Name:      o.Latest().Name,
-				Resource:  "Listeners",
-			}, len(o.Latest().Obj.Spec.Listeners))
-		}
-	})
 
 	return h
 }
@@ -556,6 +525,24 @@ func NewPolicyIndex(
 				}
 				return &a
 			}, krtopts.ToOptions(fmt.Sprintf("%s-policiesByTargetRef", gk.String()))...)
+
+			metrics.RegisterEvents(policiesByTargetRef, func(o krt.Event[ir.PolicyWrapper]) {
+				switch o.Event {
+				case controllers.EventAdd:
+					resourcesManaged.Add(1, resourceMetricLabels{
+						Gateway:   o.Latest().GetName(),
+						Namespace: o.Latest().GetNamespace(),
+						Resource:  "Policy",
+					}.toMetricsLabels()...)
+
+				case controllers.EventDelete:
+					resourcesManaged.Sub(1, resourceMetricLabels{
+						Gateway:   o.Latest().GetName(),
+						Namespace: o.Latest().GetNamespace(),
+						Resource:  "Policy",
+					}.toMetricsLabels()...)
+				}
+			})
 
 			targetRefIndex := krt.NewIndex(policiesByTargetRef, func(p ir.PolicyWrapper) []targetRefIndexKey {
 				// Every policy is indexed by PolicyRef and PolicyRef without Name (by Group+Kind+Namespace)

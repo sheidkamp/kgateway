@@ -107,6 +107,94 @@ func TestTranslationStart_Error(t *testing.T) {
 	currentMetrics.AssertHistogramPopulated("kgateway_translator_translation_duration_seconds")
 }
 
+func TestIncResourcesSyncsStartedTotal(t *testing.T) {
+	setupTest()
+
+	IncResourcesSyncsStartedTotal("test", ResourceMetricLabels{
+		Gateway:   "test-name",
+		Namespace: "test-namespace",
+		Resource:  "test-resource",
+	})
+
+	currentMetrics := metricstest.MustGatherMetrics(t)
+	currentMetrics.AssertMetric("kgateway_resources_syncs_started_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "gateway", Value: "test-name"},
+			{Name: "namespace", Value: "test-namespace"},
+			{Name: "resource", Value: "test-resource"},
+		},
+		Value: 1,
+	})
+}
+
+func TestResourceSync(t *testing.T) {
+	setupTest()
+
+	details := ResourceSyncDetails{
+		Gateway:      "test-gateway",
+		Namespace:    "test-namespace",
+		ResourceType: "test",
+		ResourceName: "test-resource",
+	}
+
+	IncResourcesSyncsStartedTotal(details.ResourceName, ResourceMetricLabels{
+		Gateway:   details.Gateway,
+		Namespace: details.Namespace,
+		Resource:  details.ResourceType,
+	})
+
+	resourcesStatusSyncsCompletedTotal := metrics.NewCounter(
+		metrics.CounterOpts{
+			Subsystem: "resources",
+			Name:      "status_syncs_completed_total",
+			Help:      "Total number of status syncs completed for resources",
+		},
+		[]string{"gateway", "namespace", "resource"})
+	resourcesStatusSyncDuration := metrics.NewHistogram(
+		metrics.HistogramOpts{
+			Subsystem:                       "resources",
+			Name:                            "status_sync_duration_seconds",
+			Help:                            "Initial resource update until status sync duration",
+			Buckets:                         metrics.DefaultBuckets,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: time.Hour,
+		},
+		[]string{"gateway", "namespace", "resource"},
+	)
+
+	EndResourceSync(details, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
+
+	time.Sleep(50 * time.Millisecond) // Allow some time for metrics to be processed.
+
+	gathered := metricstest.MustGatherMetrics(t)
+
+	gathered.AssertMetric("kgateway_resources_syncs_started_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "gateway", Value: details.Gateway},
+			{Name: "namespace", Value: details.Namespace},
+			{Name: "resource", Value: details.ResourceType},
+		},
+		Value: 1,
+	})
+
+	gathered.AssertMetric("kgateway_resources_status_syncs_completed_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "gateway", Value: details.Gateway},
+			{Name: "namespace", Value: details.Namespace},
+			{Name: "resource", Value: details.ResourceType},
+		},
+		Value: 1,
+	})
+
+	gathered.AssertMetricsLabels("kgateway_resources_status_sync_duration_seconds", [][]metrics.Label{{
+		{Name: "gateway", Value: details.Gateway},
+		{Name: "namespace", Value: details.Namespace},
+		{Name: "resource", Value: details.ResourceType},
+	}})
+	gathered.AssertHistogramPopulated("kgateway_resources_status_sync_duration_seconds")
+}
+
 func TestTranslationMetricsNotActive(t *testing.T) {
 	metrics.SetActive(false)
 	defer metrics.SetActive(true)

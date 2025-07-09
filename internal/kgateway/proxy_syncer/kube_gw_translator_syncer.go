@@ -3,6 +3,7 @@ package proxy_syncer
 import (
 	"context"
 
+	tmetrics "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
 )
 
@@ -27,4 +28,13 @@ func (s *ProxyTranslator) syncXds(
 	// a default initial fetch timeout
 	// snap.MakeConsistent()
 	s.xdsCache.SetSnapshot(ctx, proxyKey, snap)
+
+	gateway, namespace := getGatewayFromXDSSnapshotResourceName(snapWrap.ResourceName())
+
+	tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
+		Namespace:    namespace,
+		Gateway:      gateway,
+		ResourceType: "XDSSnapshot",
+		ResourceName: gateway,
+	}, true, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
 }

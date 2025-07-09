@@ -16,7 +16,7 @@ var (
 		metrics.CounterOpts{
 			Subsystem: controllerSubsystem,
 			Name:      "reconciliations_total",
-			Help:      "Total controller reconciliations",
+			Help:      "Total number of controller reconciliations",
 		},
 		[]string{controllerNameLabel, "result"},
 	)
@@ -25,6 +25,7 @@ var (
 			Subsystem:                       controllerSubsystem,
 			Name:                            "reconcile_duration_seconds",
 			Help:                            "Reconcile duration for controller",
+			Buckets:                         metrics.DefaultBuckets,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,

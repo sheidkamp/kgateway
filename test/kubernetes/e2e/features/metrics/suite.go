@@ -71,18 +71,22 @@ func (s *testingSuite) TestMetrics() {
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body: gomega.And(
-				gomega.MatchRegexp(`kgateway_collection_transform_duration_seconds_count\{collection=\"Gateways\"\} \d+`),
-				gomega.MatchRegexp(`kgateway_collection_transforms_total\{collection=\"Gateways\",result=\"success\"\} \d+`),
-				gomega.MatchRegexp(`kgateway_collection_transforms_running\{collection=\"Gateways\"} \d+`),
-				gomega.MatchRegexp(`kgateway_collection_resources\{collection=\"Gateways\",name=\"gw1\",namespace=\"default\",resource=\"Gateway\"\} \d+`),
 				gomega.MatchRegexp(`kgateway_controller_reconcile_duration_seconds_count\{controller=\"gateway\"\} \d+`),
 				gomega.MatchRegexp(`kgateway_controller_reconciliations_total\{controller=\"gateway\",result=\"success\"\} \d+`),
 				gomega.MatchRegexp(`kgateway_controller_reconciliations_running\{controller=\"gateway\"} \d+`),
-				gomega.MatchRegexp(`kgateway_status_syncer_resources\{name=\"gw1\",namespace=\"default\",resource=\"Gateway\",syncer=\"GatewayStatusSyncer\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_resources_managed\{gateway=\"gw1\",namespace=\"default\",resource=\"Gateway\"} \d+`),
+				gomega.MatchRegexp(`kgateway_resources_syncs_started_total\{gateway=\"gw1\",namespace=\"default\",resource=\"Gateway\"} \d+`),
+				gomega.MatchRegexp(`kgateway_resources_status_syncs_completed_total\{gateway=\"gw1\",namespace=\"default\",resource=\"Gateway\"} \d+`),
+				gomega.MatchRegexp(`kgateway_resources_status_sync_duration_seconds_count\{gateway=\"gw1\",namespace=\"default\",resource=\"Gateway\"} \d+`),
+				gomega.MatchRegexp(`kgateway_resources_xds_snapshot_syncs_completed_total\{gateway=\"gw1\",namespace=\"default\",resource=\"Gateway\"} \d+`),
+				gomega.MatchRegexp(`kgateway_resources_xds_snapshot_sync_duration_seconds_count\{gateway=\"gw1\",namespace=\"default\",resource=\"Gateway\"} \d+`),
+				gomega.MatchRegexp(`kgateway_xds_snapshot_transform_duration_seconds_count\{gateway=\"gw1\",namespace=\"default\"} \d+`),
+				gomega.MatchRegexp(`kgateway_xds_snapshot_transforms_total\{gateway=\"gw1\",namespace=\"default\",result="success"} \d+`),
+				gomega.MatchRegexp(`kgateway_xds_snapshot_resources\{gateway=\"gw1\",namespace=\"default\",resource=\"Endpoint\"} \d+`),
 				gomega.MatchRegexp(`kgateway_status_syncer_status_sync_duration_seconds_count\{syncer=\"GatewayStatusSyncer\"\} \d+`),
 				gomega.MatchRegexp(`kgateway_status_syncer_status_syncs_total\{result=\"success\",syncer=\"GatewayStatusSyncer\"\} \d+`),
-				gomega.MatchRegexp(`kgateway_translator_translation_duration_seconds_count\{translator=\"TranslateGatewayIR\"\} \d+`),
-				gomega.MatchRegexp(`kgateway_translator_translations_total\{result=\"success\",translator=\"TranslateGatewayIR\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_translator_translation_duration_seconds_count\{translator=\"TranslateGateway\"\} \d+`),
+				gomega.MatchRegexp(`kgateway_translator_translations_total\{result=\"success\",translator=\"TranslateGateway\"\} \d+`),
 			),
 		})
 }
@@ -118,9 +122,6 @@ func (s *testingSuite) TestResourceCountingMetrics() {
 				gomega.MatchRegexp(`kgateway_routing_domains\{gateway="gw1",namespace="default",port="8443"\} 2`),
 				gomega.MatchRegexp(`kgateway_routing_domains\{gateway="gw2",namespace="default",port="8080"\} 3`),
 				gomega.MatchRegexp(`kgateway_routing_domains\{gateway="gw2",namespace="default",port="8443"\} 3`),
-				gomega.MatchRegexp(`kgateway_collection_gateway_resources\{namespace="default",resource="Gateway"\} 2`),
-				gomega.MatchRegexp(`kgateway_collection_gateway_resources\{namespace="default",resource="HTTPRoute"\} 3`),
-				gomega.MatchRegexp(`kgateway_collection_gateway_resources\{namespace="default",resource="XListenerSet"\} 1`),
 			),
 		})
 }

@@ -1,25 +1,26 @@
 package proxy_syncer
 
 import (
-	"sync"
+	"strings"
 	"time"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
 const (
-	statusSubsystem   = "status_syncer"
-	syncerNameLabel   = "syncer"
-	resourceTypeLabel = "resource_type"
-	resourceSubsystem = "snaphot"
+	statusSubsystem    = "status_syncer"
+	syncerNameLabel    = "syncer"
+	snapshotSubsystem  = "xds_snapshot"
+	resourcesSubsystem = "resources"
 )
 
 var (
-	statusSyncsTotal = metrics.NewCounter(
+	statusSyncHistogramBuckets = []float64{0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1}
+	statusSyncsTotal           = metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: statusSubsystem,
 			Name:      "status_syncs_total",
-			Help:      "Total status syncs",
+			Help:      "Total number of status syncs",
 		},
 		[]string{syncerNameLabel, "result"},
 	)
@@ -28,33 +29,94 @@ var (
 			Subsystem:                       statusSubsystem,
 			Name:                            "status_sync_duration_seconds",
 			Help:                            "Status sync duration",
+			Buckets:                         statusSyncHistogramBuckets,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,
 		},
 		[]string{syncerNameLabel},
 	)
-	statusSyncResources = metrics.NewGauge(
-		metrics.GaugeOpts{
-			Subsystem: statusSubsystem,
-			Name:      "resources",
-			Help:      "Current number of resources managed by the status syncer",
+
+	snapshotTransformsTotal = metrics.NewCounter(
+		metrics.CounterOpts{
+			Subsystem: snapshotSubsystem,
+			Name:      "transforms_total",
+			Help:      "Total number of XDS snapshot transforms",
 		},
-		[]string{syncerNameLabel, "name", "namespace", "resource"},
+		[]string{"gateway", "namespace", "result"},
+	)
+	snapshotTransformDuration = metrics.NewHistogram(
+		metrics.HistogramOpts{
+			Subsystem:                       snapshotSubsystem,
+			Name:                            "transform_duration_seconds",
+			Help:                            "XDS snapshot transform duration",
+			Buckets:                         statusSyncHistogramBuckets,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: time.Hour,
+		},
+		[]string{"gateway", "namespace"},
+	)
+	snapshotResources = metrics.NewGauge(
+		metrics.GaugeOpts{
+			Subsystem: snapshotSubsystem,
+			Name:      "resources",
+			Help:      "Current number of resources in XDS snapshot",
+		},
+		[]string{"gateway", "namespace", "resource"},
+	)
+
+	resourcesHistogramBuckets          = []float64{0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600, 1200, 1800}
+	resourcesStatusSyncsCompletedTotal = metrics.NewCounter(
+		metrics.CounterOpts{
+			Subsystem: resourcesSubsystem,
+			Name:      "status_syncs_completed_total",
+			Help:      "Total number of status syncs completed for resources",
+		},
+		[]string{"gateway", "namespace", "resource"})
+	resourcesStatusSyncDuration = metrics.NewHistogram(
+		metrics.HistogramOpts{
+			Subsystem:                       resourcesSubsystem,
+			Name:                            "status_sync_duration_seconds",
+			Help:                            "Initial resource update until status sync duration",
+			Buckets:                         resourcesHistogramBuckets,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: time.Hour,
+		},
+		[]string{"gateway", "namespace", "resource"},
+	)
+	resourcesXDSSyncsCompletedTotal = metrics.NewCounter(
+		metrics.CounterOpts{
+			Subsystem: resourcesSubsystem,
+			Name:      "xds_snapshot_syncs_completed_total",
+			Help:      "Total number of XDS snapshot syncs completed for resources",
+		},
+		[]string{"gateway", "namespace", "resource"})
+	resourcesXDSyncDuration = metrics.NewHistogram(
+		metrics.HistogramOpts{
+			Subsystem:                       resourcesSubsystem,
+			Name:                            "xds_snapshot_sync_duration_seconds",
+			Help:                            "Initial resource update until XDS snapshot sync duration",
+			Buckets:                         resourcesHistogramBuckets,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: time.Hour,
+		},
+		[]string{"gateway", "namespace", "resource"},
 	)
 )
 
-// StatusSyncResourcesMetricLabels defines the labels for the syncer resources metric.
-type StatusSyncResourcesMetricLabels struct {
-	Name      string
+// snapshotResourcesMetricLabels defines the labels for XDS snapshot resources metrics.
+type snapshotResourcesMetricLabels struct {
+	Gateway   string
 	Namespace string
 	Resource  string
 }
 
-func (r StatusSyncResourcesMetricLabels) toMetricsLabels(syncer string) []metrics.Label {
+func (r snapshotResourcesMetricLabels) toMetricsLabels() []metrics.Label {
 	return []metrics.Label{
-		{Name: syncerNameLabel, Value: syncer},
-		{Name: "name", Value: r.Name},
+		{Name: "gateway", Value: r.Gateway},
 		{Name: "namespace", Value: r.Namespace},
 		{Name: "resource", Value: r.Resource},
 	}
@@ -63,10 +125,6 @@ func (r StatusSyncResourcesMetricLabels) toMetricsLabels(syncer string) []metric
 // statusSyncMetricsRecorder defines the interface for recording status syncer metrics.
 type statusSyncMetricsRecorder interface {
 	StatusSyncStart() func(error)
-	ResetResources(resource string)
-	SetResources(labels StatusSyncResourcesMetricLabels, count int)
-	IncResources(labels StatusSyncResourcesMetricLabels)
-	DecResources(labels StatusSyncResourcesMetricLabels)
 }
 
 // statusSyncMetrics records metrics for status syncer operations.
@@ -74,13 +132,10 @@ type statusSyncMetrics struct {
 	syncerName         string
 	statusSyncsTotal   metrics.Counter
 	statusSyncDuration metrics.Histogram
-	resources          metrics.Gauge
-	resourceNames      map[string]map[string]map[string]struct{}
-	resourcesLock      sync.Mutex
 }
 
-// NewStatusSyncMetricsRecorder creates a new recorder for status syncer metrics.
-func NewStatusSyncMetricsRecorder(syncerName string) statusSyncMetricsRecorder {
+// newStatusSyncMetricsRecorder creates a new recorder for status syncer metrics.
+func newStatusSyncMetricsRecorder(syncerName string) statusSyncMetricsRecorder {
 	if !metrics.Active() {
 		return &nullStatusSyncMetricsRecorder{}
 	}
@@ -89,9 +144,6 @@ func NewStatusSyncMetricsRecorder(syncerName string) statusSyncMetricsRecorder {
 		syncerName:         syncerName,
 		statusSyncsTotal:   statusSyncsTotal,
 		statusSyncDuration: statusSyncDuration,
-		resources:          statusSyncResources,
-		resourceNames:      make(map[string]map[string]map[string]struct{}),
-		resourcesLock:      sync.Mutex{},
 	}
 
 	return m
@@ -102,15 +154,6 @@ type nullStatusSyncMetricsRecorder struct{}
 func (m *nullStatusSyncMetricsRecorder) StatusSyncStart() func(error) {
 	return func(err error) {}
 }
-
-func (m *nullStatusSyncMetricsRecorder) ResetResources(resource string) {}
-
-func (m *nullStatusSyncMetricsRecorder) SetResources(labels StatusSyncResourcesMetricLabels, count int) {
-}
-
-func (m *nullStatusSyncMetricsRecorder) IncResources(labels StatusSyncResourcesMetricLabels) {}
-
-func (m *nullStatusSyncMetricsRecorder) DecResources(labels StatusSyncResourcesMetricLabels) {}
 
 // StatusSyncStart is called at the start of a status sync function to begin metrics
 // collection and returns a function called at the end to complete metrics recording.
@@ -135,69 +178,82 @@ func (m *statusSyncMetrics) StatusSyncStart() func(error) {
 	}
 }
 
-// ResetResources resets the resource count gauge for a specified resource.
-func (m *statusSyncMetrics) ResetResources(resource string) {
-	m.resourcesLock.Lock()
+// snapshotMetricsRecorder defines the interface for recording XDS snapshot metrics.
+type snapshotMetricsRecorder interface {
+	transformStart(string) func(error)
+}
 
-	namespaces, exists := m.resourceNames[resource]
-	if !exists {
-		m.resourcesLock.Unlock()
+// snapshotMetrics records metrics for collection operations.
+type snapshotMetrics struct {
+	transformsTotal   metrics.Counter
+	transformDuration metrics.Histogram
+}
 
-		return
+var _ snapshotMetricsRecorder = &snapshotMetrics{}
+
+// newSnapshotMetricsRecorder creates a new recorder for XDS snapshot metrics.
+func newSnapshotMetricsRecorder() snapshotMetricsRecorder {
+	if !metrics.Active() {
+		return &nullSnapshotMetricsRecorder{}
 	}
 
-	delete(m.resourceNames, resource)
+	m := &snapshotMetrics{
+		transformsTotal:   snapshotTransformsTotal,
+		transformDuration: snapshotTransformDuration,
+	}
 
-	m.resourcesLock.Unlock()
+	return m
+}
 
-	for namespace, names := range namespaces {
-		for name := range names {
-			m.resources.Set(0, []metrics.Label{
-				{Name: syncerNameLabel, Value: m.syncerName},
-				{Name: "name", Value: name},
-				{Name: "namespace", Value: namespace},
-				{Name: "resource", Value: resource},
-			}...)
+// transformStart is called at the start of a transform function to begin metrics
+// collection and returns a function called at the end to complete metrics recording.
+func (m *snapshotMetrics) transformStart(clientKey string) func(error) {
+	start := time.Now()
+
+	gateway, namespace := getGatewayFromXDSSnapshotResourceName(clientKey)
+	return func(err error) {
+		result := "success"
+		if err != nil {
+			result = "error"
 		}
+
+		m.transformsTotal.Inc([]metrics.Label{
+			{Name: "gateway", Value: gateway},
+			{Name: "namespace", Value: namespace},
+			{Name: "result", Value: result},
+		}...)
+
+		duration := time.Since(start)
+
+		m.transformDuration.Observe(duration.Seconds(), []metrics.Label{
+			{Name: "gateway", Value: gateway},
+			{Name: "namespace", Value: namespace},
+		}...)
 	}
 }
 
-// updateResourceNames updates the internal map of resource names.
-func (m *statusSyncMetrics) updateResourceNames(labels StatusSyncResourcesMetricLabels) {
-	m.resourcesLock.Lock()
+type nullSnapshotMetricsRecorder struct{}
 
-	if _, exists := m.resourceNames[labels.Resource]; !exists {
-		m.resourceNames[labels.Resource] = make(map[string]map[string]struct{})
+func (m *nullSnapshotMetricsRecorder) transformStart(string) func(error) {
+	return func(err error) {}
+}
+
+// getGatewayFromXDSSnapshotResourceName extracts the gateway and namespace from an
+// XDS snapshot resource name.
+func getGatewayFromXDSSnapshotResourceName(resourceName string) (string, string) {
+	gateway := resourceName
+	namespace := "unknown"
+
+	pks := strings.SplitN(gateway, "~", 5)
+	if len(pks) > 1 {
+		namespace = pks[1]
 	}
 
-	if _, exists := m.resourceNames[labels.Resource][labels.Namespace]; !exists {
-		m.resourceNames[labels.Resource][labels.Namespace] = make(map[string]struct{})
+	if len(pks) > 2 {
+		gateway = pks[2]
 	}
 
-	m.resourceNames[labels.Resource][labels.Namespace][labels.Name] = struct{}{}
-
-	m.resourcesLock.Unlock()
-}
-
-// SetResources updates the resource count gauge.
-func (m *statusSyncMetrics) SetResources(labels StatusSyncResourcesMetricLabels, count int) {
-	m.updateResourceNames(labels)
-
-	m.resources.Set(float64(count), labels.toMetricsLabels(m.syncerName)...)
-}
-
-// IncResources increments the resource count gauge.
-func (m *statusSyncMetrics) IncResources(labels StatusSyncResourcesMetricLabels) {
-	m.updateResourceNames(labels)
-
-	m.resources.Add(1, labels.toMetricsLabels(m.syncerName)...)
-}
-
-// DecResources decrements the resource count gauge.
-func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesMetricLabels) {
-	m.updateResourceNames(labels)
-
-	m.resources.Sub(1, labels.toMetricsLabels(m.syncerName)...)
+	return gateway, namespace
 }
 
 // ResetMetrics resets the metrics from this package.
@@ -205,5 +261,8 @@ func (m *statusSyncMetrics) DecResources(labels StatusSyncResourcesMetricLabels)
 func ResetMetrics() {
 	statusSyncDuration.Reset()
 	statusSyncsTotal.Reset()
-	statusSyncResources.Reset()
+	snapshotTransformsTotal.Reset()
+	snapshotTransformDuration.Reset()
+	snapshotResources.Reset()
+	resourcesStatusSyncsCompletedTotal.Reset()
 }
