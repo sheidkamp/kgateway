@@ -120,7 +120,6 @@ func (s *testingSuite) TestHttpListenerPolicyAllFields() {
 			StatusCode: http.StatusOK,
 			Body:       gomega.BeEmpty(),
 		})
-
 }
 
 func (s *testingSuite) TestHttpListenerPolicyServerHeader() {
