@@ -14,6 +14,7 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	skubeclient "istio.io/istio/pkg/config/schema/kubeclient"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
@@ -258,7 +259,7 @@ func (p *httpListenerPolicyPluginGwPass) ApplyHCM(
 
 	// translate useRemoteAddress
 	if policy.useRemoteAddress != nil {
-		out.UseRemoteAddress = &wrappers.BoolValue{Value: *policy.useRemoteAddress}
+		out.UseRemoteAddress = wrapperspb.Bool(*policy.useRemoteAddress)
 	}
 
 	// translate xffNumTrustedHops
