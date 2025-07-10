@@ -270,6 +270,10 @@ func EndResourceSync(
 	totalCounter metrics.Counter,
 	durationHistogram metrics.Histogram,
 ) {
+	// Add syncStartInfo to the channel for metrics processing.
+	// If the channel is full, something is probably wrong, but translations shouldn't stop because of a metrics processing issue.
+	// In that case, updating the metrics will be dropped, and translations will continue processing.
+	// This will cause the metrics to become invalid, so an error is logged to call attention to the issue.
 	select {
 	case syncCh <- &syncStartInfo{
 		endTime:           time.Now(),

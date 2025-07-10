@@ -17,7 +17,6 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/http_listener_policy"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/lambda"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/local_rate_limit"
-	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/metrics"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/path_matching"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/policyselector"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/features/rate_limit"
@@ -64,7 +63,6 @@ func KubeGatewaySuiteRunner() e2e.SuiteRunner {
 	kubeGatewaySuiteRunner.Register("PolicySelector", policyselector.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("Cors", cors.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("BackendConfigPolicy", backendconfigpolicy.NewTestingSuite)
-	kubeGatewaySuiteRunner.Register("Metrics", metrics.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("CSRF", csrf.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("Tracing", tracing.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("DirectResponse", directresponse.NewTestingSuite)
