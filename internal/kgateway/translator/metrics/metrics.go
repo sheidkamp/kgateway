@@ -264,12 +264,14 @@ func startResourceSync(details ResourceSyncDetails) bool {
 
 // EndResourceSync records the end time of a sync for a given resource and
 // updates the resource sync metrics accordingly.
+// Returns true if the sync was added to the channel, false if the channel is full.
+// If the channel is full, an error is logged to call attention to the issue. The caller is not expected to handle this case.
 func EndResourceSync(
 	details ResourceSyncDetails,
 	isXDSSnapshot bool,
 	totalCounter metrics.Counter,
 	durationHistogram metrics.Histogram,
-) {
+) bool {
 	// Add syncStartInfo to the channel for metrics processing.
 	// If the channel is full, something is probably wrong, but translations shouldn't stop because of a metrics processing issue.
 	// In that case, updating the metrics will be dropped, and translations will continue processing.
@@ -282,6 +284,7 @@ func EndResourceSync(
 		totalCounter:      totalCounter,
 		durationHistogram: durationHistogram,
 	}:
+		return true
 	default:
 		logger.Log(context.Background(), slog.LevelError,
 			"resource metrics sync channel is full, dropping end sync metrics update",
@@ -291,7 +294,10 @@ func EndResourceSync(
 			"resourceName", details.ResourceName,
 			"xdsSnapshot", isXDSSnapshot,
 		)
+		return false
 	}
+
+	return true
 }
 
 func endResourceSync(syncInfo *syncStartInfo) {
