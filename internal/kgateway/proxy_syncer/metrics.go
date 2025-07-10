@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	statusSyncHistogramBuckets = []float64{0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1}
+	statusSyncHistogramBuckets = []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}
 	statusSyncsTotal           = metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: statusSubsystem,
@@ -37,7 +37,8 @@ var (
 		[]string{syncerNameLabel},
 	)
 
-	snapshotTransformsTotal = metrics.NewCounter(
+	transformsHistogramBuckets = []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}
+	snapshotTransformsTotal    = metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: snapshotSubsystem,
 			Name:      "transforms_total",
@@ -50,7 +51,7 @@ var (
 			Subsystem:                       snapshotSubsystem,
 			Name:                            "transform_duration_seconds",
 			Help:                            "XDS snapshot transform duration",
-			Buckets:                         statusSyncHistogramBuckets,
+			Buckets:                         transformsHistogramBuckets,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,

@@ -130,7 +130,7 @@ func (s *CombinedTranslator) GetUpstreamTranslator() *irtranslator.BackendTransl
 
 // ctx needed for logging; remove once we refactor logging.
 func (s *CombinedTranslator) TranslateGateway(kctx krt.HandlerContext, ctx context.Context, gw ir.Gateway) (*irtranslator.TranslationResult, reports.ReportMap) {
-	metrics.IncResourcesSyncsStartedTotal(gw.Name, metrics.ResourceMetricLabels{
+	metrics.StartResourceSync(gw.Name, metrics.ResourceMetricLabels{
 		Gateway:   gw.Name,
 		Namespace: gw.Namespace,
 		Resource:  "Gateway",

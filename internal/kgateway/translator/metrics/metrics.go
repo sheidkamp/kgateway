@@ -1,9 +1,12 @@
 package metrics
 
 import (
+	"context"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
@@ -12,6 +15,8 @@ const (
 	translatorNameLabel = "translator"
 	resourcesSubsystem  = "resources"
 )
+
+var logger = logging.New("translator.metrics")
 
 var (
 	translationHistogramBuckets = []float64{0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1}
@@ -132,18 +137,6 @@ func (m *nullTranslatorMetricsRecorder) TranslationStart() func(error) {
 	return func(err error) {}
 }
 
-// IncTranslationsTotal increments the total translations counter.
-func IncResourcesSyncsStartedTotal(resourceName string, labels ResourceMetricLabels) {
-	if StartResourceSync(ResourceSyncDetails{
-		Namespace:    labels.Namespace,
-		Gateway:      labels.Gateway,
-		ResourceType: labels.Resource,
-		ResourceName: resourceName,
-	}) {
-		resourcesSyncsStartedTotal.Inc(labels.toMetricsLabels()...)
-	}
-}
-
 // ResourceSyncStartTime represents the start time of a resource sync.
 type ResourceSyncStartTime struct {
 	Time         time.Time
@@ -161,6 +154,27 @@ type resourceSyncStartTimes struct {
 
 var startTimes = &resourceSyncStartTimes{}
 
+// CountResourceSyncStartTimes counts the number of resource sync start times recorded.
+func CountResourceSyncStartTimes() int {
+	startTimes.RLock()
+	defer startTimes.RUnlock()
+
+	if startTimes.times == nil {
+		return 0
+	}
+
+	count := 0
+	for _, nsMap := range startTimes.times {
+		for _, rtMap := range nsMap {
+			for _, stList := range rtMap {
+				count += len(stList)
+			}
+		}
+	}
+
+	return count
+}
+
 // ResourceSyncDetails holds the details of a resource sync operation.
 type ResourceSyncDetails struct {
 	Namespace    string
@@ -169,8 +183,48 @@ type ResourceSyncDetails struct {
 	ResourceName string
 }
 
-// StartResourceSync records the start time of a sync for a given resource key.
-func StartResourceSync(details ResourceSyncDetails) bool {
+type syncStartInfo struct {
+	endTime           time.Time
+	details           ResourceSyncDetails
+	xdsSnapshot       bool
+	totalCounter      metrics.Counter
+	durationHistogram metrics.Histogram
+}
+
+var syncCh = make(chan *syncStartInfo, 1024) // Buffered channel to handle resource sync metric events.
+
+// StartResourceSyncMetricsProcessing starts a goroutine that processes resource sync metrics.
+func StartResourceSyncMetricsProcessing(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case syncInfo, ok := <-syncCh:
+				if !ok || syncInfo == nil {
+					return
+				}
+
+				endResourceSync(syncInfo)
+			}
+		}
+	}()
+}
+
+// StartResourceSync records the start time of a sync for a given resource and
+// increments the resource syncs started counter.
+func StartResourceSync(resourceName string, labels ResourceMetricLabels) {
+	if startResourceSync(ResourceSyncDetails{
+		Namespace:    labels.Namespace,
+		Gateway:      labels.Gateway,
+		ResourceType: labels.Resource,
+		ResourceName: resourceName,
+	}) {
+		resourcesSyncsStartedTotal.Inc(labels.toMetricsLabels()...)
+	}
+}
+
+func startResourceSync(details ResourceSyncDetails) bool {
 	startTimes.Lock()
 	defer startTimes.Unlock()
 
@@ -208,13 +262,35 @@ func StartResourceSync(details ResourceSyncDetails) bool {
 	return true
 }
 
-// EndResourceSync removes the start time of a sync for a given resource key.
+// EndResourceSync records the end time of a sync for a given resource and
+// updates the resource sync metrics accordingly.
 func EndResourceSync(
 	details ResourceSyncDetails,
-	xdsSnapshot bool,
+	isXDSSnapshot bool,
 	totalCounter metrics.Counter,
 	durationHistogram metrics.Histogram,
 ) {
+	select {
+	case syncCh <- &syncStartInfo{
+		endTime:           time.Now(),
+		details:           details,
+		xdsSnapshot:       isXDSSnapshot,
+		totalCounter:      totalCounter,
+		durationHistogram: durationHistogram,
+	}:
+	default:
+		logger.Log(context.Background(), slog.LevelError,
+			"resource metrics sync channel is full, dropping end sync metrics update",
+			"gateway", details.Gateway,
+			"namespace", details.Namespace,
+			"resourceType", details.ResourceType,
+			"resourceName", details.ResourceName,
+			"xdsSnapshot", isXDSSnapshot,
+		)
+	}
+}
+
+func endResourceSync(syncInfo *syncStartInfo) {
 	startTimes.Lock()
 	defer startTimes.Unlock()
 
@@ -222,19 +298,19 @@ func EndResourceSync(
 		return
 	}
 
-	if startTimes.times[details.Gateway] == nil {
+	if startTimes.times[syncInfo.details.Gateway] == nil {
 		return
 	}
 
-	if startTimes.times[details.Gateway][details.Namespace] == nil {
+	if startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace] == nil {
 		return
 	}
 
-	rt := details.ResourceType
-	if xdsSnapshot {
+	rt := syncInfo.details.ResourceType
+	if syncInfo.xdsSnapshot {
 		rt = "XDSSnapshot"
 	} else {
-		if startTimes.times[details.Gateway][details.Namespace][rt] == nil {
+		if startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt] == nil {
 			return
 		}
 	}
@@ -242,22 +318,22 @@ func EndResourceSync(
 	newSTs := []ResourceSyncStartTime{}
 	res := []ResourceSyncStartTime{}
 
-	if xdsSnapshot {
-		for ns, stm := range startTimes.times[details.Gateway] {
+	if syncInfo.xdsSnapshot {
+		for ns, stm := range startTimes.times[syncInfo.details.Gateway] {
 			res = append(res, stm["XDSSnapshot"]...)
 
-			delete(startTimes.times[details.Gateway][ns], "XDSSnapshot")
-			if len(startTimes.times[details.Gateway][ns]) == 0 {
-				delete(startTimes.times[details.Gateway], ns)
+			delete(startTimes.times[syncInfo.details.Gateway][ns], "XDSSnapshot")
+			if len(startTimes.times[syncInfo.details.Gateway][ns]) == 0 {
+				delete(startTimes.times[syncInfo.details.Gateway], ns)
 			}
 
-			if len(startTimes.times[details.Gateway]) == 0 {
-				delete(startTimes.times, details.Gateway)
+			if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
+				delete(startTimes.times, syncInfo.details.Gateway)
 			}
 		}
 	} else {
-		for _, st := range startTimes.times[details.Gateway][details.Namespace][rt] {
-			if st.ResourceType == details.ResourceType && st.ResourceName == details.ResourceName {
+		for _, st := range startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt] {
+			if st.ResourceType == syncInfo.details.ResourceType && st.ResourceName == syncInfo.details.ResourceName {
 				res = append(res, ResourceSyncStartTime{
 					Time:         st.Time,
 					ResourceType: st.ResourceType,
@@ -272,28 +348,28 @@ func EndResourceSync(
 			newSTs = append(newSTs, st)
 		}
 
-		startTimes.times[details.Gateway][details.Namespace][rt] = newSTs
-		if len(startTimes.times[details.Gateway][details.Namespace][rt]) == 0 {
-			delete(startTimes.times[details.Gateway][details.Namespace], rt)
+		startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt] = newSTs
+		if len(startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt]) == 0 {
+			delete(startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace], rt)
 		}
 
-		if len(startTimes.times[details.Gateway][details.Namespace]) == 0 {
-			delete(startTimes.times[details.Gateway], details.Namespace)
+		if len(startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace]) == 0 {
+			delete(startTimes.times[syncInfo.details.Gateway], syncInfo.details.Namespace)
 		}
 
-		if len(startTimes.times[details.Gateway]) == 0 {
-			delete(startTimes.times, details.Gateway)
+		if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
+			delete(startTimes.times, syncInfo.details.Gateway)
 		}
 	}
 
 	for _, st := range res {
-		totalCounter.Inc([]metrics.Label{
+		syncInfo.totalCounter.Inc([]metrics.Label{
 			{Name: "gateway", Value: st.Gateway},
 			{Name: "namespace", Value: st.Namespace},
 			{Name: "resource", Value: st.ResourceType},
 		}...)
 
-		durationHistogram.Observe(time.Since(st.Time).Seconds(),
+		syncInfo.durationHistogram.Observe(syncInfo.endTime.Sub(st.Time).Seconds(),
 			[]metrics.Label{
 				{Name: "gateway", Value: st.Gateway},
 				{Name: "namespace", Value: st.Namespace},

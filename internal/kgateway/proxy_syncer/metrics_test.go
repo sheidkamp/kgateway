@@ -1,6 +1,7 @@
 package proxy_syncer
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -280,14 +281,19 @@ func TestXDSSnapshotsCollectionMetrics(t *testing.T) {
 	}
 }
 
-func TestResourcesMetrics(t *testing.T) {
+func TestResourceSyncMetrics(t *testing.T) {
 	setupTest()
 
 	testNS := "test-namespace"
 	testName := "test-name"
 	testResource := "test-resource"
 
-	tmetrics.IncResourcesSyncsStartedTotal(testName, tmetrics.ResourceMetricLabels{
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tmetrics.StartResourceSyncMetricsProcessing(ctx)
+
+	tmetrics.StartResourceSync(testName, tmetrics.ResourceMetricLabels{
 		Gateway:   testName,
 		Namespace: testNS,
 		Resource:  testResource,

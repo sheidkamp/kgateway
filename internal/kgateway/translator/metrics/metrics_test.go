@@ -1,6 +1,7 @@
 package metrics_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -107,26 +108,6 @@ func TestTranslationStart_Error(t *testing.T) {
 	currentMetrics.AssertHistogramPopulated("kgateway_translator_translation_duration_seconds")
 }
 
-func TestIncResourcesSyncsStartedTotal(t *testing.T) {
-	setupTest()
-
-	IncResourcesSyncsStartedTotal("test", ResourceMetricLabels{
-		Gateway:   "test-name",
-		Namespace: "test-namespace",
-		Resource:  "test-resource",
-	})
-
-	currentMetrics := metricstest.MustGatherMetrics(t)
-	currentMetrics.AssertMetric("kgateway_resources_syncs_started_total", &metricstest.ExpectedMetric{
-		Labels: []metrics.Label{
-			{Name: "gateway", Value: "test-name"},
-			{Name: "namespace", Value: "test-namespace"},
-			{Name: "resource", Value: "test-resource"},
-		},
-		Value: 1,
-	})
-}
-
 func TestResourceSync(t *testing.T) {
 	setupTest()
 
@@ -137,12 +118,12 @@ func TestResourceSync(t *testing.T) {
 		ResourceName: "test-resource",
 	}
 
-	IncResourcesSyncsStartedTotal(details.ResourceName, ResourceMetricLabels{
-		Gateway:   details.Gateway,
-		Namespace: details.Namespace,
-		Resource:  details.ResourceType,
-	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
+	StartResourceSyncMetricsProcessing(ctx)
+
+	// Test for status sync metrics.
 	resourcesStatusSyncsCompletedTotal := metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: "resources",
@@ -162,6 +143,12 @@ func TestResourceSync(t *testing.T) {
 		},
 		[]string{"gateway", "namespace", "resource"},
 	)
+
+	StartResourceSync(details.ResourceName, ResourceMetricLabels{
+		Gateway:   details.Gateway,
+		Namespace: details.Namespace,
+		Resource:  details.ResourceType,
+	})
 
 	EndResourceSync(details, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
 
@@ -193,6 +180,60 @@ func TestResourceSync(t *testing.T) {
 		{Name: "resource", Value: details.ResourceType},
 	}})
 	gathered.AssertHistogramPopulated("kgateway_resources_status_sync_duration_seconds")
+
+	// Test for XDS snapshot sync metrics.
+	resourcesXDSSyncsCompletedTotal := metrics.NewCounter(
+		metrics.CounterOpts{
+			Subsystem: "resources",
+			Name:      "xds_snapshot_syncs_completed_total",
+			Help:      "Total number of XDS snapshot syncs completed for resources",
+		},
+		[]string{"gateway", "namespace", "resource"})
+	resourcesXDSyncDuration := metrics.NewHistogram(
+		metrics.HistogramOpts{
+			Subsystem:                       "resources",
+			Name:                            "xds_snapshot_sync_duration_seconds",
+			Help:                            "Initial resource update until XDS snapshot sync duration",
+			Buckets:                         metrics.DefaultBuckets,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: time.Hour,
+		},
+		[]string{"gateway", "namespace", "resource"},
+	)
+
+	EndResourceSync(details, true, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
+
+	time.Sleep(50 * time.Millisecond) // Allow some time for metrics to be processed.
+
+	gathered = metricstest.MustGatherMetrics(t)
+
+	gathered.AssertMetric("kgateway_resources_syncs_started_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "gateway", Value: details.Gateway},
+			{Name: "namespace", Value: details.Namespace},
+			{Name: "resource", Value: details.ResourceType},
+		},
+		Value: 1,
+	})
+
+	gathered.AssertMetric("kgateway_resources_xds_snapshot_syncs_completed_total", &metricstest.ExpectedMetric{
+		Labels: []metrics.Label{
+			{Name: "gateway", Value: details.Gateway},
+			{Name: "namespace", Value: details.Namespace},
+			{Name: "resource", Value: details.ResourceType},
+		},
+		Value: 1,
+	})
+
+	gathered.AssertMetricsLabels("kgateway_resources_xds_snapshot_sync_duration_seconds", [][]metrics.Label{{
+		{Name: "gateway", Value: details.Gateway},
+		{Name: "namespace", Value: details.Namespace},
+		{Name: "resource", Value: details.ResourceType},
+	}})
+	gathered.AssertHistogramPopulated("kgateway_resources_xds_snapshot_sync_duration_seconds")
+
+	assert.Zero(t, CountResourceSyncStartTimes(), "Expected resource sync start times data to be cleared after sync end")
 }
 
 func TestTranslationMetricsNotActive(t *testing.T) {

@@ -64,7 +64,7 @@ func translateGatewayHTTPRouteRulesUtil(
 	metricsRecorder := metrics.NewTranslatorMetricsRecorder("TranslateHTTPRoute")
 	defer metricsRecorder.TranslationStart()(nil)
 
-	metrics.IncResourcesSyncsStartedTotal(routeInfo.GetName(), metrics.ResourceMetricLabels{
+	metrics.StartResourceSync(routeInfo.GetName(), metrics.ResourceMetricLabels{
 		Gateway:   string(routeInfo.ParentRef.Name),
 		Namespace: routeInfo.GetNamespace(),
 		Resource:  routeInfo.GetKind(),
