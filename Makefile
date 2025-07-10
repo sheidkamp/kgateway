@@ -38,9 +38,7 @@ export VERSION
 
 SOURCES := $(shell find . -name "*.go" | grep -v test.go)
 
-# ATTENTION: when updating to a new major version of Envoy, check if
-# universal header validation has been enabled and if so, we expect
-# failures in `test/e2e/header_validation_test.go`.
+# Note: When bumping this version, update the version in pkg/validator/validator.go as well.
 export ENVOY_IMAGE ?= quay.io/solo-io/envoy-gloo:1.34.1-patch3
 export LDFLAGS := -X 'github.com/kgateway-dev/kgateway/v2/internal/version.Version=$(VERSION)'
 export GCFLAGS ?=
@@ -468,34 +466,6 @@ GORELEASER_CURRENT_TAG ?= $(VERSION)
 .PHONY: release
 release: ## Create a release using goreleaser
 	GORELEASER_CURRENT_TAG=$(GORELEASER_CURRENT_TAG) $(GORELEASER) release $(GORELEASER_ARGS) --timeout $(GORELEASER_TIMEOUT)
-
-#----------------------------------------------------------------------------------
-# Docker
-#----------------------------------------------------------------------------------
-
-.PHONY: docker
-docker: kgateway-docker ## Build docker images
-docker: envoy-wrapper-docker
-docker: sds-docker
-docker: kgateway-ai-extension-docker
-
-.PHONY: docker-push
-docker-push: docker-push-kgateway
-docker-push: docker-push-envoy-wrapper
-docker-push: docker-push-sds
-docker-push: docker-push-kgateway-ai-extension
-
-.PHONY: docker-retag
-docker-retag: docker-retag-kgateway
-docker-retag: docker-retag-envoy-wrapper
-docker-retag: docker-retag-sds
-docker-retag: docker-retag-kgateway-ai-extension
-
-docker-retag-%:
-	docker tag $(ORIGINAL_IMAGE_REGISTRY)/$*:$(VERSION) $(IMAGE_REGISTRY)/$*:$(VERSION)
-
-docker-push-%:
-	docker push $(IMAGE_REGISTRY)/$*:$(VERSION)
 
 #----------------------------------------------------------------------------------
 # Development

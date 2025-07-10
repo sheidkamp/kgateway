@@ -40,6 +40,8 @@ func allEnvVarsSet() map[string]string {
 		"KGW_ENABLE_AGENT_GATEWAY":          "true",
 		"KGW_WEIGHTED_ROUTE_PRECEDENCE":     "true",
 		"KGW_ROUTE_REPLACEMENT_MODE":        string(settings.RouteReplacementStrict),
+    "KGW_ENABLE_BUILTIN_DEFAULT_METRICS": "true",
+    "KGW_GLOBAL_POLICY_NAMESPACE":        "foo",
 	}
 }
 
@@ -84,6 +86,8 @@ func TestSettings(t *testing.T) {
 				EnableAgentGateway:          false,
 				WeightedRoutePrecedence:     false,
 				RouteReplacementMode:        settings.RouteReplacementStandard,
+				EnableBuiltinDefaultMetrics: false,
+				GlobalPolicyNamespace:       "",
 			},
 		},
 		{
@@ -113,6 +117,8 @@ func TestSettings(t *testing.T) {
 				EnableAgentGateway:          true,
 				WeightedRoutePrecedence:     true,
 				RouteReplacementMode:        settings.RouteReplacementStrict,
+				EnableBuiltinDefaultMetrics: true,
+				GlobalPolicyNamespace:       "foo",
 			},
 		},
 		{
