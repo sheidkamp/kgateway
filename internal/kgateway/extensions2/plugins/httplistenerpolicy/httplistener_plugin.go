@@ -11,7 +11,6 @@ import (
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	healthcheckv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/health_check/v3"
 	envoy_hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -347,7 +346,7 @@ func convertServerHeaderTransformation(transformation *v1alpha1.ServerHeaderTran
 func convertHealthCheckPolicy(policy *v1alpha1.HTTPListenerPolicy) *healthcheckv3.HealthCheck {
 	if policy.Spec.HealthCheck != nil {
 		return &healthcheckv3.HealthCheck{
-			PassThroughMode: &wrappers.BoolValue{Value: false},
+			PassThroughMode: wrapperspb.Bool(false),
 			Headers: []*routev3.HeaderMatcher{{
 				Name: ":path",
 				HeaderMatchSpecifier: &routev3.HeaderMatcher_ExactMatch{
