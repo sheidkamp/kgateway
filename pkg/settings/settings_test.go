@@ -202,7 +202,6 @@ func TestSettings(t *testing.T) {
 			require.Emptyf(t, diff, "Settings do not match expected values (-expected +got):\n%s", diff)
 		})
 	}
-
 }
 
 // TestEnvVarCoverage tests that all settings are tested with non-default values.
@@ -220,7 +219,6 @@ func TestEnvVarCoverage(t *testing.T) {
 		require.Contains(t, allEnvVars, envVar, "Env var %s is not tested", envVar)
 		require.NotEqual(t, allEnvVars[envVar], defaultValue, "Env var %s is set to the default value", envVar)
 	}
-
 }
 
 // TestExpectedEnvVars tests that the expectedEnvVars function, which is used only in this test file, parses the field tags correctly to calculate the env var names.
@@ -239,7 +237,6 @@ func TestExpectedEnvVars(t *testing.T) {
 	require.Contains(t, expectedEnvVars, "ALT_FIELD_4", "Env var ALT_FIELD_4 is not set")
 	require.Contains(t, expectedEnvVars, "KGW_FIELD_SSL_CONFIG", "Env var KGW_FIELD_SSL_CONFIG is not set")
 	require.Contains(t, expectedEnvVars, "KGW_FIELDHTTPCONFIG", "Env var KGW_FIELDHTTPCONFIG is not set")
-
 }
 
 func cleanupEnvVars(t *testing.T, envVars map[string]string) {
