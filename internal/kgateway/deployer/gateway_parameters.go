@@ -210,6 +210,10 @@ func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Con
 
 	paramRef := gwc.Spec.ParametersRef
 	if paramRef == nil {
+		logger.V(1).Info("no GatewayParameters found for GatewayClass, using default",
+			"gatewayClassName", gwc.GetName(),
+			"gatewayClassNamespace", gwc.GetNamespace(),
+		)
 		// when there is no parametersRef, just return the defaults
 		return defaultGwp, nil
 	}
@@ -251,6 +255,7 @@ func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Con
 func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.GatewayParameters) (*deployer.HelmConfig, error) {
 	irGW := deployer.GetGatewayIR(gw, k.inputs.CommonCollections)
 
+	logger := log.FromContext(context.Background())
 	// construct the default values
 	vals := &deployer.HelmConfig{
 		Gateway: &deployer.HelmGateway{
@@ -279,6 +284,7 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	kubeProxyConfig := gwParam.Spec.Kube
 	deployConfig := kubeProxyConfig.GetDeployment()
 	podConfig := kubeProxyConfig.GetPodTemplate()
+	logger.V(1).Info("podConfig", "podConfig", podConfig)
 	envoyContainerConfig := kubeProxyConfig.GetEnvoyContainer()
 	svcConfig := kubeProxyConfig.GetService()
 	svcAccountConfig := kubeProxyConfig.GetServiceAccount()
