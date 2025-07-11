@@ -210,7 +210,7 @@ func (k *kGatewayParameters) getGatewayParametersForGatewayClass(ctx context.Con
 
 	paramRef := gwc.Spec.ParametersRef
 	if paramRef == nil {
-		logger.V(1).Info("no GatewayParameters found for GatewayClass, using default",
+		logger.V(1).Info("GREPME-DEBUG: no GatewayParameters found for GatewayClass, using default",
 			"gatewayClassName", gwc.GetName(),
 			"gatewayClassNamespace", gwc.GetNamespace(),
 		)
@@ -284,7 +284,7 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	kubeProxyConfig := gwParam.Spec.Kube
 	deployConfig := kubeProxyConfig.GetDeployment()
 	podConfig := kubeProxyConfig.GetPodTemplate()
-	logger.V(1).Info("podConfig", "podConfig", podConfig)
+	logger.V(1).Info("GREPME-DEBUG: podConfig", "podConfig", podConfig)
 	envoyContainerConfig := kubeProxyConfig.GetEnvoyContainer()
 	svcConfig := kubeProxyConfig.GetService()
 	svcAccountConfig := kubeProxyConfig.GetServiceAccount()
