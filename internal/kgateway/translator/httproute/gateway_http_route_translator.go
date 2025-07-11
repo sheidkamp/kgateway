@@ -39,6 +39,12 @@ func TranslateGatewayHTTPRouteRules(
 		return finalRoutes
 	}
 
+	metrics.StartResourceSync(routeInfo.GetName(), metrics.ResourceMetricLabels{
+		Gateway:   string(routeInfo.ParentRef.Name),
+		Namespace: routeInfo.GetNamespace(),
+		Resource:  routeInfo.GetKind(),
+	})
+
 	translateGatewayHTTPRouteRulesUtil(
 		ctx, routeInfo, reporter, baseReporter, &finalRoutes, routesVisited, nil)
 	return finalRoutes
@@ -63,12 +69,6 @@ func translateGatewayHTTPRouteRulesUtil(
 
 	metricsRecorder := metrics.NewTranslatorMetricsRecorder("TranslateHTTPRoute")
 	defer metricsRecorder.TranslationStart()(nil)
-
-	metrics.StartResourceSync(routeInfo.GetName(), metrics.ResourceMetricLabels{
-		Gateway:   string(routeInfo.ParentRef.Name),
-		Namespace: routeInfo.GetNamespace(),
-		Resource:  routeInfo.GetKind(),
-	})
 
 	for ruleIdx, rule := range route.Rules {
 		if len(rule.Matches) == 0 {

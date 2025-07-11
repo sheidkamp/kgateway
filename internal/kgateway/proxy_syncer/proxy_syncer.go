@@ -677,6 +677,13 @@ func (s *ProxySyncer) syncListenerSetStatus(ctx context.Context, logger *slog.Lo
 					logger.Info("skipping k8s ls status update, status equal", "listenerset", lsnn.String())
 				}
 			}
+
+			tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
+				Namespace:    ls.Namespace,
+				Gateway:      string(ls.Spec.ParentRef.Name),
+				ResourceType: "XListenerSet",
+				ResourceName: ls.Name,
+			}, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
 		}
 		return nil
 	},

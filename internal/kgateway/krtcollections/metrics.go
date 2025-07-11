@@ -8,6 +8,7 @@ import (
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
+	tmetrics "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 )
 
@@ -80,7 +81,16 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 			eventType = o.Event
 			resourceType = "XListenerSet"
 			namespace = clientObject.(client.Object).GetNamespace()
-			gatewayNames = []string{string(clientObject.(client.Object).GetName())}
+			gatewayNames = []string{string(obj.Spec.ParentRef.Name)}
+
+			if eventType != controllers.EventDelete {
+				tmetrics.StartResourceSync(clientObject.(client.Object).GetName(),
+					tmetrics.ResourceMetricLabels{
+						Namespace: namespace,
+						Gateway:   gatewayNames[0],
+						Resource:  resourceType,
+					})
+			}
 		default:
 			return
 		}
