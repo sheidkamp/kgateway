@@ -287,7 +287,6 @@ func TestSyncChannelFull(t *testing.T) {
 	case <-time.After(10 * time.Millisecond):
 		t.Fatal("Expected EndResourceSync to return and log an error")
 	}
-
 }
 
 func TestTranslationMetricsNotActive(t *testing.T) {
