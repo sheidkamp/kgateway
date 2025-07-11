@@ -23,9 +23,23 @@ var (
 			Name:      "managed",
 			Help:      "Current number of gateway resources managed",
 		},
-		[]string{"gateway", "namespace", "resource"},
+		[]string{"namespace", "parent", "resource"},
 	)
 )
+
+type resourceMetricLabels struct {
+	Namespace string
+	Parent    string
+	Resource  string
+}
+
+func (r resourceMetricLabels) toMetricsLabels() []metrics.Label {
+	return []metrics.Label{
+		{Name: "namespace", Value: r.Namespace},
+		{Name: "parent", Value: r.Parent},
+		{Name: "resource", Value: r.Resource},
+	}
+}
 
 // GetResourceMetricEventHandler returns a function that handles krt events for various Gateway API resources.
 func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
@@ -99,7 +113,7 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 		case controllers.EventAdd:
 			for _, gatewayName := range gatewayNames {
 				resourcesManaged.Add(1, resourceMetricLabels{
-					Gateway:   gatewayName,
+					Parent:    gatewayName,
 					Namespace: namespace,
 					Resource:  resourceType,
 				}.toMetricsLabels()...)
@@ -107,26 +121,12 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 		case controllers.EventDelete:
 			for _, gatewayName := range gatewayNames {
 				resourcesManaged.Sub(1, resourceMetricLabels{
-					Gateway:   gatewayName,
+					Parent:    gatewayName,
 					Namespace: namespace,
 					Resource:  resourceType,
 				}.toMetricsLabels()...)
 			}
 		}
-	}
-}
-
-type resourceMetricLabels struct {
-	Gateway   string
-	Namespace string
-	Resource  string
-}
-
-func (r resourceMetricLabels) toMetricsLabels() []metrics.Label {
-	return []metrics.Label{
-		{Name: "gateway", Value: r.Gateway},
-		{Name: "namespace", Value: r.Namespace},
-		{Name: "resource", Value: r.Resource},
 	}
 }
 

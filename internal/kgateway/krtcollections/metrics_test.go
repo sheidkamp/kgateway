@@ -77,8 +77,8 @@ func TestCollectionMetrics(t *testing.T) {
 
 			gathered.AssertMetric("kgateway_resources_managed", &metricstest.ExpectedMetric{
 				Labels: []metrics.Label{
-					{Name: "gateway", Value: "test-gateway"},
 					{Name: "namespace", Value: "ns"},
+					{Name: "parent", Value: "test-gateway"},
 					{Name: "resource", Value: "HTTPRoute"},
 				},
 				Value: 1,

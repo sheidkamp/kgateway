@@ -39,11 +39,13 @@ func TranslateGatewayHTTPRouteRules(
 		return finalRoutes
 	}
 
-	metrics.StartResourceSync(routeInfo.GetName(), metrics.ResourceMetricLabels{
-		Gateway:   string(routeInfo.ParentRef.Name),
-		Namespace: routeInfo.GetNamespace(),
-		Resource:  routeInfo.GetKind(),
-	})
+	if routeInfo.ParentRef.Kind != nil && *routeInfo.ParentRef.Kind == gwv1.Kind("Gateway") {
+		metrics.StartResourceSync(routeInfo.GetName(), metrics.ResourceMetricLabels{
+			Gateway:   string(routeInfo.ParentRef.Name),
+			Namespace: routeInfo.GetNamespace(),
+			Resource:  routeInfo.GetKind(),
+		})
+	}
 
 	translateGatewayHTTPRouteRulesUtil(
 		ctx, routeInfo, reporter, baseReporter, &finalRoutes, routesVisited, nil)

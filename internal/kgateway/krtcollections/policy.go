@@ -530,14 +530,14 @@ func NewPolicyIndex(
 				switch o.Event {
 				case controllers.EventAdd:
 					resourcesManaged.Add(1, resourceMetricLabels{
-						Gateway:   o.Latest().GetName(),
+						Parent:    o.Latest().GetName(),
 						Namespace: o.Latest().GetNamespace(),
 						Resource:  "Policy",
 					}.toMetricsLabels()...)
 
 				case controllers.EventDelete:
 					resourcesManaged.Sub(1, resourceMetricLabels{
-						Gateway:   o.Latest().GetName(),
+						Parent:    o.Latest().GetName(),
 						Namespace: o.Latest().GetNamespace(),
 						Resource:  "Policy",
 					}.toMetricsLabels()...)
