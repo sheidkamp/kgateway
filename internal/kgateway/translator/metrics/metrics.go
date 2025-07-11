@@ -296,8 +296,6 @@ func EndResourceSync(
 		)
 		return false
 	}
-
-	return true
 }
 
 func endResourceSync(syncInfo *syncStartInfo) {
