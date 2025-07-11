@@ -214,6 +214,10 @@ func StartResourceSyncMetricsProcessing(ctx context.Context) {
 // StartResourceSync records the start time of a sync for a given resource and
 // increments the resource syncs started counter.
 func StartResourceSync(resourceName string, labels ResourceMetricLabels) {
+	if !metrics.Active() {
+		return
+	}
+
 	if startResourceSync(ResourceSyncDetails{
 		Namespace:    labels.Namespace,
 		Gateway:      labels.Gateway,
@@ -272,6 +276,10 @@ func EndResourceSync(
 	totalCounter metrics.Counter,
 	durationHistogram metrics.Histogram,
 ) bool {
+	if !metrics.Active() {
+		return true
+	}
+
 	// Add syncStartInfo to the channel for metrics processing.
 	// If the channel is full, something is probably wrong, but translations shouldn't stop because of a metrics processing issue.
 	// In that case, updating the metrics will be dropped, and translations will continue processing.
