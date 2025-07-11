@@ -254,7 +254,8 @@ func TestSyncChannelFull(t *testing.T) {
 	resourcesXDSSyncsCompletedTotal := metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: "resources",
-			Name:      "xds_snapshot_syncs_channel_full",
+			Name:      "xds_snapshot_syncs_channel_full_total",
+			Help:      "Total number of XDS snapshot syncs",
 		},
 		[]string{"gateway", "namespace", "resource"})
 
@@ -262,6 +263,7 @@ func TestSyncChannelFull(t *testing.T) {
 		metrics.HistogramOpts{
 			Subsystem: "resources",
 			Name:      "xds_snapshot_sync_duration_channel_full",
+			Help:      "XDS snapshot sync duration",
 		},
 		[]string{"gateway", "namespace", "resource"},
 	)
