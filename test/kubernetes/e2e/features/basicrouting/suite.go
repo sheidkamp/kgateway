@@ -2,6 +2,7 @@ package basicrouting
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/onsi/gomega"
@@ -88,4 +89,6 @@ func (s *testingSuite) TestGatewayWithRoute() {
 				Body:       gomega.ContainSubstring(testdefaults.NginxResponse),
 			})
 	}
+
+	s.Errorf(fmt.Errorf("test"), "test")
 }
