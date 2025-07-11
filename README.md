@@ -24,7 +24,7 @@ Kgateway is feature-rich, fast, and flexible. It excels in function-level routin
 
 The project was previously known as Gloo, and has been [production-ready since 2019](https://www.solo.io/blog/announcing-gloo-1-0-a-production-ready-envoy-based-api-gateway). Please see [the migration plan](https://github.com/kgateway-dev/kgateway/issues/10363) for more information and the current status of the change from Gloo to kgateway.
 
-## Get involved
+## Get involved!
 - [Join us on our Slack channel](https://kgateway.dev/slack/)
 - [Check out the docs](https://kgateway.dev/docs)
 - [Read the kgateway blog](https://kgateway.dev/blog/)
