@@ -309,9 +309,14 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	gateway.ExtraPodLabels = podConfig.GetExtraLabels()
 	gateway.ImagePullSecrets = podConfig.GetImagePullSecrets()
 	gateway.PodSecurityContext = podConfig.GetSecurityContext()
+	logger.V(1).Info("GREPME-DEBUG: podConfig before update", "podConfig", podConfig)
+	logger.V(1).Info("GREPME-DEBUG: gateway.PodSecurityContext before update", "kubeproxyconfig.podTemplate", kubeProxyConfig.GetPodTemplate())
 	// The security contexts may need to be updated if floating user ID is set or if privileged ports are used
 	// This may affect both the PodSecurityContext and the SecurityContexts for the containers defined in gwParam
 	deployer.UpdateSecurityContexts(gwParam.Spec.Kube, vals.Gateway.Ports)
+	logger.V(1).Info("GREPME-DEBUG: podConfig after update", "podConfig", podConfig)
+	logger.V(1).Info("GREPME-DEBUG: gateway.PodSecurityContext after update", "kubeproxyconfig.podTemplate", kubeProxyConfig.GetPodTemplate())
+
 	gateway.NodeSelector = podConfig.GetNodeSelector()
 	gateway.Affinity = podConfig.GetAffinity()
 	gateway.Tolerations = podConfig.GetTolerations()
