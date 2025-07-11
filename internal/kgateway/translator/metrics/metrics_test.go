@@ -236,6 +236,58 @@ func TestResourceSync(t *testing.T) {
 	assert.Zero(t, CountResourceSyncStartTimes(), "Expected resource sync start times data to be cleared after sync end")
 }
 
+func TestSyncChannelFull(t *testing.T) {
+	setupTest()
+
+	m := NewTranslatorMetricsRecorder("test-translator")
+
+	// Start translation
+	m.TranslationStart()
+
+	details := ResourceSyncDetails{
+		Gateway:      "test-gateway",
+		Namespace:    "test-namespace",
+		ResourceType: "test",
+		ResourceName: "test-resource",
+	}
+
+	resourcesXDSSyncsCompletedTotal := metrics.NewCounter(
+		metrics.CounterOpts{
+			Subsystem: "resources",
+			Name:      "xds_snapshot_syncs_channel_full",
+		},
+		[]string{"gateway", "namespace", "resource"})
+
+	resourcesXDSyncDuration := metrics.NewHistogram(
+		metrics.HistogramOpts{
+			Subsystem: "resources",
+			Name:      "xds_snapshot_sync_duration_channel_full",
+		},
+		[]string{"gateway", "namespace", "resource"},
+	)
+
+	for i := 0; i < 1024; i++ {
+		success := EndResourceSync(details, false, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
+		assert.True(t, success)
+	}
+
+	// Channel will be full. Validate that EndResourceSync returns and logs an error.
+	c := make(chan struct{})
+	defer close(c)
+
+	go func() {
+		success := EndResourceSync(details, false, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
+		assert.False(t, success)
+		c <- struct{}{}
+	}()
+
+	select {
+	case <-c: // Expect to return quickly
+	case <-time.After(10 * time.Millisecond):
+		t.Fatal("Expected EndResourceSync to return and log an error")
+	}
+}
+
 func TestTranslationMetricsNotActive(t *testing.T) {
 	metrics.SetActive(false)
 	defer metrics.SetActive(true)
