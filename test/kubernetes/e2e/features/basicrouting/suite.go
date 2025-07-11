@@ -2,7 +2,6 @@ package basicrouting
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/onsi/gomega"
@@ -90,5 +89,5 @@ func (s *testingSuite) TestGatewayWithRoute() {
 			})
 	}
 
-	s.Errorf(fmt.Errorf("test"), "test")
+	s.FailNow("test")
 }
