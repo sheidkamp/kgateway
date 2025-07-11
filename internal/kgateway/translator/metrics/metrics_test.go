@@ -239,6 +239,11 @@ func TestResourceSync(t *testing.T) {
 func TestSyncChannelFull(t *testing.T) {
 	setupTest()
 
+	m := NewTranslatorMetricsRecorder("test-translator")
+
+	// Start translation
+	m.TranslationStart()
+
 	details := ResourceSyncDetails{
 		Gateway:      "test-gateway",
 		Namespace:    "test-namespace",
@@ -249,20 +254,14 @@ func TestSyncChannelFull(t *testing.T) {
 	resourcesXDSSyncsCompletedTotal := metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: "resources",
-			Name:      "xds_snapshot_syncs_completed_total",
-			Help:      "Total number of XDS snapshot syncs completed for resources",
+			Name:      "xds_snapshot_syncs_channel_full",
 		},
 		[]string{"gateway", "namespace", "resource"})
 
 	resourcesXDSyncDuration := metrics.NewHistogram(
 		metrics.HistogramOpts{
-			Subsystem:                       "resources",
-			Name:                            "xds_snapshot_sync_duration_seconds",
-			Help:                            "Initial resource update until XDS snapshot sync duration",
-			Buckets:                         metrics.DefaultBuckets,
-			NativeHistogramBucketFactor:     1.1,
-			NativeHistogramMaxBucketNumber:  100,
-			NativeHistogramMinResetDuration: time.Hour,
+			Subsystem: "resources",
+			Name:      "xds_snapshot_sync_duration_channel_full",
 		},
 		[]string{"gateway", "namespace", "resource"},
 	)
