@@ -744,12 +744,21 @@ func (s *ProxySyncer) syncPolicyStatus(ctx context.Context, rm reports.ReportMap
 			logger.Error("error updating policy status", "error", err, "group_kind", gk, "resource_ref", nsName)
 		}
 
-		tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
-			Namespace:    nsName.Namespace,
-			Gateway:      nsName.Name,
-			ResourceType: "Policy",
-			ResourceName: nsName.Name,
-		}, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
+		for _, ancestor := range status.Ancestors {
+			if ancestor.AncestorRef.Kind != nil && *ancestor.AncestorRef.Kind == "Gateway" {
+				namespace := nsName.Namespace
+				if ancestor.AncestorRef.Namespace != nil {
+					namespace = string(*ancestor.AncestorRef.Namespace)
+				}
+
+				tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
+					Namespace:    namespace,
+					Gateway:      string(ancestor.AncestorRef.Name),
+					ResourceType: gk.Kind,
+					ResourceName: nsName.Name,
+				}, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
+			}
+		}
 	}
 }
 

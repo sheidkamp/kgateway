@@ -44,58 +44,103 @@ func (r resourceMetricLabels) toMetricsLabels() []metrics.Label {
 // GetResourceMetricEventHandler returns a function that handles krt events for various Gateway API resources.
 func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 	var (
-		gatewayNames []string
-		eventType    controllers.EventType
-		namespace    string
-		resourceType string
-		clientObject any
+		eventType       controllers.EventType
+		resourceType    string
+		gatewayNames    []string
+		gatewayNamesOld []string
+		namespace       string
+		namespaceOld    string
+		clientObject    any
+		clientObjectOld any
 	)
 
 	return func(o krt.Event[T]) {
 		clientObject = o.Latest()
+		namespace = clientObject.(client.Object).GetNamespace()
+
+		if o.Old != nil {
+			clientObjectOld = *o.Old
+			namespaceOld = clientObjectOld.(client.Object).GetNamespace()
+		}
+
 		switch obj := clientObject.(type) {
 		case *gwv1.HTTPRoute:
 			eventType = o.Event
 			resourceType = "HTTPRoute"
-			namespace = clientObject.(client.Object).GetNamespace()
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
 				gatewayNames = append(gatewayNames, string(pr.Name))
+			}
+
+			if clientObjectOld != nil {
+				oldObj := clientObjectOld.(*gwv1.HTTPRoute)
+				gatewayNamesOld = make([]string, 0, len(oldObj.Spec.ParentRefs))
+				for _, pr := range oldObj.Spec.ParentRefs {
+					gatewayNamesOld = append(gatewayNamesOld, string(pr.Name))
+				}
 			}
 		case *gwv1a2.TCPRoute:
 			eventType = o.Event
 			resourceType = "TCPRoute"
-			namespace = clientObject.(client.Object).GetNamespace()
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
 				gatewayNames = append(gatewayNames, string(pr.Name))
+			}
+
+			if clientObjectOld != nil {
+				oldObj := clientObjectOld.(*gwv1a2.TCPRoute)
+				gatewayNamesOld = make([]string, 0, len(oldObj.Spec.ParentRefs))
+				for _, pr := range oldObj.Spec.ParentRefs {
+					gatewayNamesOld = append(gatewayNamesOld, string(pr.Name))
+				}
 			}
 		case *gwv1a2.TLSRoute:
 			eventType = o.Event
 			resourceType = "TLSRoute"
-			namespace = clientObject.(client.Object).GetNamespace()
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
 				gatewayNames = append(gatewayNames, string(pr.Name))
+			}
+
+			if clientObjectOld != nil {
+				oldObj := clientObjectOld.(*gwv1a2.TLSRoute)
+				gatewayNamesOld = make([]string, 0, len(oldObj.Spec.ParentRefs))
+				for _, pr := range oldObj.Spec.ParentRefs {
+					gatewayNamesOld = append(gatewayNamesOld, string(pr.Name))
+				}
 			}
 		case *gwv1.GRPCRoute:
 			eventType = o.Event
 			resourceType = "GRPCRoute"
-			namespace = clientObject.(client.Object).GetNamespace()
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
 				gatewayNames = append(gatewayNames, string(pr.Name))
 			}
+
+			if clientObjectOld != nil {
+				oldObj := clientObjectOld.(*gwv1.GRPCRoute)
+				gatewayNamesOld = make([]string, 0, len(oldObj.Spec.ParentRefs))
+				for _, pr := range oldObj.Spec.ParentRefs {
+					gatewayNamesOld = append(gatewayNamesOld, string(pr.Name))
+				}
+			}
 		case *gwv1.Gateway:
 			eventType = o.Event
 			resourceType = "Gateway"
-			namespace = clientObject.(client.Object).GetNamespace()
 			gatewayNames = []string{clientObject.(client.Object).GetName()}
+
+			if clientObjectOld != nil {
+				gatewayNamesOld = []string{clientObjectOld.(*gwv1.Gateway).Name}
+			}
 		case *gwxv1a1.XListenerSet:
 			eventType = o.Event
 			resourceType = "XListenerSet"
 			namespace = clientObject.(client.Object).GetNamespace()
 			gatewayNames = []string{string(obj.Spec.ParentRef.Name)}
+
+			if clientObjectOld != nil {
+				gatewayNamesOld = []string{string(clientObjectOld.(*gwxv1a1.XListenerSet).Spec.ParentRef.Name)}
+			}
 
 			if eventType != controllers.EventDelete {
 				tmetrics.StartResourceSync(clientObject.(client.Object).GetName(),
@@ -111,6 +156,22 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 
 		switch eventType {
 		case controllers.EventAdd:
+			for _, gatewayName := range gatewayNames {
+				resourcesManaged.Add(1, resourceMetricLabels{
+					Parent:    gatewayName,
+					Namespace: namespace,
+					Resource:  resourceType,
+				}.toMetricsLabels()...)
+			}
+		case controllers.EventUpdate:
+			for _, gatewayName := range gatewayNamesOld {
+				resourcesManaged.Sub(1, resourceMetricLabels{
+					Parent:    gatewayName,
+					Namespace: namespaceOld,
+					Resource:  resourceType,
+				}.toMetricsLabels()...)
+			}
+
 			for _, gatewayName := range gatewayNames {
 				resourcesManaged.Add(1, resourceMetricLabels{
 					Parent:    gatewayName,

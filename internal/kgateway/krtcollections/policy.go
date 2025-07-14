@@ -529,18 +529,47 @@ func NewPolicyIndex(
 			metrics.RegisterEvents(policiesByTargetRef, func(o krt.Event[ir.PolicyWrapper]) {
 				switch o.Event {
 				case controllers.EventAdd:
-					resourcesManaged.Add(1, resourceMetricLabels{
-						Parent:    o.Latest().GetName(),
-						Namespace: o.Latest().GetNamespace(),
-						Resource:  "Policy",
-					}.toMetricsLabels()...)
+					for _, ref := range o.Latest().TargetRefs {
+						if ref.Group == wellknown.GatewayGroup && ref.Kind == wellknown.GatewayKind {
+							resourcesManaged.Add(1, resourceMetricLabels{
+								Parent:    ref.Name,
+								Namespace: o.Latest().Namespace,
+								Resource:  o.Latest().Kind,
+							}.toMetricsLabels()...)
+						}
+					}
+				case controllers.EventUpdate:
+					if o.Old != nil {
+						for _, ref := range o.Old.TargetRefs {
+							if ref.Group == wellknown.GatewayGroup && ref.Kind == wellknown.GatewayKind {
+								resourcesManaged.Sub(1, resourceMetricLabels{
+									Parent:    ref.Name,
+									Namespace: o.Old.Namespace,
+									Resource:  o.Old.Kind,
+								}.toMetricsLabels()...)
+							}
+						}
+					}
 
+					for _, ref := range o.Latest().TargetRefs {
+						if ref.Group == wellknown.GatewayGroup && ref.Kind == wellknown.GatewayKind {
+							resourcesManaged.Add(1, resourceMetricLabels{
+								Parent:    ref.Name,
+								Namespace: o.Latest().Namespace,
+								Resource:  o.Latest().Kind,
+							}.toMetricsLabels()...)
+						}
+					}
 				case controllers.EventDelete:
-					resourcesManaged.Sub(1, resourceMetricLabels{
-						Parent:    o.Latest().GetName(),
-						Namespace: o.Latest().GetNamespace(),
-						Resource:  "Policy",
-					}.toMetricsLabels()...)
+					for _, ref := range o.Latest().TargetRefs {
+						if ref.Group == wellknown.GatewayGroup && ref.Kind == wellknown.GatewayKind {
+							resourcesManaged.Sub(1, resourceMetricLabels{
+								Parent:    ref.Name,
+								Namespace: o.Latest().Namespace,
+								Resource:  o.Latest().Kind,
+							}.toMetricsLabels()...)
+						}
+					}
 				}
 			})
 
