@@ -6,6 +6,7 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -72,6 +73,18 @@ func (s *testingSuite) TestGatewayWithRoute() {
 	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, proxyObjectMeta.GetNamespace(), metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=gw",
 	})
+
+	// Dump the gw deployment spec
+	deployment := &appsv1.Deployment{}
+	err := s.testInstallation.ClusterContext.Client.Get(
+		s.ctx,
+		client.ObjectKeyFromObject(proxyDeployment),
+		deployment,
+	)
+	s.Require().NoError(err, "failed to get deployment")
+
+	// Log deployment spec
+	s.T().Log("GREPME-DEBUG: Gateway Deployment Spec:", deployment.Spec)
 
 	// Should have a successful response
 	for _, port := range []int{listenerHighPort, listenerLowPort} {
