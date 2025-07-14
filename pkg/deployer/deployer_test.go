@@ -1638,23 +1638,6 @@ var _ = Describe("Deployer", func() {
 			return nil
 		}
 
-		fullyDefinedValidationForNullPodTemplate := func(objs clientObjects, inp *input) error {
-			expectedGwp := inp.defaultGwp.Spec.Kube
-			Expect(expectedGwp.PodTemplate).To(BeNil())
-
-			expectedGwp.PodTemplate = &gw2_v1alpha1.Pod{
-				SecurityContext: &corev1.PodSecurityContext{},
-			}
-
-			if err := fullyDefinedValidationWithoutRunAsUser(objs, inp); err != nil {
-				return err
-			}
-
-			validateRunAsUser(objs, inp)
-
-			return nil
-		}
-
 		fullyDefinedValidationWithProbes := func(objs clientObjects, inp *input) error {
 			err := fullyDefinedValidationWithoutRunAsUser(objs, inp)
 			if err != nil {
@@ -1917,7 +1900,7 @@ var _ = Describe("Deployer", func() {
 				gw:         defaultGateway(),
 				defaultGwp: gwParamsNoPodTemplate(),
 			}, &expectedOutput{
-				validationFunc: fullyDefinedValidationForNullPodTemplate,
+				validationFunc: fullyDefinedValidation,
 			}),
 			Entry("Fully defined GatewayParameters with custom env vars", &input{
 				dInputs:    istioEnabledDeployerInputs(),
