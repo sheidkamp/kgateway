@@ -9,6 +9,8 @@ import (
 	envoy_config_route_v3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"istio.io/istio/pkg/kube/controllers"
+	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/slices"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
@@ -17,8 +19,10 @@ import (
 	extensionsplug "github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/plugin"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
+	tmetrics "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
+	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/reporter"
 	"github.com/kgateway-dev/kgateway/v2/pkg/reports"
 	"github.com/kgateway-dev/kgateway/v2/pkg/settings"
@@ -201,12 +205,30 @@ func (t *Translator) newPass(reporter reports.Reporter) TranslationPassPlugins {
 		if v.NewGatewayTranslationPass == nil {
 			continue
 		}
+
 		tp := v.NewGatewayTranslationPass(context.TODO(), ir.GwTranslationCtx{}, reporter)
 		if tp != nil {
 			ret[k] = &TranslationPass{
 				ProxyTranslationPass: tp,
 				Name:                 v.Name,
 				MergePolicies:        v.MergePolicies,
+			}
+
+			if v.Policies != nil {
+				metrics.RegisterEvents(v.Policies, func(o krt.Event[ir.PolicyWrapper]) {
+					switch o.Event {
+					case controllers.EventAdd, controllers.EventUpdate:
+						for _, ref := range o.Latest().TargetRefs {
+							if ref.Group == wellknown.GatewayGroup && ref.Kind == wellknown.GatewayKind {
+								tmetrics.StartResourceSync(o.Latest().Name, tmetrics.ResourceMetricLabels{
+									Gateway:   ref.Name,
+									Namespace: o.Latest().Namespace,
+									Resource:  o.Latest().Kind,
+								})
+							}
+						}
+					}
+				})
 			}
 		}
 	}
