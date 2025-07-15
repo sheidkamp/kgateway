@@ -489,8 +489,21 @@ func (s *ProxySyncer) syncRouteStatus(ctx context.Context, logger *slog.Logger, 
 					return err
 				}
 
-				if p, ok := route.(*gwv1.HTTPRoute); ok {
-					for _, parentRef := range p.Spec.ParentRefs {
+				switch r := route.(type) {
+				case *gwv1.HTTPRoute:
+					for _, parentRef := range r.Spec.ParentRefs {
+						gatewayNames = append(gatewayNames, string(parentRef.Name))
+					}
+				case *gwv1a2.TCPRoute:
+					for _, parentRef := range r.Spec.ParentRefs {
+						gatewayNames = append(gatewayNames, string(parentRef.Name))
+					}
+				case *gwv1a2.TLSRoute:
+					for _, parentRef := range r.Spec.ParentRefs {
+						gatewayNames = append(gatewayNames, string(parentRef.Name))
+					}
+				case *gwv1.GRPCRoute:
+					for _, parentRef := range r.Spec.ParentRefs {
 						gatewayNames = append(gatewayNames, string(parentRef.Name))
 					}
 				}
