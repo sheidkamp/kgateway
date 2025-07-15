@@ -273,20 +273,33 @@ func TestSyncChannelFull(t *testing.T) {
 		assert.True(t, success)
 	}
 
-	// Channel will be full. Validate that EndResourceSync returns and logs an error.
+	// Channel will be full. Validate that EndResourceSync returns and logs an error and that the kgateway_resources_updates_dropped_total metric is incremented.
 	c := make(chan struct{})
 	defer close(c)
 
-	go func() {
-		success := EndResourceSync(details, false, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
-		assert.False(t, success)
-		c <- struct{}{}
-	}()
+	overflowCount := 0
+	numOverflows := 20
 
-	select {
-	case <-c: // Expect to return quickly
-	case <-time.After(10 * time.Millisecond):
-		t.Fatal("Expected EndResourceSync to return and log an error")
+	for overflowCount < numOverflows {
+		go func() {
+			success := EndResourceSync(details, false, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
+			assert.False(t, success)
+			c <- struct{}{}
+		}()
+
+		select {
+		case <-c: // Expect to return quickly
+		case <-time.After(10 * time.Millisecond):
+			t.Fatal("Expected EndResourceSync to return and log an error")
+		}
+
+		overflowCount++
+
+		currentMetrics := metricstest.MustGatherMetrics(t)
+		currentMetrics.AssertMetric("kgateway_resources_updates_dropped_total", &metricstest.ExpectedMetric{
+			Labels: []metrics.Label{},
+			Value:  float64(overflowCount),
+		})
 	}
 }
 
