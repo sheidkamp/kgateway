@@ -415,6 +415,7 @@ func ResetMetrics() {
 	translationDuration.Reset()
 	translationsRunning.Reset()
 	resourcesSyncsStartedTotal.Reset()
+	resourcesUpdatesDroppedTotal.Reset()
 
 	startTimes.Lock()
 	defer startTimes.Unlock()
