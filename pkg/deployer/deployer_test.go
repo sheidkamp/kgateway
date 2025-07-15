@@ -1634,7 +1634,6 @@ var _ = Describe("Deployer", func() {
 			}
 
 			validateRunAsUser(objs, inp)
-
 			return nil
 		}
 
@@ -1649,8 +1648,8 @@ var _ = Describe("Deployer", func() {
 			if err := fullyDefinedValidationWithoutRunAsUser(objs, inp); err != nil {
 				return err
 			}
-
 			validateRunAsUser(objs, inp)
+
 
 			return nil
 		}
@@ -1917,7 +1916,7 @@ var _ = Describe("Deployer", func() {
 				gw:         defaultGateway(),
 				defaultGwp: gwParamsNoPodTemplate(),
 			}, &expectedOutput{
-				validationFunc: fullyDefinedValidationForNullPodTemplate,
+				validationFunc: fullyDefinedValidation,
 			}),
 			Entry("Fully defined GatewayParameters with custom env vars", &input{
 				dInputs:    istioEnabledDeployerInputs(),
