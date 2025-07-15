@@ -626,14 +626,14 @@ func (s *ProxySyncer) syncGatewayStatus(ctx context.Context, logger *slog.Logger
 				} else {
 					logger.Info("skipping k8s gateway status update, status equal", "gateway", gwnn.String())
 				}
-			}
 
-			tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
-				Namespace:    gwnn.Namespace,
-				Gateway:      gwnn.Name,
-				ResourceType: "Gateway",
-				ResourceName: gwnn.Name,
-			}, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
+				tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
+					Namespace:    gwnn.Namespace,
+					Gateway:      gwnn.Name,
+					ResourceType: "Gateway",
+					ResourceName: gwnn.Name,
+				}, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
+			}
 		}
 		return nil
 	},
@@ -676,14 +676,14 @@ func (s *ProxySyncer) syncListenerSetStatus(ctx context.Context, logger *slog.Lo
 				} else {
 					logger.Info("skipping k8s ls status update, status equal", "listenerset", lsnn.String())
 				}
-			}
 
-			tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
-				Namespace:    ls.Namespace,
-				Gateway:      string(ls.Spec.ParentRef.Name),
-				ResourceType: "XListenerSet",
-				ResourceName: ls.Name,
-			}, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
+				tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
+					Namespace:    ls.Namespace,
+					Gateway:      string(ls.Spec.ParentRef.Name),
+					ResourceType: "XListenerSet",
+					ResourceName: ls.Name,
+				}, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
+			}
 		}
 		return nil
 	},

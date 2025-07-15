@@ -55,6 +55,11 @@ var (
 		Help:      "Total number of syncs started",
 	},
 		[]string{"gateway", "namespace", "resource"})
+	resourcesUpdatesDroppedTotal = metrics.NewCounter(metrics.CounterOpts{
+		Subsystem: resourcesSubsystem,
+		Name:      "updates_dropped_total",
+		Help:      "Total number of resources metrics updates dropped. If this metric is ever greater than 0, all resources subsystem metrics should be considered invalid until process restart",
+	}, nil)
 )
 
 type ResourceMetricLabels struct {
@@ -149,7 +154,7 @@ type ResourceSyncStartTime struct {
 // resourceSyncStartTimes tracks the start times of resource syncs.
 type resourceSyncStartTimes struct {
 	sync.RWMutex
-	times map[string]map[string]map[string][]ResourceSyncStartTime
+	times map[string]map[string]map[string]map[string][]ResourceSyncStartTime
 }
 
 var startTimes = &resourceSyncStartTimes{}
@@ -233,23 +238,19 @@ func startResourceSync(details ResourceSyncDetails) bool {
 	defer startTimes.Unlock()
 
 	if startTimes.times == nil {
-		startTimes.times = make(map[string]map[string]map[string][]ResourceSyncStartTime)
+		startTimes.times = make(map[string]map[string]map[string]map[string][]ResourceSyncStartTime)
 	}
 
 	if startTimes.times[details.Gateway] == nil {
-		startTimes.times[details.Gateway] = make(map[string]map[string][]ResourceSyncStartTime)
+		startTimes.times[details.Gateway] = make(map[string]map[string]map[string][]ResourceSyncStartTime)
 	}
 
-	if startTimes.times[details.Gateway][details.Namespace] == nil {
-		startTimes.times[details.Gateway][details.Namespace] = make(map[string][]ResourceSyncStartTime)
+	if startTimes.times[details.Gateway][details.ResourceType] == nil {
+		startTimes.times[details.Gateway][details.ResourceType] = make(map[string]map[string][]ResourceSyncStartTime)
 	}
 
-	if startTimes.times[details.Gateway][details.Namespace][details.ResourceType] == nil {
-		startTimes.times[details.Gateway][details.Namespace][details.ResourceType] = []ResourceSyncStartTime{}
-	}
-
-	if startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"] == nil {
-		startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"] = []ResourceSyncStartTime{}
+	if startTimes.times[details.Gateway][details.ResourceType][details.Namespace] == nil {
+		startTimes.times[details.Gateway][details.ResourceType][details.Namespace] = make(map[string][]ResourceSyncStartTime)
 	}
 
 	st := ResourceSyncStartTime{
@@ -260,31 +261,19 @@ func startResourceSync(details ResourceSyncDetails) bool {
 		Gateway:      details.Gateway,
 	}
 
-	found := false
+	startTimes.times[details.Gateway][details.ResourceType][details.Namespace][details.ResourceName] = append(startTimes.times[details.Gateway][details.ResourceType][details.Namespace][details.ResourceName], st)
 
-	newST := make([]ResourceSyncStartTime, 0, len(startTimes.times[details.Gateway][details.Namespace][details.ResourceType])+1)
-	for _, v := range startTimes.times[details.Gateway][details.Namespace][details.ResourceType] {
-		if v.ResourceName != details.ResourceName {
-			newST = append(newST, v)
-		} else {
-			found = true
-		}
+	if startTimes.times[details.Gateway]["XDSSnapshot"] == nil {
+		startTimes.times[details.Gateway]["XDSSnapshot"] = make(map[string]map[string][]ResourceSyncStartTime)
 	}
 
-	newST = append(newST, st)
-	startTimes.times[details.Gateway][details.Namespace][details.ResourceType] = newST
-
-	newXDSST := make([]ResourceSyncStartTime, 0, len(startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"])+1)
-	for _, v := range startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"] {
-		if v.ResourceName != details.ResourceName {
-			newXDSST = append(newXDSST, v)
-		}
+	if startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace] == nil {
+		startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace] = make(map[string][]ResourceSyncStartTime)
 	}
 
-	newXDSST = append(newXDSST, st)
-	startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"] = newXDSST
+	startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace][details.ResourceName] = append(startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace][details.ResourceName], st)
 
-	return !found
+	return true
 }
 
 // EndResourceSync records the end time of a sync for a given resource and
@@ -323,6 +312,7 @@ func EndResourceSync(
 			"resourceName", details.ResourceName,
 			"xdsSnapshot", isXDSSnapshot,
 		)
+		resourcesUpdatesDroppedTotal.Inc()
 		return false
 	}
 }
@@ -339,79 +329,82 @@ func endResourceSync(syncInfo *syncStartInfo) {
 		return
 	}
 
-	if startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace] == nil {
-		return
-	}
-
+	rn := syncInfo.details.ResourceName
 	rt := syncInfo.details.ResourceType
+
 	if syncInfo.xdsSnapshot {
 		rt = "XDSSnapshot"
-	} else {
-		if startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt] == nil {
+		sts, exists := startTimes.times[syncInfo.details.Gateway][rt]
+		if !exists {
 			return
 		}
-	}
 
-	newSTs := []ResourceSyncStartTime{}
-	res := []ResourceSyncStartTime{}
+		for _, stsn := range sts {
+			for _, stsns := range stsn {
+				for _, st := range stsns {
+					syncInfo.totalCounter.Inc([]metrics.Label{
+						{Name: "gateway", Value: st.Gateway},
+						{Name: "namespace", Value: st.Namespace},
+						{Name: "resource", Value: st.ResourceType},
+					}...)
 
-	if syncInfo.xdsSnapshot {
-		for ns, stm := range startTimes.times[syncInfo.details.Gateway] {
-			res = append(res, stm["XDSSnapshot"]...)
-
-			delete(startTimes.times[syncInfo.details.Gateway][ns], "XDSSnapshot")
-			if len(startTimes.times[syncInfo.details.Gateway][ns]) == 0 {
-				delete(startTimes.times[syncInfo.details.Gateway], ns)
+					syncInfo.durationHistogram.Observe(syncInfo.endTime.Sub(st.Time).Seconds(), []metrics.Label{
+						{Name: "gateway", Value: st.Gateway},
+						{Name: "namespace", Value: st.Namespace},
+						{Name: "resource", Value: st.ResourceType},
+					}...)
+				}
 			}
-
-			if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
-				delete(startTimes.times, syncInfo.details.Gateway)
-			}
-		}
-	} else {
-		for _, st := range startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt] {
-			if st.ResourceType == syncInfo.details.ResourceType && st.ResourceName == syncInfo.details.ResourceName {
-				res = append(res, ResourceSyncStartTime{
-					Time:         st.Time,
-					ResourceType: st.ResourceType,
-					ResourceName: st.ResourceName,
-					Namespace:    st.Namespace,
-					Gateway:      st.Gateway,
-				})
-
-				continue
-			}
-
-			newSTs = append(newSTs, st)
 		}
 
-		startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt] = newSTs
-		if len(startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace][rt]) == 0 {
-			delete(startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace], rt)
-		}
-
-		if len(startTimes.times[syncInfo.details.Gateway][syncInfo.details.Namespace]) == 0 {
-			delete(startTimes.times[syncInfo.details.Gateway], syncInfo.details.Namespace)
-		}
+		delete(startTimes.times[syncInfo.details.Gateway], rt)
 
 		if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
 			delete(startTimes.times, syncInfo.details.Gateway)
 		}
+
+		return
 	}
 
-	for _, st := range res {
+	if startTimes.times[syncInfo.details.Gateway][rt] == nil {
+		return
+	}
+
+	if startTimes.times[syncInfo.details.Gateway][rt][syncInfo.details.Namespace] == nil {
+		return
+	}
+
+	sts, exists := startTimes.times[syncInfo.details.Gateway][rt][syncInfo.details.Namespace][rn]
+	if !exists {
+		return
+	}
+
+	for _, st := range sts {
 		syncInfo.totalCounter.Inc([]metrics.Label{
 			{Name: "gateway", Value: st.Gateway},
 			{Name: "namespace", Value: st.Namespace},
 			{Name: "resource", Value: st.ResourceType},
 		}...)
 
-		syncInfo.durationHistogram.Observe(syncInfo.endTime.Sub(st.Time).Seconds(),
-			[]metrics.Label{
-				{Name: "gateway", Value: st.Gateway},
-				{Name: "namespace", Value: st.Namespace},
-				{Name: "resource", Value: st.ResourceType},
-			}...)
+		syncInfo.durationHistogram.Observe(syncInfo.endTime.Sub(st.Time).Seconds(), []metrics.Label{
+			{Name: "gateway", Value: st.Gateway},
+			{Name: "namespace", Value: st.Namespace},
+			{Name: "resource", Value: st.ResourceType},
+		}...)
+	}
+
+	delete(startTimes.times[syncInfo.details.Gateway][rt][syncInfo.details.Namespace], rn)
+
+	if len(startTimes.times[syncInfo.details.Gateway][rt][syncInfo.details.Namespace]) == 0 {
+		delete(startTimes.times[syncInfo.details.Gateway][rt], syncInfo.details.Namespace)
+	}
+
+	if len(startTimes.times[syncInfo.details.Gateway][rt]) == 0 {
+		delete(startTimes.times[syncInfo.details.Gateway], rt)
+	}
+
+	if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
+		delete(startTimes.times, syncInfo.details.Gateway)
 	}
 }
 
@@ -425,5 +418,5 @@ func ResetMetrics() {
 
 	startTimes.Lock()
 	defer startTimes.Unlock()
-	startTimes.times = make(map[string]map[string]map[string][]ResourceSyncStartTime)
+	startTimes.times = make(map[string]map[string]map[string]map[string][]ResourceSyncStartTime)
 }
