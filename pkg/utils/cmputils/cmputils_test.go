@@ -114,7 +114,7 @@ func TestPointerValsEqualWithNils(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := PointerValsEqual(tt.a, tt.b)
 			if result != tt.expected {
-				t.Errorf("PointersEqualWithNils(%v, %v) = %v, want %v", tt.a, tt.b, result, tt.expected)
+				t.Errorf("PointerValsEqual(%v, %v) = %v, want %v", tt.a, tt.b, result, tt.expected)
 			}
 		})
 	}
