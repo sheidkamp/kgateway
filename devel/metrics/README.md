@@ -67,3 +67,9 @@ KRT collection is modified.
 metrics.RegisterEvents(httpRoutes, GetResourceMetricEventHandler[*gwv1.HTTPRoute]())
 ```
 
+### `kgateway_resources_updates_dropped_total` Metric
+* This metric is never emitted under normal operating circumstances.
+* It counts the number of times the background processing of resources metrics had to drop an update because the channel buffer was full.
+* This indicates the metrics system, and probably the gateway, is overloaded.
+* Once updates have been dropped, `kgateway_resources_*` metrics are no longer valid, until the process has been restarted.
+* Metrics subsystems other than `kgateway_resources_` are not affected.

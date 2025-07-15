@@ -540,6 +540,8 @@ func NewPolicyIndex(
 					}
 				case controllers.EventUpdate:
 					if o.Old != nil {
+						// When updating an existing policy, decrement resource metrics with the old label
+						// values before incrementing with the changed label values.
 						for _, ref := range o.Old.TargetRefs {
 							if ref.Group == wellknown.GatewayGroup && ref.Kind == wellknown.GatewayKind {
 								resourcesManaged.Sub(1, resourceMetricLabels{

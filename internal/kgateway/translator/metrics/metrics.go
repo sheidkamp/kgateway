@@ -196,7 +196,10 @@ type syncStartInfo struct {
 	durationHistogram metrics.Histogram
 }
 
-var syncCh = make(chan *syncStartInfo, 1024) // Buffered channel to handle resource sync metric events.
+// Buffered channel to handle resource sync metrics updates.
+// The buffer size is assumed to be sufficient for any reasonable load.
+// But, this may need to be configurable in the future, if needed for very high load.
+var syncCh = make(chan *syncStartInfo, 1024)
 
 // StartResourceSyncMetricsProcessing starts a goroutine that processes resource sync metrics.
 func StartResourceSyncMetricsProcessing(ctx context.Context) {

@@ -11,6 +11,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
+	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
 	reports "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/reporter"
 )
@@ -64,7 +65,11 @@ func translateGatewayHTTPRouteRulesUtil(
 	metricsRecorder := metrics.NewTranslatorMetricsRecorder("TranslateHTTPRoute")
 	defer metricsRecorder.TranslationStart()(nil)
 
-	if routeInfo.ParentRef.Kind != nil && *routeInfo.ParentRef.Kind == gwv1.Kind("Gateway") {
+	// This only starts a resource metric sync if the route has a Gateway parent.
+	// This ensures that the status sync and XDS snapshot sync metrics can be balanced.
+	// Syncs for routes with non-gateway parents are recorded when applied to a gateway,
+	// the translation of which also calls this function.
+	if routeInfo.ParentRef.Kind != nil && *routeInfo.ParentRef.Kind == wellknown.GatewayKind {
 		metrics.StartResourceSync(routeInfo.GetName(), metrics.ResourceMetricLabels{
 			Gateway:   string(routeInfo.ParentRef.Name),
 			Namespace: routeInfo.GetNamespace(),
