@@ -3,15 +3,7 @@ package cmputils
 // OnlyOneNil returns true if exactly one of the two values is nil.
 // This is used to compare fields/objects that are optional and may be set to nil.
 func OnlyOneNil[T any](a, b *T) bool {
-	if a == nil && b != nil {
-		return true
-	}
-
-	if a != nil && b == nil {
-		return true
-	}
-
-	return false
+	return (a == nil) != (b == nil)
 }
 
 // CompareWithNils compares two values of type T, where T is a pointer to a value.
