@@ -334,14 +334,14 @@ func endResourceSync(syncInfo *syncStartInfo) {
 
 	if syncInfo.xdsSnapshot {
 		rt = "XDSSnapshot"
-		sts, exists := startTimes.times[syncInfo.details.Gateway][rt]
+		resourceTypeStartTimes, exists := startTimes.times[syncInfo.details.Gateway][rt]
 		if !exists {
 			return
 		}
 
-		for _, stsn := range sts {
-			for _, stsns := range stsn {
-				for _, st := range stsns {
+		for _, namespaceStartTimes := range resourceTypeStartTimes {
+			for _, nameStartTimes := range namespaceStartTimes {
+				for _, st := range nameStartTimes {
 					syncInfo.totalCounter.Inc([]metrics.Label{
 						{Name: "gateway", Value: st.Gateway},
 						{Name: "namespace", Value: st.Namespace},
@@ -374,12 +374,12 @@ func endResourceSync(syncInfo *syncStartInfo) {
 		return
 	}
 
-	sts, exists := startTimes.times[syncInfo.details.Gateway][rt][syncInfo.details.Namespace][rn]
+	resourceStartTimes, exists := startTimes.times[syncInfo.details.Gateway][rt][syncInfo.details.Namespace][rn]
 	if !exists {
 		return
 	}
 
-	for _, st := range sts {
+	for _, st := range resourceStartTimes {
 		syncInfo.totalCounter.Inc([]metrics.Label{
 			{Name: "gateway", Value: st.Gateway},
 			{Name: "namespace", Value: st.Namespace},
