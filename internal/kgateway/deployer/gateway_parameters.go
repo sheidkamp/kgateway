@@ -281,7 +281,7 @@ func (k *kGatewayParameters) getValues(gw *api.Gateway, gwParam *v1alpha1.Gatewa
 	// This may affect both the PodSecurityContext and the SecurityContexts for the containers defined in gwParam
 	// Note: this call may populate the PodSecurityContext and SecurityContext fields in the gateway parameters if they are null,
 	// so this needs to happen before those kubeProxyConfig fields are extracted to local variables.
-	deployer.UpdateSecurityContexts(gwParam.Spec.Kube, vals.Gateway.Ports)
+	//deployer.UpdateSecurityContexts(gwParam.Spec.Kube, vals.Gateway.Ports)
 
 	// extract all the custom values from the GatewayParameters
 	// (note: if we add new fields to GatewayParameters, they will
