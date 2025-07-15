@@ -260,10 +260,31 @@ func startResourceSync(details ResourceSyncDetails) bool {
 		Gateway:      details.Gateway,
 	}
 
-	startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"] = append(startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"], st)
-	startTimes.times[details.Gateway][details.Namespace][details.ResourceType] = append(startTimes.times[details.Gateway][details.Namespace][details.ResourceType], st)
+	found := false
 
-	return true
+	newST := make([]ResourceSyncStartTime, 0, len(startTimes.times[details.Gateway][details.Namespace][details.ResourceType])+1)
+	for _, v := range startTimes.times[details.Gateway][details.Namespace][details.ResourceType] {
+		if v.ResourceName != details.ResourceName {
+			newST = append(newST, v)
+		} else {
+			found = true
+		}
+	}
+
+	newST = append(newST, st)
+	startTimes.times[details.Gateway][details.Namespace][details.ResourceType] = newST
+
+	newXDSST := make([]ResourceSyncStartTime, 0, len(startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"])+1)
+	for _, v := range startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"] {
+		if v.ResourceName != details.ResourceName {
+			newXDSST = append(newXDSST, v)
+		}
+	}
+
+	newXDSST = append(newXDSST, st)
+	startTimes.times[details.Gateway][details.Namespace]["XDSSnapshot"] = newXDSST
+
+	return !found
 }
 
 // EndResourceSync records the end time of a sync for a given resource and

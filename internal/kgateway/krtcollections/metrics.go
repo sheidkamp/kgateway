@@ -57,15 +57,17 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 	return func(o krt.Event[T]) {
 		clientObject = o.Latest()
 		namespace = clientObject.(client.Object).GetNamespace()
+		eventType = o.Event
 
-		if o.Old != nil {
+		// If the event is an update, we must decrement resource metrics using the old label
+		// values before incrementing the resource count with the new label values.
+		if eventType == controllers.EventUpdate && o.Old != nil {
 			clientObjectOld = *o.Old
 			namespaceOld = clientObjectOld.(client.Object).GetNamespace()
 		}
 
 		switch obj := clientObject.(type) {
 		case *gwv1.HTTPRoute:
-			eventType = o.Event
 			resourceType = "HTTPRoute"
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
@@ -80,7 +82,6 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 				}
 			}
 		case *gwv1a2.TCPRoute:
-			eventType = o.Event
 			resourceType = "TCPRoute"
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
@@ -95,7 +96,6 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 				}
 			}
 		case *gwv1a2.TLSRoute:
-			eventType = o.Event
 			resourceType = "TLSRoute"
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
@@ -110,7 +110,6 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 				}
 			}
 		case *gwv1.GRPCRoute:
-			eventType = o.Event
 			resourceType = "GRPCRoute"
 			gatewayNames = make([]string, 0, len(obj.Spec.ParentRefs))
 			for _, pr := range obj.Spec.ParentRefs {
@@ -125,7 +124,6 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 				}
 			}
 		case *gwv1.Gateway:
-			eventType = o.Event
 			resourceType = "Gateway"
 			gatewayNames = []string{clientObject.(client.Object).GetName()}
 
@@ -133,7 +131,6 @@ func GetResourceMetricEventHandler[T any]() func(krt.Event[T]) {
 				gatewayNamesOld = []string{clientObjectOld.(*gwv1.Gateway).Name}
 			}
 		case *gwxv1a1.XListenerSet:
-			eventType = o.Event
 			resourceType = "XListenerSet"
 			namespace = clientObject.(client.Object).GetNamespace()
 			gatewayNames = []string{string(obj.Spec.ParentRef.Name)}

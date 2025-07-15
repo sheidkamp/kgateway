@@ -195,6 +195,8 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	mergedPlugins := pluginFactoryWithBuiltin(cfg)(ctx, commoncol)
 	commoncol.InitPlugins(ctx, mergedPlugins, globalSettings)
 
+	// Begin background processing of resource sync metrics.
+	// This only effects metrics in the resources subsystem and is not required for other metrics.
 	metrics.StartResourceSyncMetricsProcessing(ctx)
 
 	// Create the proxy syncer for the Gateway API resources
