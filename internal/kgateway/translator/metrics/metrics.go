@@ -274,7 +274,7 @@ func startResourceSync(details ResourceSyncDetails) bool {
 		startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace] = make(map[string]ResourceSyncStartTime)
 	}
 
-	startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace][details.ResourceType] = st
+	startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace][details.ResourceName] = st
 
 	return !exists
 }
@@ -342,8 +342,10 @@ func endResourceSync(syncInfo *syncStartInfo) {
 			return
 		}
 
+		deleteResources := map[string]map[string]struct{}{}
+
 		for _, namespaceStartTimes := range resourceTypeStartTimes {
-			for _, st := range namespaceStartTimes {
+			for resourceName, st := range namespaceStartTimes {
 				syncInfo.totalCounter.Inc([]metrics.Label{
 					{Name: "gateway", Value: st.Gateway},
 					{Name: "namespace", Value: st.Namespace},
@@ -355,6 +357,30 @@ func endResourceSync(syncInfo *syncStartInfo) {
 					{Name: "namespace", Value: st.Namespace},
 					{Name: "resource", Value: st.ResourceType},
 				}...)
+
+				if deleteResources[st.Namespace] == nil {
+					deleteResources[st.Namespace] = map[string]struct{}{}
+				}
+
+				deleteResources[st.Namespace][resourceName] = struct{}{}
+			}
+		}
+
+		for namespace, resources := range deleteResources {
+			for resourceName := range resources {
+				delete(startTimes.times[syncInfo.details.Gateway][rt][namespace], resourceName)
+
+				if len(startTimes.times[syncInfo.details.Gateway][rt][namespace]) == 0 {
+					delete(startTimes.times[syncInfo.details.Gateway][rt], namespace)
+				}
+
+				if len(startTimes.times[syncInfo.details.Gateway][rt]) == 0 {
+					delete(startTimes.times[syncInfo.details.Gateway], rt)
+				}
+
+				if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
+					delete(startTimes.times, syncInfo.details.Gateway)
+				}
 			}
 		}
 
