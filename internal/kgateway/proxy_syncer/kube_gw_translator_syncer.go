@@ -22,14 +22,16 @@ func (s *ProxyTranslator) syncXds(
 
 	logger.Log(ctx, logging.LevelTrace, "syncing xds snapshot", "proxy_key", proxyKey)
 
+	gateway, namespace := getGatewayFromXDSSnapshotResourceName(snapWrap.ResourceName())
+
+	tmetrics.StartResourceXDSSnapshotSync(gateway, namespace)
+
 	// if the snapshot is not consistent, make it so
 	// TODO: me may need to copy this to not change krt cache.
 	// TODO: this is also may not be needed now that envoy has
 	// a default initial fetch timeout
 	// snap.MakeConsistent()
 	s.xdsCache.SetSnapshot(ctx, proxyKey, snap)
-
-	gateway, namespace := getGatewayFromXDSSnapshotResourceName(snapWrap.ResourceName())
 
 	tmetrics.EndResourceSync(tmetrics.ResourceSyncDetails{
 		Namespace:    namespace,
