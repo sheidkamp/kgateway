@@ -304,7 +304,7 @@ func TestResourceSyncMetrics(t *testing.T) {
 		Namespace:    testNS,
 		ResourceType: testResource,
 		ResourceName: testName,
-	}, false, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
+	}, false, resourcesXDSSyncsTotal, resourcesXDSyncDuration)
 
 	time.Sleep(50 * time.Millisecond) // Allow some time for metrics to be processed.
 
@@ -319,7 +319,7 @@ func TestResourceSyncMetrics(t *testing.T) {
 		Value: 1,
 	})
 
-	gathered.AssertMetric("kgateway_resources_xds_snapshot_syncs_completed_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("kgateway_resources_xds_snapshot_syncs_total", &metricstest.ExpectedMetric{
 		Labels: []metrics.Label{
 			{Name: "gateway", Value: testName},
 			{Name: "namespace", Value: testNS},

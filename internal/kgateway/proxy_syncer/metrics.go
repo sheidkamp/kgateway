@@ -87,11 +87,11 @@ var (
 		},
 		[]string{"gateway", "namespace", "resource"},
 	)
-	resourcesXDSSyncsCompletedTotal = metrics.NewCounter(
+	resourcesXDSSyncsTotal = metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: resourcesSubsystem,
-			Name:      "xds_snapshot_syncs_completed_total",
-			Help:      "Total number of XDS snapshot syncs completed for resources",
+			Name:      "xds_snapshot_syncs_total",
+			Help:      "Total number of XDS snapshot syncs for resources",
 		},
 		[]string{"gateway", "namespace", "resource"})
 	resourcesXDSyncDuration = metrics.NewHistogram(

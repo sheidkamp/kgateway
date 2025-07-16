@@ -38,5 +38,5 @@ func (s *ProxyTranslator) syncXds(
 		Gateway:      gateway,
 		ResourceType: "XDSSnapshot",
 		ResourceName: gateway,
-	}, true, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
+	}, true, resourcesXDSSyncsTotal, resourcesXDSyncDuration)
 }

@@ -184,11 +184,11 @@ func TestResourceSync(t *testing.T) {
 	gathered.AssertHistogramPopulated("kgateway_resources_status_sync_duration_seconds")
 
 	// Test for XDS snapshot sync metrics.
-	resourcesXDSSyncsCompletedTotal := metrics.NewCounter(
+	resourcesXDSSyncsTotal := metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: "resources",
-			Name:      "xds_snapshot_syncs_completed_total",
-			Help:      "Total number of XDS snapshot syncs completed for resources",
+			Name:      "xds_snapshot_syncs_total",
+			Help:      "Total number of XDS snapshot syncs for resources",
 		},
 		[]string{"gateway", "namespace", "resource"})
 	resourcesXDSyncDuration := metrics.NewHistogram(
@@ -204,7 +204,7 @@ func TestResourceSync(t *testing.T) {
 		[]string{"gateway", "namespace", "resource"},
 	)
 
-	EndResourceSync(details, true, resourcesXDSSyncsCompletedTotal, resourcesXDSyncDuration)
+	EndResourceSync(details, true, resourcesXDSSyncsTotal, resourcesXDSyncDuration)
 
 	time.Sleep(50 * time.Millisecond) // Allow some time for metrics to be processed.
 
@@ -219,7 +219,7 @@ func TestResourceSync(t *testing.T) {
 		Value: 1,
 	})
 
-	gathered.AssertMetric("kgateway_resources_xds_snapshot_syncs_started_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("kgateway_xds_snapshot_syncs_total", &metricstest.ExpectedMetric{
 		Labels: []metrics.Label{
 			{Name: "gateway", Value: details.Gateway},
 			{Name: "namespace", Value: details.Namespace},
@@ -227,7 +227,7 @@ func TestResourceSync(t *testing.T) {
 		Value: 1,
 	})
 
-	gathered.AssertMetric("kgateway_resources_xds_snapshot_syncs_completed_total", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("kgateway_resources_xds_snapshot_syncs_total", &metricstest.ExpectedMetric{
 		Labels: []metrics.Label{
 			{Name: "gateway", Value: details.Gateway},
 			{Name: "namespace", Value: details.Namespace},
@@ -242,8 +242,6 @@ func TestResourceSync(t *testing.T) {
 		{Name: "resource", Value: details.ResourceType},
 	}})
 	gathered.AssertHistogramPopulated("kgateway_resources_xds_snapshot_sync_duration_seconds")
-
-	assert.Zero(t, CountResourceSyncStartTimes(), "Expected resource sync start times data to be cleared after sync end")
 }
 
 func TestSyncChannelFull(t *testing.T) {

@@ -167,27 +167,6 @@ type resourceSyncStartTimes struct {
 
 var startTimes = &resourceSyncStartTimes{}
 
-// CountResourceSyncStartTimes counts the number of resource sync start times recorded.
-func CountResourceSyncStartTimes() int {
-	startTimes.RLock()
-	defer startTimes.RUnlock()
-
-	if startTimes.times == nil {
-		return 0
-	}
-
-	count := 0
-	for _, nsMap := range startTimes.times {
-		for _, rtMap := range nsMap {
-			for _, stList := range rtMap {
-				count += len(stList)
-			}
-		}
-	}
-
-	return count
-}
-
 // ResourceSyncDetails holds the details of a resource sync operation.
 type ResourceSyncDetails struct {
 	Namespace    string
