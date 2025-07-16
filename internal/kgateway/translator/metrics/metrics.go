@@ -292,7 +292,7 @@ func startResourceSync(details ResourceSyncDetails) bool {
 		startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace] = make(map[string][]ResourceSyncStartTime)
 	}
 
-	startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace][details.ResourceName] = []ResourceSyncStartTime{st}
+	startTimes.times[details.Gateway]["XDSSnapshot"][details.Namespace][details.ResourceType] = []ResourceSyncStartTime{st}
 
 	return true
 }
@@ -378,11 +378,11 @@ func endResourceSync(syncInfo *syncStartInfo) {
 			}
 		}
 
-		delete(startTimes.times[syncInfo.details.Gateway], rt)
+		// delete(startTimes.times[syncInfo.details.Gateway], rt)
 
-		if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
-			delete(startTimes.times, syncInfo.details.Gateway)
-		}
+		// if len(startTimes.times[syncInfo.details.Gateway]) == 0 {
+		// 	delete(startTimes.times, syncInfo.details.Gateway)
+		// }
 
 		return
 	}
