@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	apiannotations "github.com/kgateway-dev/kgateway/v2/api/annotations"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/plugins"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
@@ -94,6 +95,8 @@ type RouteContext struct {
 	In              HttpRouteRuleMatchIR
 	// TypedFilterConfig will be output on the Route level after all plugins have run
 	TypedFilterConfig TypedFilterConfigMap
+
+	InheritedPolicyPriority apiannotations.InheritedPolicyPriorityValue
 }
 
 type HcmContext struct {
@@ -111,10 +114,6 @@ type ProxyTranslationPass interface {
 		pCtx *ListenerContext,
 		out *envoy_config_listener_v3.Listener,
 	)
-	// called 1 time per filter chain after listeners and allows tweaking HCM settings.
-	ApplyHCM(ctx context.Context,
-		pCtx *HcmContext,
-		out *envoy_hcm.HttpConnectionManager) error
 
 	// called 1 time for all the routes in a filter chain. Use this to set default PerFilterConfig
 	// No policy is provided here.
@@ -158,12 +157,18 @@ type ProxyTranslationPass interface {
 		out *envoy_config_route_v3.Route,
 	) error
 
+	NetworkFilters(ctx context.Context) ([]plugins.StagedNetworkFilter, error)
+
 	// called 1 time per filter-chain.
 	// If a plugin emits new filters, they must be with a plugin unique name.
 	// filters added to impact specific routes should be disabled on the listener level, so they don't impact other routes.
 	HttpFilters(ctx context.Context, fc FilterChainCommon) ([]plugins.StagedHttpFilter, error)
 
-	NetworkFilters(ctx context.Context) ([]plugins.StagedNetworkFilter, error)
+	// called 1 time per filter chain after listeners and allows tweaking HCM settings.
+	ApplyHCM(ctx context.Context,
+		pCtx *HcmContext,
+		out *envoy_hcm.HttpConnectionManager) error
+
 	// called 1 time (per envoy proxy). replaces GeneratedResources and allows adding clusters to the envoy.
 	ResourcesToAdd(ctx context.Context) Resources
 }
