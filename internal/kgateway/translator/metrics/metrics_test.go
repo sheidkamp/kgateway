@@ -150,7 +150,7 @@ func TestResourceSync(t *testing.T) {
 		Resource:  details.ResourceType,
 	})
 
-	StartResourceXDSSnapshotSync(details.Gateway, details.Namespace)
+	IncXDSSnapshotSync(details.Gateway, details.Namespace)
 
 	EndResourceSync(details, false, resourcesStatusSyncsCompletedTotal, resourcesStatusSyncDuration)
 

@@ -14,6 +14,7 @@ const (
 	translatorSubsystem = "translator"
 	translatorNameLabel = "translator"
 	resourcesSubsystem  = "resources"
+	snapshotSubsystem   = "xds_snapshot"
 )
 
 var logger = logging.New("translator.metrics")
@@ -49,18 +50,19 @@ var (
 		[]string{translatorNameLabel},
 	)
 
+	xdsSnapshotSyncsTotal = metrics.NewCounter(metrics.CounterOpts{
+		Subsystem: snapshotSubsystem,
+		Name:      "syncs_total",
+		Help:      "Total number of XDS snapshot syncs",
+	},
+		[]string{"gateway", "namespace"})
+
 	resourcesSyncsStartedTotal = metrics.NewCounter(metrics.CounterOpts{
 		Subsystem: resourcesSubsystem,
 		Name:      "syncs_started_total",
 		Help:      "Total number of syncs started",
 	},
 		[]string{"gateway", "namespace", "resource"})
-	resourcesXDSSnapshotSyncsStartedTotal = metrics.NewCounter(metrics.CounterOpts{
-		Subsystem: resourcesSubsystem,
-		Name:      "xds_snapshot_syncs_started_total",
-		Help:      "Total number of XDS snapshot syncs started",
-	},
-		[]string{"gateway", "namespace"})
 	resourcesUpdatesDroppedTotal = metrics.NewCounter(metrics.CounterOpts{
 		Subsystem: resourcesSubsystem,
 		Name:      "updates_dropped_total",
@@ -225,13 +227,13 @@ func StartResourceSyncMetricsProcessing(ctx context.Context) {
 	}()
 }
 
-// StartResourceXDSSnapshotSync records the start of an XDS snapshot sync for a given resource.
-func StartResourceXDSSnapshotSync(gateway, namespace string) {
+// IncXDSSnapshotSync records an XDS snapshot sync for a given gateway.
+func IncXDSSnapshotSync(gateway, namespace string) {
 	if !metrics.Active() {
 		return
 	}
 
-	resourcesXDSSnapshotSyncsStartedTotal.Inc([]metrics.Label{
+	xdsSnapshotSyncsTotal.Inc([]metrics.Label{
 		{Name: "gateway", Value: gateway},
 		{Name: "namespace", Value: namespace},
 	}...)
@@ -435,8 +437,8 @@ func ResetMetrics() {
 	translationsTotal.Reset()
 	translationDuration.Reset()
 	translationsRunning.Reset()
+	xdsSnapshotSyncsTotal.Reset()
 	resourcesSyncsStartedTotal.Reset()
-	resourcesXDSSnapshotSyncsStartedTotal.Reset()
 	resourcesUpdatesDroppedTotal.Reset()
 
 	startTimes.Lock()
