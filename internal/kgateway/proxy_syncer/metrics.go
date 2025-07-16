@@ -79,7 +79,7 @@ var (
 		metrics.HistogramOpts{
 			Subsystem:                       resourcesSubsystem,
 			Name:                            "status_sync_duration_seconds",
-			Help:                            "Duration of time for a resource update to be synced in XDS snapshots",
+			Help:                            "Duration of time for a resource update to receive a status report",
 			Buckets:                         resourcesHistogramBuckets,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
@@ -98,7 +98,7 @@ var (
 		metrics.HistogramOpts{
 			Subsystem:                       resourcesSubsystem,
 			Name:                            "xds_snapshot_sync_duration_seconds",
-			Help:                            "Duration of time for a resource update to receive a status report",
+			Help:                            "Duration of time for a resource update to be synced in XDS snapshots",
 			Buckets:                         resourcesHistogramBuckets,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
