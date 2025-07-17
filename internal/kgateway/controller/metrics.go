@@ -12,7 +12,8 @@ const (
 )
 
 var (
-	reconciliationsTotal = metrics.NewCounter(
+	reconcileHistogramBuckets = []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+	reconciliationsTotal      = metrics.NewCounter(
 		metrics.CounterOpts{
 			Subsystem: controllerSubsystem,
 			Name:      "reconciliations_total",
@@ -25,7 +26,7 @@ var (
 			Subsystem:                       controllerSubsystem,
 			Name:                            "reconcile_duration_seconds",
 			Help:                            "Reconcile duration for controller",
-			Buckets:                         metrics.DefaultBuckets,
+			Buckets:                         reconcileHistogramBuckets,
 			NativeHistogramBucketFactor:     1.1,
 			NativeHistogramMaxBucketNumber:  100,
 			NativeHistogramMinResetDuration: time.Hour,
