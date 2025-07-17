@@ -351,6 +351,8 @@ func NewGatewayIndex(
 			return a.GetCreationTimestamp().Compare(b.GetCreationTimestamp().Time)
 		})
 
+		// Start the resource sync metrics for all XListenerSets before they are processed,
+		// so they do not have staggered start times.
 		for _, ls := range listenerSets {
 			tmetrics.StartResourceSync(ls.Name,
 				tmetrics.ResourceMetricLabels{
@@ -358,7 +360,9 @@ func NewGatewayIndex(
 					Gateway:   i.GetName(),
 					Resource:  wellknown.XListenerSetKind,
 				})
+		}
 
+		for _, ls := range listenerSets {
 			lsIR := ir.ListenerSet{
 				ObjectSource: ir.ObjectSource{
 					Group:     wellknown.XListenerSetGroup,
