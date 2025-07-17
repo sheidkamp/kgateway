@@ -2,6 +2,7 @@ package httproute
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -64,6 +65,7 @@ func translateGatewayHTTPRouteRulesUtil(
 	metricsRecorder := metrics.NewTranslatorMetricsRecorder("TranslateHTTPRoute")
 	defer metricsRecorder.TranslationStart()(nil)
 
+	fmt.Printf("METRICSTRACE: StartResourceSync: for route %s with hostnames %v, gateway %s, namespace %s\n", routeInfo.GetName(), route.Hostnames, string(routeInfo.ParentRef.Name), routeInfo.GetNamespace())
 	metrics.StartResourceSync(routeInfo.GetName(), metrics.ResourceMetricLabels{
 		Gateway:   string(routeInfo.ParentRef.Name),
 		Namespace: routeInfo.GetNamespace(),

@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -231,8 +232,13 @@ func StartResourceSync(resourceName string, labels ResourceMetricLabels) {
 		ResourceType: labels.Resource,
 		ResourceName: resourceName,
 	}) {
+		fmt.Printf("METRICSTRACE: StartResourceSync Increment: resource name: %s, resource type: %s, namespace: %s, gateway: %s, time: %s\n", resourceName, labels.Resource, labels.Namespace, labels.Gateway, time.Now().Format(time.RFC3339))
 		resourcesSyncsStartedTotal.Inc(labels.toMetricsLabels()...)
+	} else {
+		fmt.Printf("METRICSTRACE: StartResourceSync Increment Skipped: resource name: %s, resource type: %s, namespace: %s, gateway: %s, time: %s\n", resourceName, labels.Resource, labels.Namespace, labels.Gateway, time.Now().Format(time.RFC3339))
 	}
+
+	//time.Sleep(time.Duration((rand.New(rand.NewSource(time.Now().UnixNano()))).Intn(250)+250) * time.Millisecond)
 }
 
 func startResourceSync(details ResourceSyncDetails) bool {
@@ -336,6 +342,7 @@ func endResourceSync(syncInfo *syncStartInfo) {
 	rt := syncInfo.details.ResourceType
 
 	if syncInfo.xdsSnapshot {
+		fmt.Printf("METRICSTRACE: EndResourceSync: xds snapshot: %t, resource name: %s, resource type: %s, namespace: %s, gateway: %s, time: %s\n", syncInfo.xdsSnapshot, rn, rt, syncInfo.details.Namespace, syncInfo.details.Gateway, time.Now().Format(time.RFC3339))
 		rt = "XDSSnapshot"
 		resourceTypeStartTimes, exists := startTimes.times[syncInfo.details.Gateway][rt]
 		if !exists {
@@ -346,6 +353,7 @@ func endResourceSync(syncInfo *syncStartInfo) {
 
 		for _, namespaceStartTimes := range resourceTypeStartTimes {
 			for resourceName, st := range namespaceStartTimes {
+				fmt.Printf("\tMETRICSTRACE: EndResourceSync: xds snapshot loop1: %t, resource name: %s, resource type: %s, namespace: %s, gateway: %s, time: %s\n", syncInfo.xdsSnapshot, resourceName, st.ResourceType, st.Namespace, st.Gateway, time.Now().Format(time.RFC3339))
 				syncInfo.totalCounter.Inc([]metrics.Label{
 					{Name: "gateway", Value: st.Gateway},
 					{Name: "namespace", Value: st.Namespace},
@@ -368,6 +376,7 @@ func endResourceSync(syncInfo *syncStartInfo) {
 
 		for namespace, resources := range deleteResources {
 			for resourceName := range resources {
+				fmt.Printf("\tMETRICSTRACE: EndResourceSync: xds snapshot loop2: %t, resource name: %s, resource type: %s, namespace: %s, gateway: %s, time: %s\n", syncInfo.xdsSnapshot, resourceName, rt, namespace, syncInfo.details.Gateway, time.Now().Format(time.RFC3339))
 				delete(startTimes.times[syncInfo.details.Gateway][rt][namespace], resourceName)
 
 				if len(startTimes.times[syncInfo.details.Gateway][rt][namespace]) == 0 {
@@ -386,6 +395,8 @@ func endResourceSync(syncInfo *syncStartInfo) {
 
 		return
 	}
+
+	fmt.Printf("METRICSTRACE: EndResourceSync: resource name: %s, resource type: %s, namespace: %s, gateway: %s, time: %s\n", rn, rt, syncInfo.details.Namespace, syncInfo.details.Gateway, time.Now().Format(time.RFC3339))
 
 	if startTimes.times[syncInfo.details.Gateway][rt] == nil {
 		return

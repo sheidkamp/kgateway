@@ -1,6 +1,7 @@
 package proxy_syncer
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -160,10 +161,12 @@ func (m *nullStatusSyncMetricsRecorder) StatusSyncStart() func(error) {
 // collection and returns a function called at the end to complete metrics recording.
 func (m *statusSyncMetrics) StatusSyncStart() func(error) {
 	start := time.Now()
+	fmt.Printf("METRICSTRACE: StatusSyncStart %s: %s\n", m.syncerName, start.Format(time.RFC3339))
+	//time.Sleep(time.Duration((rand.New(rand.NewSource(time.Now().UnixNano()))).Intn(250)+250) * time.Millisecond)
 
 	return func(err error) {
 		duration := time.Since(start)
-
+		fmt.Printf("METRICSTRACE: StatusSyncStart (END) %s: %s\n", m.syncerName, start.Format(time.RFC3339))
 		m.statusSyncDuration.Observe(duration.Seconds(),
 			metrics.Label{Name: syncerNameLabel, Value: m.syncerName})
 
@@ -211,6 +214,7 @@ func newSnapshotMetricsRecorder() snapshotMetricsRecorder {
 func (m *snapshotMetrics) transformStart(clientKey string) func(error) {
 	start := time.Now()
 
+	//time.Sleep(time.Duration((rand.New(rand.NewSource(time.Now().UnixNano()))).Intn(250)+250) * time.Millisecond)
 	gateway, namespace := getGatewayFromXDSSnapshotResourceName(clientKey)
 	return func(err error) {
 		result := "success"

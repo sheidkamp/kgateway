@@ -1,0 +1,15 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-route-2
+  namespace: allowed-ns
+spec:
+  parentRefs:
+    - name: gw
+  hostnames:
+    - "example.com-2a"
+  rules:
+    - backendRefs:
+        - name: example-svc
+          port: 8080

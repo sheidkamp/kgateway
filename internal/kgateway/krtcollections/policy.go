@@ -354,6 +354,7 @@ func NewGatewayIndex(
 		// Start the resource sync metrics for all XListenerSets before they are processed,
 		// so they do not have staggered start times.
 		for _, ls := range listenerSets {
+			fmt.Printf("METRICSTRACE: StartResourceSync: for listener set %s with allowedRoutes from %s\n", ls.Name, &ls.Spec.Listeners[0].AllowedRoutes.Namespaces.From)
 			tmetrics.StartResourceSync(ls.Name,
 				tmetrics.ResourceMetricLabels{
 					Namespace: ls.Namespace,
