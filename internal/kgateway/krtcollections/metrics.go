@@ -21,7 +21,7 @@ var (
 		metrics.GaugeOpts{
 			Subsystem: resourcesSubsystem,
 			Name:      "managed",
-			Help:      "Current number of gateway resources managed",
+			Help:      "Current number of resources managed",
 		},
 		[]string{"namespace", "parent", "resource"},
 	)
