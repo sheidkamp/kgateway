@@ -26,6 +26,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/extensions2/settings"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/ir"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/backendref"
+	tmetrics "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/metrics"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/utils"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
@@ -351,6 +352,13 @@ func NewGatewayIndex(
 		})
 
 		for _, ls := range listenerSets {
+			tmetrics.StartResourceSync(ls.Name,
+				tmetrics.ResourceMetricLabels{
+					Namespace: ls.Namespace,
+					Gateway:   i.GetName(),
+					Resource:  wellknown.XListenerSetKind,
+				})
+
 			lsIR := ir.ListenerSet{
 				ObjectSource: ir.ObjectSource{
 					Group:     wellknown.XListenerSetGroup,
