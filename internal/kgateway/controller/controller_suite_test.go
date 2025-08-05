@@ -306,6 +306,7 @@ func newCommonCols(ctx context.Context, kubeClient kube.Client) *collections.Com
 	return commoncol
 }
 
+// Controller routines all in waiting state
 var allowedRunningGoroutines = []types.GomegaMatcher{
 	gleak.IgnoringTopFunction("sync.runtime_notifyListWait [sync.Cond.Wait]"),
 	gleak.IgnoringTopFunction("istio.io/istio/pkg/kube/krt.(*processorListener[...]).run [select]"),
