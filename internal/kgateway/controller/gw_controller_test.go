@@ -28,8 +28,8 @@ var _ = Describe("GwController", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithCancel(context.Background())
 		goroutineMonitor = assertions.NewGoRoutineMonitor()
+		ctx, cancel = context.WithCancel(context.Background())
 
 		var err error
 		cancel, err = createManager(ctx, inferenceExt, nil)
