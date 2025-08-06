@@ -27,6 +27,9 @@ import (
 //
 // AfterEach(func() {
 // // This example is from the controller tests. Different tests may have different allowed routines.
+// // The way to figure out what routines to allow is to run the test with the goroutine leak detector enabled
+// // and examining the reported goroutines if/when it fails. Those routines can be individually examined and
+// // either added to the list or somehow mitigated (longer timeout, passing context to the goroutine)
 // var allowedRoutines = []types.GomegaMatcher{
 // 	gleak.IgnoringTopFunction("sync.runtime_notifyListWait [sync.Cond.Wait]"),
 // 	gleak.IgnoringTopFunction("istio.io/istio/pkg/kube/krt.(*processorListener[...]).run [select]"),
