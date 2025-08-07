@@ -1800,6 +1800,7 @@ var _ = Describe("Deployer", func() {
 			return generalAiAndSdsValidationFunc(objs, inp, true) // true: don't expect null runAsUser
 		}
 
+		DescribeTable("create and validate objs", func(inp *input, expected *expectedOutput) {
 			checkErr := func(err, expectedErr error) (shouldReturn bool) {
 				GinkgoHelper()
 				if expectedErr != nil {
