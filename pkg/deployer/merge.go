@@ -32,7 +32,7 @@ func DeepMergeGatewayParameters(dst, src *v1alpha1.GatewayParameters) *v1alpha1.
 	dstKube.Deployment = deepMergeDeployment(dstKube.GetDeployment(), srcKube.GetDeployment())
 	dstKube.EnvoyContainer = deepMergeEnvoyContainer(dstKube.GetEnvoyContainer(), srcKube.GetEnvoyContainer())
 	dstKube.SdsContainer = deepMergeSdsContainer(dstKube.GetSdsContainer(), srcKube.GetSdsContainer())
-	dstKube.PodTemplate = DeepMergePodTemplate(dstKube.GetPodTemplate(), srcKube.GetPodTemplate())
+	dstKube.PodTemplate = deepMergePodTemplate(dstKube.GetPodTemplate(), srcKube.GetPodTemplate())
 	dstKube.Service = deepMergeService(dstKube.GetService(), srcKube.GetService())
 	dstKube.ServiceAccount = deepMergeServiceAccount(dstKube.GetServiceAccount(), srcKube.GetServiceAccount())
 	dstKube.Istio = deepMergeIstioIntegration(dstKube.GetIstio(), srcKube.GetIstio())
@@ -125,7 +125,7 @@ func deepMergeStatsConfig(dst *v1alpha1.StatsConfig, src *v1alpha1.StatsConfig) 
 	return dst
 }
 
-func DeepMergePodTemplate(dst, src *v1alpha1.Pod) *v1alpha1.Pod {
+func deepMergePodTemplate(dst, src *v1alpha1.Pod) *v1alpha1.Pod {
 	// nil src override means just use dst
 	if src == nil {
 		return dst
