@@ -16,6 +16,10 @@ import (
 // +kubebuilder:resource:categories=kgateway
 // +kubebuilder:subresource:status
 // +kubebuilder:metadata:labels="gateway.networking.k8s.io/policy=Direct"
+// HTTPListenerPolicy is intended to be used for configuring the Envoy `HttpConnectionManager` and any other config or policy
+// that should map 1-to-1 with a given HTTP listener, such as the Envoy health check HTTP filter.
+// Currently these policies can only be applied per `Gateway` but support for `Listener` attachment may be added in the future.
+// See https://github.com/kgateway-dev/kgateway/issues/11786 for more details.
 type HTTPListenerPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -35,10 +39,6 @@ type HTTPListenerPolicyList struct {
 }
 
 // HTTPListenerPolicySpec defines the desired state of a HTTP listener policy.
-// It is intended to be primarily used for Http Connection Manager configuration, though it has been extended to support other filters
-// that should map 1-to-1 with HCM configuration, such as the health check HTTP filter.
-// Currently these policies can only be applied per gateway, and it is expected that support for per-listener attachment will be added in the future.
-// See https://github.com/kgateway-dev/kgateway/issues/11786 for more details.
 type HTTPListenerPolicySpec struct {
 	// TargetRefs specifies the target resources by reference to attach the policy to.
 	// +optional
