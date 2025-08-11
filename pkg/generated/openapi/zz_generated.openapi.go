@@ -3751,7 +3751,7 @@ func schema_kgateway_v2_api_v1alpha1_HTTPListenerPolicySpec(ref common.Reference
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "HTTPListenerPolicySpec defines the desired state of a HTTP listener policy.",
+				Description: "HTTPListenerPolicySpec defines the desired state of a HTTP listener policy. It is intended to be primarily used for Http Connection Manager configuration, though it has been extended to support other filters that should map 1-to-1 with HCM configuration, such as the health check HTTP filter. Current these policies can only be applied per gateway, and it is expected that support for per-listener attachment will be added in the future. See https://github.com/kgateway-dev/kgateway/issues/11786 for more details.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"targetRefs": {
