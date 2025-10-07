@@ -67,6 +67,7 @@ func BuildLogArgs(options ...LogOption) []string {
 		args = append(args, "-c", cfg.container)
 	}
 
+	// --since and --since-time are mutually exclusive, but let kubectl handle that and the messaging
 	if cfg.since > 0 {
 		args = append(args, "--since", cfg.since.String())
 	}
