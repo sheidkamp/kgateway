@@ -103,8 +103,8 @@ GW_API_VERSION=$(cd ../kgateway && go list -m sigs.k8s.io/gateway-api | awk '{pr
 sed -i '' "1s/.*/${GW_API_VERSION}/" assets/docs/versions/k8s-gw-version.md
 ```
 
-### Previous Versions
-The [Kgateway.dev repo](https://github.com/kgateway-dev/kgateway.dev) does not use branches to support documentation for previous versions. It uses versioned folders and conrefs. See [PR 447](https://github.com/kgateway-dev/kgateway.dev/pull/447/files) asan example of updating v2.0.4 to v2.0.5 when v2.1.0 was the latest release
+### Docs for previous Versions
+The [kgateway.dev repo](https://github.com/kgateway-dev/kgateway.dev) does not use branches to support documentation for previous versions. It uses versioned folders and conrefs. See [PR 447](https://github.com/kgateway-dev/kgateway.dev/pull/447/files) as an example of updating v2.0.4 to v2.0.5 when v2.1.0 was the latest release.
 
 
 ### Push Changes (All Versions)
