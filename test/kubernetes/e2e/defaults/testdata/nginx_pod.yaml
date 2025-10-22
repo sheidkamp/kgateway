@@ -109,6 +109,10 @@ metadata:
     app.kubernetes.io/name: nginx
 spec:
   terminationGracePeriodSeconds: 0
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: nginx
     image: nginx:stable
@@ -117,6 +121,12 @@ spec:
         name: http-web-svc
       - containerPort: 443
         name: https-web-svc
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - name: nginx-conf
       mountPath: /etc/nginx/

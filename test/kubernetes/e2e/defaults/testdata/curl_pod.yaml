@@ -15,6 +15,10 @@ metadata:
     app.kubernetes.io/name: curl
 spec:
   terminationGracePeriodSeconds: 0
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: curl
       image: ghcr.io/kgateway-dev/curl:7.83.1
@@ -23,6 +27,12 @@ spec:
         - "tail"
         - "-f"
         - "/dev/null"
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
       resources:
         requests:
           cpu: "100m"
