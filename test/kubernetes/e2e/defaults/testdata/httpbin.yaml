@@ -36,6 +36,15 @@ spec:
     spec:
       terminationGracePeriodSeconds: 0
       serviceAccountName: httpbin
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        capabilities:
+          drop:
+            - ALL
       containers:
         - image: docker.io/mccutchen/go-httpbin:v2.6.0
           imagePullPolicy: IfNotPresent

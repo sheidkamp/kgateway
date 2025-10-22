@@ -109,6 +109,15 @@ metadata:
     app.kubernetes.io/name: nginx
 spec:
   terminationGracePeriodSeconds: 0
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+    capabilities:
+      drop:
+        - ALL
   containers:
   - name: nginx
     image: nginx:stable
