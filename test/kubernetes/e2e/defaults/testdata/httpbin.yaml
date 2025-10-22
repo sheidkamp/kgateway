@@ -38,10 +38,10 @@ spec:
     spec:
       terminationGracePeriodSeconds: 0
       serviceAccountName: httpbin
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
+      # securityContext:
+      #   runAsNonRoot: true
+      #   seccompProfile:
+      #     type: RuntimeDefault
       containers:
         - image: docker.io/mccutchen/go-httpbin:v2.6.0
           imagePullPolicy: IfNotPresent
@@ -54,12 +54,12 @@ spec:
             - "600s" # override default 10s
           ports:
             - containerPort: 8080
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
+          # securityContext:
+          #   allowPrivilegeEscalation: false
+          #   readOnlyRootFilesystem: true
+          #   capabilities:
+          #     drop:
+          #       - ALL
         - name: curl
           image: ghcr.io/kgateway-dev/curl:7.83.1
           imagePullPolicy: IfNotPresent
@@ -67,9 +67,9 @@ spec:
             - "tail"
             - "-f"
             - "/dev/null"
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
+          # securityContext:
+          #   allowPrivilegeEscalation: false
+          #   readOnlyRootFilesystem: true
+          #   capabilities:
+          #     drop:
+          #       - ALL
