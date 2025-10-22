@@ -3,11 +3,13 @@ kind: ServiceAccount
 metadata:
   name: httpbin
   namespace: default
+  namespace: default
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: httpbin
+  namespace: default
   namespace: default
 spec:
   ports:
@@ -23,6 +25,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: httpbin
+  namespace: default
   namespace: default
 spec:
   replicas: 1
