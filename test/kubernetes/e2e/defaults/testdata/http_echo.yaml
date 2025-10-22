@@ -27,20 +27,21 @@ metadata:
 spec:
   terminationGracePeriodSeconds: 0
   securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
-    capabilities:
-      drop:
-        - ALL
   containers:
   - name: http-echo
     # we avoid using checksums so that we automatically select amd64 or arm64
     image: jmalloc/echo-server:v0.3.7
     ports:
       - containerPort: 8080
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
     resources:
       requests:
         cpu: "100m"

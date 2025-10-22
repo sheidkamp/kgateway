@@ -110,14 +110,9 @@ metadata:
 spec:
   terminationGracePeriodSeconds: 0
   securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
-    capabilities:
-      drop:
-        - ALL
   containers:
   - name: nginx
     image: nginx:stable
@@ -126,6 +121,12 @@ spec:
         name: http-web-svc
       - containerPort: 443
         name: https-web-svc
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - name: nginx-conf
       mountPath: /etc/nginx/

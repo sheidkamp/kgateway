@@ -25,20 +25,21 @@ metadata:
     app.kubernetes.io/name: tcp-echo
 spec:
   securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
-    capabilities:
-      drop:
-        - ALL
   terminationGracePeriodSeconds: 0
   containers:
   - name: tcp-echo
     image: soloio/tcp-echo:latest
     ports:
       - containerPort: 1025
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
     resources:
       requests:
         cpu: "100m"
