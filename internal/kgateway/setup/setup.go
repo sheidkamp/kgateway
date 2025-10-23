@@ -8,6 +8,7 @@ import (
 
 	xdsserver "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/go-logr/logr"
+	"istio.io/istio/pkg/kube"
 	istiokube "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/kube/kubetypes"
@@ -143,7 +144,7 @@ func WithAgwXDSListener(l net.Listener) func(*setup) {
 	}
 }
 
-func WithExtraManagerConfig(mgrConfigFuncs ...func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter) error) func(*setup) {
+func WithExtraManagerConfig(mgrConfigFuncs ...func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter, client kube.Client) error) func(*setup) {
 	return func(s *setup) {
 		s.extraManagerConfig = mgrConfigFuncs
 	}
@@ -190,7 +191,7 @@ type setup struct {
 	restConfig                  *rest.Config
 	ctrlMgrOptionsInitFunc      func(context.Context) *ctrl.Options
 	// extra controller manager config, like adding registering additional controllers
-	extraManagerConfig           []func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter) error
+	extraManagerConfig           []func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter, client kube.Client) error
 	krtDebugger                  *krt.DebugHandler
 	globalSettings               *apisettings.Settings
 	leaderElectionID             string
@@ -367,7 +368,7 @@ func (s *setup) Start(ctx context.Context) error {
 	}
 
 	for _, mgrCfgFunc := range s.extraManagerConfig {
-		err := mgrCfgFunc(ctx, mgr, commoncol.DiscoveryNamespacesFilter)
+		err := mgrCfgFunc(ctx, mgr, commoncol.DiscoveryNamespacesFilter, commoncol.Client)
 		if err != nil {
 			return err
 		}
