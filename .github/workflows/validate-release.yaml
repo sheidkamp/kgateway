@@ -12,9 +12,6 @@ on:
         required: false
         type: string
         default: ghcr.io/kgateway-dev
-    secrets:
-      github_token:
-        required: true
   workflow_dispatch:
     inputs:
       version:
@@ -45,8 +42,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         run: |
           REGISTRY="${{ inputs.image_registry }}"
-          TOKEN="${{ secrets.github_token || secrets.GITHUB_TOKEN }}"
-          echo "$TOKEN" | go tool helm registry login $REGISTRY -u ${{ github.repository_owner }} --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login $REGISTRY -u ${{ github.repository_owner }} --password-stdin
 
       - name: Download module dependencies
         run: make mod-download

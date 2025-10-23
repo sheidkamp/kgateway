@@ -146,8 +146,7 @@ jobs:
     with:
       version: ${{ needs.setup.outputs.version }}
       image_registry: ghcr.io/${{ github.repository_owner }}
-    secrets:
-      github_token: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit
 
   load_tests:
     name: Load Testing
