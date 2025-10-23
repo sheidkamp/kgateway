@@ -401,39 +401,24 @@ func (s *BaseTestingSuite) getCurrentGatewayApiVersion() *semver.Version {
 
 // detectVersionFromCRDs attempts to detect the Gateway API version from installed CRDs
 func (s *BaseTestingSuite) detectVersionFromCRDs() *semver.Version {
-	// Query for Gateway API CRDs to detect version from annotations or labels
+	// Query for Gateway API CRDs to detect version from annotations
 	ctx := context.Background()
 
 	// Look for Gateway CRD as a representative of Gateway API version
 	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
-	err := s.TestInstallation.ClusterContext.Client.List(ctx, crdList, client.MatchingLabels{
-		"gateway.networking.k8s.io/version": "", // This might contain version info
-	})
+	err := s.TestInstallation.ClusterContext.Client.List(ctx, crdList)
 	if err != nil {
 		// If we can't query CRDs, fall back to other methods
 		return nil
 	}
 
-	// Look for version information in CRD annotations or labels
+	// Look for version information in CRD annotations
 	for _, crd := range crdList.Items {
 		// Check if this is a Gateway API CRD
 		if strings.Contains(crd.Name, "gateways.gateway.networking.k8s.io") {
-			// Try to extract version from annotations
-			if versionStr, exists := crd.Annotations["gateway.networking.k8s.io/version"]; exists {
-				if version, err := semver.NewVersion(versionStr); err == nil {
-					return version
-				}
-			}
-
-			// Try to extract version from labels
-			if versionStr, exists := crd.Labels["gateway.networking.k8s.io/version"]; exists {
-				if version, err := semver.NewVersion(versionStr); err == nil {
-					return version
-				}
-			}
-
-			// Try to extract version from CRD name or spec
-			if versionStr := s.extractVersionFromCRDName(crd.Name); versionStr != "" {
+			// Try to extract version from bundle-version annotation
+			// Note: channel information is available in "gateway.networking.k8s.io/channel" annotation
+			if versionStr, exists := crd.Annotations["gateway.networking.k8s.io/bundle-version"]; exists {
 				if version, err := semver.NewVersion(versionStr); err == nil {
 					return version
 				}
@@ -442,13 +427,6 @@ func (s *BaseTestingSuite) detectVersionFromCRDs() *semver.Version {
 	}
 
 	return nil
-}
-
-// extractVersionFromCRDName attempts to extract version information from CRD name
-func (s *BaseTestingSuite) extractVersionFromCRDName(crdName string) string {
-	// This is a heuristic approach - CRD names might contain version info
-	// For now, return empty string as this is not commonly used
-	return ""
 }
 
 // getGoModuleVersion gets the Gateway API version from go.mod (same as setup-kind.sh)
