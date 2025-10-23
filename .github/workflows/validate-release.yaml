@@ -1,0 +1,80 @@
+name: Validate Release Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to validate (e.g., v1.0.0)"
+        required: true
+        type: string
+      image_registry:
+        description: "Image registry to pull charts from"
+        required: false
+        type: string
+        default: ghcr.io/kgateway-dev
+    secrets:
+      github_token:
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to validate (e.g., v1.0.0)"
+        required: true
+        type: string
+      image_registry:
+        description: "Image registry to pull charts from"
+        required: false
+        type: string
+        default: ghcr.io/kgateway-dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ inputs.version }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate release artifacts
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      
+      - name: Prep Go Runner
+        uses: ./.github/actions/prep-go-runner
+
+      - name: Login to registry
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          REGISTRY="${{ inputs.image_registry }}"
+          TOKEN="${{ secrets.github_token || secrets.GITHUB_TOKEN }}"
+          echo "$TOKEN" | go tool helm registry login $REGISTRY -u ${{ github.repository_owner }} --password-stdin
+
+      - name: Download module dependencies
+        run: make mod-download
+
+      - name: Setup kind cluster
+        run: ./hack/kind/setup-kind.sh
+        env:
+          VERSION: ${{ inputs.version }}
+          SKIP_DOCKER: "true"
+          CONFORMANCE: "true"
+
+      - name: Install the released chart
+        run: |
+          # install the crds first
+          go tool helm install kgateway-crds oci://${{ inputs.image_registry }}/charts/kgateway-crds \
+            --version ${{ inputs.version }} \
+            --wait --timeout 5m
+
+          # install the main chart
+          go tool helm install --create-namespace --namespace kgateway-system kgateway \
+            oci://${{ inputs.image_registry }}/charts/kgateway \
+            --set image.registry=${{ inputs.image_registry }} \
+            --version ${{ inputs.version }} \
+            --set inferenceExtension.enabled=true \
+            --set agentgateway.enabled=true \
+            --wait --timeout 5m
+
+      - name: Wait for the kgateway deployment to be ready
+        run: |
+          kubectl wait --for=condition=available --timeout=5m deployment/kgateway -n kgateway-system
+
