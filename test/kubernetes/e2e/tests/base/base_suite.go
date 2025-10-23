@@ -156,6 +156,12 @@ func (s *BaseTestingSuite) AfterTest(suiteName, testName string) {
 		return
 	}
 
+	// Check if the test was skipped due to version requirements
+	// If so, don't try to delete resources that were never applied
+	if shouldSkip := s.shouldSkipTest(testCase); shouldSkip {
+		return
+	}
+
 	if s.T().Failed() {
 		s.TestInstallation.PreFailHandler(s.Ctx)
 	}
