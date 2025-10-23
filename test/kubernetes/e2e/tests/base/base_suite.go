@@ -6,15 +6,19 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiserverschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -27,6 +31,16 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/defaults"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+)
+
+// Named Gateway API version constants for easy reference
+var (
+	// GatewayAPIV1_2_0 represents Gateway API version v1.2.0
+	GatewayAPIV1_2_0 = semver.MustParse("1.2.0")
+	// GatewayAPIV1_3_0 represents Gateway API version v1.3.0
+	GatewayAPIV1_3_0 = semver.MustParse("1.3.0")
+	// GatewayAPIV1_4_0 represents Gateway API version v1.4.0
+	GatewayAPIV1_4_0 = semver.MustParse("1.4.0")
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.
@@ -44,6 +58,11 @@ type TestCase struct {
 	// dynamicResources contains the expected dynamically provisioned resources for any Gateways
 	// contained in this test case's manifests.
 	dynamicResources []client.Object
+
+	// MinGatewayApiVersion specifies the minimum Gateway API version required to run this test.
+	// If nil, falls back to the suite-level MinGatewayApiVersion.
+	// If the current Gateway API version is below the required minimum, the test will be skipped.
+	MinGatewayApiVersion *semver.Version
 }
 
 type BaseTestingSuite struct {
@@ -63,18 +82,40 @@ type BaseTestingSuite struct {
 
 	// used internally to parse the manifest files
 	gvkToStructuralSchema map[schema.GroupVersionKind]*apiserverschema.Structural
+
+	// MinGatewayApiVersion specifies the minimum Gateway API version required for this entire suite.
+	// Individual tests can override this with their own MinGatewayApiVersion field.
+	// If both are set, the test-level version takes precedence.
+	MinGatewayApiVersion *semver.Version
+}
+
+// SuiteOption defines a functional option for configuring BaseTestingSuite
+type SuiteOption func(*BaseTestingSuite)
+
+// WithDefaultMinGatewayApiVersion sets the default minimum Gateway API version for the suite
+func WithDefaultMinGatewayApiVersion(version *semver.Version) SuiteOption {
+	return func(s *BaseTestingSuite) {
+		s.MinGatewayApiVersion = version
+	}
 }
 
 // NewBaseTestingSuite returns a BaseTestingSuite that performs all the pre-requisites of upgrading helm installations,
 // applying manifests and verifying resources exist before a suite and tests and the corresponding post-run cleanup.
 // The pre-requisites for the suite are defined in the setup parameter and for each test in the individual testCase.
-func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, setupTestCase TestCase, testCases map[string]*TestCase) *BaseTestingSuite {
-	return &BaseTestingSuite{
+func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, setupTestCase TestCase, testCases map[string]*TestCase, opts ...SuiteOption) *BaseTestingSuite {
+	suite := &BaseTestingSuite{
 		Ctx:              ctx,
 		TestInstallation: testInst,
 		Setup:            setupTestCase,
 		TestCases:        testCases,
 	}
+
+	// Apply functional options
+	for _, opt := range opts {
+		opt(suite)
+	}
+
+	return suite
 }
 
 func (s *BaseTestingSuite) SetupSuite() {
@@ -95,6 +136,13 @@ func (s *BaseTestingSuite) BeforeTest(suiteName, testName string) {
 	// apply test-specific manifests
 	testCase, ok := s.TestCases[testName]
 	if !ok {
+		return
+	}
+
+	// Check version requirements before applying manifests
+	if shouldSkip := s.shouldSkipTest(testCase); shouldSkip {
+		s.T().Skipf("Test requires Gateway API version %s, but current version is %s",
+			s.getRequiredVersion(testCase), s.getCurrentGatewayApiVersion())
 		return
 	}
 
@@ -313,4 +361,126 @@ func newGatewayHelper(testInst *e2e.TestInstallation) *defaultGatewayHelper {
 
 func (h *defaultGatewayHelper) IsSelfManaged(ctx context.Context, gw *gwv1.Gateway) (bool, error) {
 	return h.gwpClient.IsSelfManaged(ctx, gw)
+}
+
+// getRequiredVersion returns the minimum Gateway API version required for the test case.
+// Test-level version takes precedence over suite-level version.
+func (s *BaseTestingSuite) getRequiredVersion(testCase *TestCase) *semver.Version {
+	if testCase.MinGatewayApiVersion != nil {
+		return testCase.MinGatewayApiVersion
+	}
+	return s.MinGatewayApiVersion
+}
+
+// getCurrentGatewayApiVersion returns the current Gateway API version from the test installation
+func (s *BaseTestingSuite) getCurrentGatewayApiVersion() *semver.Version {
+	// Try multiple detection methods in order of preference
+
+	// 1. Check CONFORMANCE_VERSION environment variable (set by CI/CD)
+	if versionStr := os.Getenv("CONFORMANCE_VERSION"); versionStr != "" {
+		if version, err := semver.NewVersion(versionStr); err == nil {
+			return version
+		}
+	}
+
+	// 2. Try to detect from installed CRDs by checking CRD annotations or labels
+	if version := s.detectVersionFromCRDs(); version != nil {
+		return version
+	}
+
+	// 3. Fallback to go module version (same logic as setup-kind.sh)
+	if versionStr := s.getGoModuleVersion(); versionStr != "" {
+		if version, err := semver.NewVersion(versionStr); err == nil {
+			return version
+		}
+	}
+
+	// 4. Ultimate fallback - return a reasonable default
+	return semver.MustParse("1.4.0")
+}
+
+// detectVersionFromCRDs attempts to detect the Gateway API version from installed CRDs
+func (s *BaseTestingSuite) detectVersionFromCRDs() *semver.Version {
+	// Query for Gateway API CRDs to detect version from annotations or labels
+	ctx := context.Background()
+
+	// Look for Gateway CRD as a representative of Gateway API version
+	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
+	err := s.TestInstallation.ClusterContext.Client.List(ctx, crdList, client.MatchingLabels{
+		"gateway.networking.k8s.io/version": "", // This might contain version info
+	})
+	if err != nil {
+		// If we can't query CRDs, fall back to other methods
+		return nil
+	}
+
+	// Look for version information in CRD annotations or labels
+	for _, crd := range crdList.Items {
+		// Check if this is a Gateway API CRD
+		if strings.Contains(crd.Name, "gateways.gateway.networking.k8s.io") {
+			// Try to extract version from annotations
+			if versionStr, exists := crd.Annotations["gateway.networking.k8s.io/version"]; exists {
+				if version, err := semver.NewVersion(versionStr); err == nil {
+					return version
+				}
+			}
+
+			// Try to extract version from labels
+			if versionStr, exists := crd.Labels["gateway.networking.k8s.io/version"]; exists {
+				if version, err := semver.NewVersion(versionStr); err == nil {
+					return version
+				}
+			}
+
+			// Try to extract version from CRD name or spec
+			if versionStr := s.extractVersionFromCRDName(crd.Name); versionStr != "" {
+				if version, err := semver.NewVersion(versionStr); err == nil {
+					return version
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// extractVersionFromCRDName attempts to extract version information from CRD name
+func (s *BaseTestingSuite) extractVersionFromCRDName(crdName string) string {
+	// This is a heuristic approach - CRD names might contain version info
+	// For now, return empty string as this is not commonly used
+	return ""
+}
+
+// getGoModuleVersion gets the Gateway API version from go.mod (same as setup-kind.sh)
+func (s *BaseTestingSuite) getGoModuleVersion() string {
+	// Run the same command as setup-kind.sh: go list -m sigs.k8s.io/gateway-api
+	cmd := exec.Command("go", "list", "-m", "sigs.k8s.io/gateway-api")
+	output, err := cmd.Output()
+	if err != nil {
+		// If go command fails, return empty string to fall back to default
+		return ""
+	}
+
+	// Parse the output: "sigs.k8s.io/gateway-api v1.4.0"
+	parts := strings.Fields(strings.TrimSpace(string(output)))
+	if len(parts) >= 2 {
+		return parts[1] // Return the version part
+	}
+
+	return ""
+}
+
+// shouldSkipTest determines if a test should be skipped based on version requirements
+func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
+	requiredVersion := s.getRequiredVersion(testCase)
+	if requiredVersion == nil {
+		return false // No version requirement, don't skip
+	}
+
+	currentVersion := s.getCurrentGatewayApiVersion()
+	if currentVersion == nil {
+		return false // Can't determine current version, don't skip
+	}
+
+	return currentVersion.LessThan(requiredVersion)
 }
