@@ -91,6 +91,12 @@ type BaseTestingSuite struct {
 	// used internally to parse the manifest files
 	gvkToStructuralSchema map[schema.GroupVersionKind]*apiserverschema.Structural
 
+	// gwApiVersion stores the detected Gateway API version (detected once and cached)
+	gwApiVersion *semver.Version
+
+	// gwApiChannel stores the detected Gateway API channel (detected once and cached)
+	gwApiChannel GatewayApiChannel
+
 	// SetupByVersion allows defining different setup configurations for different GW API versions and channels.
 	// Key is the TestCase to use, value is the channel/version requirements (same format as TestCase.GatewayApiVersion).
 	// The system will select the setup with the highest matching version requirement for the current channel.
@@ -378,6 +384,9 @@ func (s *BaseTestingSuite) setupHelpers() {
 	var err error
 	s.gvkToStructuralSchema, err = testutils.GetStructuralSchemas(filepath.Join(testutils.GitRootDirectory(), s.CrdPath))
 	s.Require().NoError(err)
+
+	// Detect and cache Gateway API version and channel once
+	s.detectAndCacheGatewayApiInfo()
 }
 
 // loadManifestResources populates the `manifestResources` for the given test case, by parsing each
@@ -470,89 +479,41 @@ func (h *defaultGatewayHelper) IsSelfManaged(ctx context.Context, gw *gwv1.Gatew
 	return h.gwpClient.IsSelfManaged(ctx, gw)
 }
 
-// getCurrentGatewayApiChannel returns the current Gateway API channel from the installed CRDs
+// detectAndCacheGatewayApiInfo detects the Gateway API version and channel from installed CRDs
+// and caches the results. This is called once during setup.
+func (s *BaseTestingSuite) detectAndCacheGatewayApiInfo() {
+	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
+	err := s.TestInstallation.ClusterContext.Client.List(s.Ctx, crdList)
+	s.Require().NoError(err, "failed to list CRDs to detect Gateway API version/channel")
+
+	for _, crd := range crdList.Items {
+		if strings.Contains(crd.Name, "gateways.gateway.networking.k8s.io") {
+			channel, hasChannel := crd.Annotations["gateway.networking.k8s.io/channel"]
+			s.Require().True(hasChannel, "Gateway CRD missing 'gateway.networking.k8s.io/channel' annotation")
+			s.gwApiChannel = GatewayApiChannel(channel)
+
+			versionStr, hasVersion := crd.Annotations["gateway.networking.k8s.io/bundle-version"]
+			s.Require().True(hasVersion, "Gateway CRD missing 'gateway.networking.k8s.io/bundle-version' annotation")
+
+			version, err := semver.NewVersion(versionStr)
+			s.Require().NoError(err, "failed to parse Gateway API version '%s'", versionStr)
+			s.gwApiVersion = version
+
+			return
+		}
+	}
+
+	s.Require().FailNow("Gateway CRD 'gateways.gateway.networking.k8s.io' not found in cluster")
+}
+
+// getCurrentGatewayApiChannel returns the cached Gateway API channel
 func (s *BaseTestingSuite) getCurrentGatewayApiChannel() GatewayApiChannel {
-	ctx := context.Background()
-
-	// Query for Gateway CRD to detect channel from annotations
-	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
-	err := s.TestInstallation.ClusterContext.Client.List(ctx, crdList)
-	if err != nil {
-		// If we can't query CRDs, default to standard (most restrictive)
-		return GwApiChannelStandard
-	}
-
-	// Look for channel information in Gateway CRD annotations
-	for _, crd := range crdList.Items {
-		// Check if this is a Gateway API CRD
-		if strings.Contains(crd.Name, "gateways.gateway.networking.k8s.io") {
-			// Read channel from annotation
-			if channel, exists := crd.Annotations["gateway.networking.k8s.io/channel"]; exists {
-				return GatewayApiChannel(channel)
-			}
-		}
-	}
-
-	// Default to standard if channel annotation not found
-	return GwApiChannelStandard
+	return s.gwApiChannel
 }
 
-// TODO (sheidkamp) - review this method and make sure it is correct
-// getCurrentGatewayApiVersion returns the current Gateway API version from the test installation
+// getCurrentGatewayApiVersion returns the cached Gateway API version
 func (s *BaseTestingSuite) getCurrentGatewayApiVersion() *semver.Version {
-	// Try multiple detection methods in order of preference
-
-	// 1. Check CONFORMANCE_VERSION environment variable (set by CI/CD)
-	if versionStr := os.Getenv("CONFORMANCE_VERSION"); versionStr != "" {
-		if version, err := semver.NewVersion(versionStr); err == nil {
-			return version
-		}
-	}
-
-	// 2. Try to detect from installed CRDs by checking CRD annotations or labels
-	if version := s.detectVersionFromCRDs(); version != nil {
-		return version
-	}
-
-	// 3. Fallback to go module version (same logic as setup-kind.sh)
-	if versionStr := s.getGoModuleVersion(); versionStr != "" {
-		if version, err := semver.NewVersion(versionStr); err == nil {
-			return version
-		}
-	}
-
-	// 4. Ultimate fallback - return a reasonable default - assume the most restrictive version to avoid errors
-	return GatewayApiVMin
-}
-
-// detectVersionFromCRDs attempts to detect the Gateway API version from installed CRDs
-func (s *BaseTestingSuite) detectVersionFromCRDs() *semver.Version {
-	// Query for Gateway API CRDs to detect version from annotations
-	ctx := context.Background()
-
-	// Look for Gateway CRD as a representative of Gateway API version
-	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
-	err := s.TestInstallation.ClusterContext.Client.List(ctx, crdList)
-	if err != nil {
-		// If we can't query CRDs, fall back to other methods
-		return nil
-	}
-
-	// Look for version information in CRD annotations
-	for _, crd := range crdList.Items {
-		// Check if this is a Gateway API CRD
-		if strings.Contains(crd.Name, "gateways.gateway.networking.k8s.io") {
-			// Try to extract version from bundle-version annotation
-			// Note: channel information is available in "gateway.networking.k8s.io/channel" annotation
-			if versionStr, exists := crd.Annotations["gateway.networking.k8s.io/bundle-version"]; exists {
-				if version, err := semver.NewVersion(versionStr); err == nil {
-					return version
-				}
-			}
-		}
-	}
-
-	return nil
+	return s.gwApiVersion
 }
 
 // getGoModuleVersion gets the Gateway API version from go.mod (same as setup-kind.sh)
