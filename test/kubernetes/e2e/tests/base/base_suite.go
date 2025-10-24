@@ -35,8 +35,10 @@ import (
 
 // Named Gateway API version constants for easy reference
 var (
-	// GatewayAPIV1_4_0 represents Gateway API version v1.4.0
-	GatewayAPIV1_4_0 = semver.MustParse("1.4.0")
+	// GatewayApiV1_4_0 represents Gateway API version v1.4.0
+	GatewayApiV1_4_0   = semver.MustParse("1.4.0")
+	GatewayApiV_Latest = GatewayApiV1_4_0
+	GatewayApiVMin     = semver.MustParse("1.0.0")
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.
@@ -79,10 +81,14 @@ type BaseTestingSuite struct {
 	// used internally to parse the manifest files
 	gvkToStructuralSchema map[schema.GroupVersionKind]*apiserverschema.Structural
 
-	// MinGatewayApiVersion specifies the minimum Gateway API version required for this entire suite.
-	// Individual tests can override this with their own MinGatewayApiVersion field.
-	// If both are set, the test-level version takes precedence.
-	MinGatewayApiVersion *semver.Version
+	// SetupByVersion allows defining different setup configurations for different GW API versions.
+	// Key is a minimum version (e.g., GatewayApiV1_4_0), value is the TestCase to use for that version and above.
+	// If provided, takes precedence over the Setup field.
+	// The system will select the highest version that is <= the current Gateway API version.
+	SetupByVersion map[*semver.Version]*TestCase
+
+	// selectedSetup tracks which setup was actually used, so we can clean it up in TearDownSuite
+	selectedSetup *TestCase
 }
 
 // NewBaseTestingSuite returns a BaseTestingSuite that performs all the pre-requisites of upgrading helm installations,
@@ -99,18 +105,64 @@ func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, se
 	return suite
 }
 
+// selectSetup chooses the appropriate setup TestCase based on the current Gateway API version.
+// If SetupByVersion is defined, it selects the highest version key that is <= the current version.
+// Otherwise, it returns the default Setup.
+func (s *BaseTestingSuite) selectSetup() *TestCase {
+	// If versioned setups are not defined, use the default Setup
+	if len(s.SetupByVersion) == 0 {
+		return &s.Setup
+	}
+
+	currentVersion := s.getCurrentGatewayApiVersion()
+	if currentVersion == nil {
+		// Can't determine version, fall back to default
+		return &s.Setup
+	}
+
+	// Find the highest version that is <= current version
+	var selectedVersion *semver.Version
+	var selectedSetup *TestCase
+
+	for version, setup := range s.SetupByVersion {
+		// Check if this version is applicable (current >= this version)
+		if currentVersion.GreaterThan(version) || currentVersion.Equal(version) {
+			// Use this setup if it's the first match or if it's a higher version than the previous match
+			if selectedVersion == nil || version.GreaterThan(selectedVersion) {
+				selectedVersion = version
+				selectedSetup = setup
+			}
+		}
+	}
+
+	// Fallback to default Setup if no version match
+	if selectedSetup == nil {
+		return &s.Setup
+	}
+
+	return selectedSetup
+}
+
 func (s *BaseTestingSuite) SetupSuite() {
 	// set up the helpers once and store them on the suite
 	s.setupHelpers()
 
-	s.ApplyManifests(&s.Setup)
+	// Select the appropriate setup based on Gateway API version
+	s.selectedSetup = s.selectSetup()
+	s.ApplyManifests(s.selectedSetup)
 }
 
 func (s *BaseTestingSuite) TearDownSuite() {
 	if testutils.ShouldPersistInstall() {
 		return
 	}
-	s.DeleteManifests(&s.Setup)
+
+	// Use the selected setup if available, otherwise fall back to default Setup
+	setupToDelete := s.selectedSetup
+	if setupToDelete == nil {
+		setupToDelete = &s.Setup
+	}
+	s.DeleteManifests(setupToDelete)
 }
 
 func (s *BaseTestingSuite) BeforeTest(suiteName, testName string) {
@@ -356,9 +408,10 @@ func (s *BaseTestingSuite) getRequiredVersion(testCase *TestCase) *semver.Versio
 	if testCase.GatewayApiVersion != nil {
 		return testCase.GatewayApiVersion
 	}
-	return s.MinGatewayApiVersion
+	return nil
 }
 
+// TODO (sheidkamp) - review this method and make sure it is correct
 // getCurrentGatewayApiVersion returns the current Gateway API version from the test installation
 func (s *BaseTestingSuite) getCurrentGatewayApiVersion() *semver.Version {
 	// Try multiple detection methods in order of preference
@@ -382,8 +435,8 @@ func (s *BaseTestingSuite) getCurrentGatewayApiVersion() *semver.Version {
 		}
 	}
 
-	// 4. Ultimate fallback - return a reasonable default
-	return semver.MustParse("1.4.0")
+	// 4. Ultimate fallback - return a reasonable default - assume the most restrictive version to avoid errors
+	return GatewayApiVMin
 }
 
 // detectVersionFromCRDs attempts to detect the Gateway API version from installed CRDs
@@ -437,8 +490,7 @@ func (s *BaseTestingSuite) getGoModuleVersion() string {
 
 // shouldSkipTest determines if a test should be skipped based on version requirements
 func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
-	requiredVersion := s.getRequiredVersion(testCase)
-	if requiredVersion == nil {
+	if testCase.GatewayApiVersion == nil {
 		return false // No version requirement, don't skip
 	}
 
@@ -447,5 +499,5 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 		return false // Can't determine current version, don't skip
 	}
 
-	return currentVersion.LessThan(requiredVersion)
+	return currentVersion.LessThan(testCase.GatewayApiVersion)
 }

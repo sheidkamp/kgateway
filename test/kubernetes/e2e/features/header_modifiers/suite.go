@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -26,8 +27,15 @@ type testingSuite struct {
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
+
+	// Define versioned setups - the system will select the appropriate one based on Gateway API version
+	baseSuite.SetupByVersion = map[*semver.Version]*base.TestCase{
+		base.GatewayApiV1_4_0: &setup1_4, // For Gateway API >= 1.4
+	}
+
 	return &testingSuite{
-		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: baseSuite,
 	}
 }
 
@@ -62,6 +70,11 @@ func (s *testingSuite) TestListenerSetLevelHeaderModifiers() {
 }
 
 func (s *testingSuite) TestMultiLevelHeaderModifiers() {
+	s.checkPodsRunning()
+	s.assertHeaders(8080, expectedRequestHeaders("route", "gw"), nil)
+}
+
+func (s *testingSuite) TestMultiLevelHeaderModifiersWithListenerSet() {
 	s.checkPodsRunning()
 	s.assertHeaders(8080, expectedRequestHeaders("route", "gw"), nil)
 	s.assertHeaders(8081, expectedRequestHeaders("route", "ls", "gw"), nil)
