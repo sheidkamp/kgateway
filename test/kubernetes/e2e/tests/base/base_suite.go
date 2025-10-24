@@ -38,16 +38,14 @@ type GatewayApiChannel string
 
 // Gateway API channel constants
 const (
-	GatewayApiChannelStandard     GatewayApiChannel = "standard"
-	GatewayApiChannelExperimental GatewayApiChannel = "experimental"
+	GwApiChannelStandard     GatewayApiChannel = "standard"
+	GwApiChannelExperimental GatewayApiChannel = "experimental"
 )
 
 // Named Gateway API version constants for easy reference
 var (
-	// GatewayApiV1_4_0 represents Gateway API version v1.4.0
-	GatewayApiV1_4_0   = semver.MustParse("1.4.0")
-	GatewayApiV_Latest = GatewayApiV1_4_0
-	GatewayApiVMin     = semver.MustParse("1.0.0")
+	// GwApiV1_4_0 represents Gateway API version v1.4.0
+	GwApiV1_4_0 = semver.MustParse("1.4.0")
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.
@@ -71,7 +69,7 @@ type TestCase struct {
 	// If the map is empty/nil, the test runs on any channel/version.
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
-	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise run
+	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs .
 	GatewayApiVersion map[GatewayApiChannel]*semver.Version
 }
 
@@ -130,26 +128,26 @@ func (s *BaseTestingSuite) requirementsMatch(requirements map[GatewayApiChannel]
 		return true // No requirements = always matches
 	}
 
-	if currentChannel == GatewayApiChannelExperimental {
+	if currentChannel == GwApiChannelExperimental {
 		// 1) If experimental version defined - compare versions
-		if requiredVersion, hasExperimental := requirements[GatewayApiChannelExperimental]; hasExperimental {
+		if requiredVersion, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
 			return currentVersion.GreaterThan(requiredVersion) || currentVersion.Equal(requiredVersion)
 		}
 		// 2) If no experimental requirement, check if it's standard-only (has standard but not experimental)
-		if _, hasStandard := requirements[GatewayApiChannelStandard]; hasStandard {
+		if _, hasStandard := requirements[GwApiChannelStandard]; hasStandard {
 			return false // This is standard-only, don't match experimental
 		}
 		// No requirements = matches any experimental
 		return true
 	}
 
-	if currentChannel == GatewayApiChannelStandard {
+	if currentChannel == GwApiChannelStandard {
 		// 1) If standard version defined - compare versions
-		if requiredVersion, hasStandard := requirements[GatewayApiChannelStandard]; hasStandard {
+		if requiredVersion, hasStandard := requirements[GwApiChannelStandard]; hasStandard {
 			return currentVersion.GreaterThan(requiredVersion) || currentVersion.Equal(requiredVersion)
 		}
 		// 2) If experimental defined but not standard - don't match (experimental-only)
-		if _, hasExperimental := requirements[GatewayApiChannelExperimental]; hasExperimental {
+		if _, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
 			return false
 		}
 		// 3) No requirements = matches any standard
@@ -187,10 +185,10 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 
 		// Track the version requirement for the current channel to find "best"
 		var matchVersion *semver.Version
-		if currentChannel == GatewayApiChannelExperimental {
-			matchVersion = requirements[GatewayApiChannelExperimental]
-		} else if currentChannel == GatewayApiChannelStandard {
-			matchVersion = requirements[GatewayApiChannelStandard]
+		if currentChannel == GwApiChannelExperimental {
+			matchVersion = requirements[GwApiChannelExperimental]
+		} else if currentChannel == GwApiChannelStandard {
+			matchVersion = requirements[GwApiChannelStandard]
 		}
 
 		// Pick the setup with the highest version requirement (most specific)
@@ -481,7 +479,7 @@ func (s *BaseTestingSuite) getCurrentGatewayApiChannel() GatewayApiChannel {
 	err := s.TestInstallation.ClusterContext.Client.List(ctx, crdList)
 	if err != nil {
 		// If we can't query CRDs, default to standard (most restrictive)
-		return GatewayApiChannelStandard
+		return GwApiChannelStandard
 	}
 
 	// Look for channel information in Gateway CRD annotations
@@ -496,7 +494,7 @@ func (s *BaseTestingSuite) getCurrentGatewayApiChannel() GatewayApiChannel {
 	}
 
 	// Default to standard if channel annotation not found
-	return GatewayApiChannelStandard
+	return GwApiChannelStandard
 }
 
 // TODO (sheidkamp) - review this method and make sure it is correct

@@ -60,13 +60,13 @@ var (
 				headerModifiersRouteListenerSetTrafficPolicyManifest,
 			},
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GatewayApiChannelExperimental: base.GatewayApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
 			},
 		},
 		"TestListenerSetLevelHeaderModifiers": {
 			Manifests: []string{headerModifiersLsTrafficPolicyManifest},
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GatewayApiChannelExperimental: base.GatewayApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
 			},
 		},
 	}
