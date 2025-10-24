@@ -5,6 +5,7 @@ package header_modifiers
 import (
 	"path/filepath"
 
+	"github.com/Masterminds/semver/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
@@ -33,7 +34,7 @@ var (
 		Manifests: append([]string{setupManifest}, commonSetupManifests...),
 	}
 
-	setup1_4 = base.TestCase{
+	setupWithListenerSets = base.TestCase{
 		Manifests: append([]string{setupManifest_1_4}, commonSetupManifests...),
 	}
 
@@ -58,11 +59,15 @@ var (
 				headerModifiersRouteTrafficPolicyManifest,
 				headerModifiersRouteListenerSetTrafficPolicyManifest,
 			},
-			GatewayApiVersion: base.GatewayApiV1_4_0,
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GatewayApiChannelExperimental: base.GatewayApiV1_4_0,
+			},
 		},
 		"TestListenerSetLevelHeaderModifiers": {
-			Manifests:         []string{headerModifiersLsTrafficPolicyManifest},
-			GatewayApiVersion: base.GatewayApiV1_4_0,
+			Manifests: []string{headerModifiersLsTrafficPolicyManifest},
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GatewayApiChannelExperimental: base.GatewayApiV1_4_0,
+			},
 		},
 	}
 )

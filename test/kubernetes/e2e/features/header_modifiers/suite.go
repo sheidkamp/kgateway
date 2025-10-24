@@ -29,9 +29,11 @@ type testingSuite struct {
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
 
-	// Define versioned setups - the system will select the appropriate one based on Gateway API version
-	baseSuite.SetupByVersion = map[*semver.Version]*base.TestCase{
-		base.GatewayApiV1_4_0: &setup1_4, // For Gateway API >= 1.4
+	// Define versioned setups - the system will select the appropriate one based on Gateway API version and channel
+	baseSuite.SetupByVersion = map[*base.TestCase]map[base.GatewayApiChannel]*semver.Version{
+		&setupWithListenerSets: {
+			base.GatewayApiChannelExperimental: base.GatewayApiV1_4_0, // ListenerSet available in experimental >= 1.4
+		},
 	}
 
 	return &testingSuite{
