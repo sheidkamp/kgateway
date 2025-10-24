@@ -16,7 +16,7 @@ import (
 var (
 	// Manifests.
 	commonManifest                                       = filepath.Join(fsutils.MustGetThisDir(), "testdata", "common.yaml")
-	setupManifest_1_4                                    = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup-1.4.yaml")
+	setupWithListenerSetsManifest                        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup-with-listenersets.yaml")
 	setupManifest                                        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
 	headerModifiersRouteTrafficPolicyManifest            = filepath.Join(fsutils.MustGetThisDir(), "testdata", "header-modifiers-route.yaml")
 	headerModifiersRouteListenerSetTrafficPolicyManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "header-modifiers-route-ls.yaml")
@@ -35,7 +35,7 @@ var (
 	}
 
 	setupWithListenerSets = base.TestCase{
-		Manifests: append([]string{setupManifest_1_4}, commonSetupManifests...),
+		Manifests: append([]string{setupWithListenerSetsManifest}, commonSetupManifests...),
 	}
 
 	testCases = map[string]*base.TestCase{
