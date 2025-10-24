@@ -35,10 +35,6 @@ import (
 
 // Named Gateway API version constants for easy reference
 var (
-	// GatewayAPIV1_2_0 represents Gateway API version v1.2.0
-	GatewayAPIV1_2_0 = semver.MustParse("1.2.0")
-	// GatewayAPIV1_3_0 represents Gateway API version v1.3.0
-	GatewayAPIV1_3_0 = semver.MustParse("1.3.0")
 	// GatewayAPIV1_4_0 represents Gateway API version v1.4.0
 	GatewayAPIV1_4_0 = semver.MustParse("1.4.0")
 )
@@ -59,10 +55,10 @@ type TestCase struct {
 	// contained in this test case's manifests.
 	dynamicResources []client.Object
 
-	// MinGatewayApiVersion specifies the minimum Gateway API version required to run this test.
-	// If nil, falls back to the suite-level MinGatewayApiVersion.
+	// GatewayApiVersion specifies the minimum Gateway API version required to run this test.
+	// If nil, falls back to the suite-level GatewayApiVersion.
 	// If the current Gateway API version is below the required minimum, the test will be skipped.
-	MinGatewayApiVersion *semver.Version
+	GatewayApiVersion *semver.Version
 }
 
 type BaseTestingSuite struct {
@@ -89,30 +85,15 @@ type BaseTestingSuite struct {
 	MinGatewayApiVersion *semver.Version
 }
 
-// SuiteOption defines a functional option for configuring BaseTestingSuite
-type SuiteOption func(*BaseTestingSuite)
-
-// WithDefaultMinGatewayApiVersion sets the default minimum Gateway API version for the suite
-func WithDefaultMinGatewayApiVersion(version *semver.Version) SuiteOption {
-	return func(s *BaseTestingSuite) {
-		s.MinGatewayApiVersion = version
-	}
-}
-
 // NewBaseTestingSuite returns a BaseTestingSuite that performs all the pre-requisites of upgrading helm installations,
 // applying manifests and verifying resources exist before a suite and tests and the corresponding post-run cleanup.
 // The pre-requisites for the suite are defined in the setup parameter and for each test in the individual testCase.
-func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, setupTestCase TestCase, testCases map[string]*TestCase, opts ...SuiteOption) *BaseTestingSuite {
+func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, setupTestCase TestCase, testCases map[string]*TestCase) *BaseTestingSuite {
 	suite := &BaseTestingSuite{
 		Ctx:              ctx,
 		TestInstallation: testInst,
 		Setup:            setupTestCase,
 		TestCases:        testCases,
-	}
-
-	// Apply functional options
-	for _, opt := range opts {
-		opt(suite)
 	}
 
 	return suite
@@ -372,8 +353,8 @@ func (h *defaultGatewayHelper) IsSelfManaged(ctx context.Context, gw *gwv1.Gatew
 // getRequiredVersion returns the minimum Gateway API version required for the test case.
 // Test-level version takes precedence over suite-level version.
 func (s *BaseTestingSuite) getRequiredVersion(testCase *TestCase) *semver.Version {
-	if testCase.MinGatewayApiVersion != nil {
-		return testCase.MinGatewayApiVersion
+	if testCase.GatewayApiVersion != nil {
+		return testCase.GatewayApiVersion
 	}
 	return s.MinGatewayApiVersion
 }
