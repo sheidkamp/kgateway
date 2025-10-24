@@ -4,6 +4,7 @@ import (
 	"context"
 
 	xdsserver "github.com/envoyproxy/go-control-plane/pkg/server/v3"
+	istiokube "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kubetypes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,7 +41,7 @@ type Options struct {
 	RestConfig             *rest.Config
 	CtrlMgrOptions         func(context.Context) *ctrl.Options
 	// extra controller manager config, like registering additional controllers
-	ExtraManagerConfig []func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter) error
+	ExtraManagerConfig []func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter, client istiokube.Client) error
 	// Validator is the validator to use for the controller.
 	Validator validator.Validator
 	// ExtraAgwPolicyStatusHandlers maps policy kinds to their status sync handlers for AgentGateway
