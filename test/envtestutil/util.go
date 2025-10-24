@@ -140,8 +140,8 @@ func RunController(
 					},
 				}
 			}),
-		setup.WithExtraManagerConfig([]func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter) error{
-			func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter) error {
+		setup.WithExtraManagerConfig([]func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter, client istiokube.Client) error{
+			func(ctx context.Context, mgr manager.Manager, objectFilter kubetypes.DynamicObjectFilter, client istiokube.Client) error {
 				return controller.AddToScheme(mgr.GetScheme())
 			},
 		}...),
