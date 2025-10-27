@@ -109,7 +109,7 @@ jobs:
       uses: ./.github/actions/kubernetes-e2e-tests
       with:
         cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
-        test-args: '-v -timeout=25m' # TODO(sheidkamp): Update for full suite
-        run-regex: '^TestKgatewayMetrics$$|^TestControlPlaneTLS$$|^TestKgateway$$/^HeaderModifiers$$|^TestListenerSet$$|^TestKgateway$$/^BasicRouting$$|'
-        istio-version: ${{ steps.dotenv.outputs.istio_version }}
-        matrix-label: "nightly-gw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
+        test-args: '-v -timeout=45m' # TODO(sheidkamp): Update for full suite
+        go-test-run-regex: ${{ matrix.test.go-test-run-regex }}
+        istio-version: '^TestKgatewayMetrics$$|^TestControlPlaneTLS$$|^TestKgateway$$/^HeaderModifiers$$|^TestListenerSet$$|^TestKgateway$$/^BasicRouting$$|'
+        matrix-label: "nightly-gw-api"
