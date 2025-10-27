@@ -32,7 +32,7 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	// Define versioned setups - the system will select the appropriate one based on Gateway API version and channel
 	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[*semver.Version]*base.TestCase{
 		base.GwApiChannelExperimental: {
-			base.GwApiV1_4_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.4
+			base.GwApiV1_3_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.3
 		},
 	}
 

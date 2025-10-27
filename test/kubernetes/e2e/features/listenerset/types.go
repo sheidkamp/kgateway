@@ -105,31 +105,31 @@ var (
 		"TestValidListenerSet": {
 			Manifests: []string{validListenerSetManifest},
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_3_0,
 			},
 		},
 		"TestInvalidListenerSetNotAllowed": {
 			Manifests: []string{invalidListenerSetNotAllowedManifest},
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_3_0,
 			},
 		},
 		"TestInvalidListenerSetNonExistingGW": {
 			Manifests: []string{invalidListenerSetNonExistingGWManifest},
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_3_0,
 			},
 		},
 		"TestPolicies": {
 			Manifests: []string{validListenerSetManifest, validListenerSetManifest2, policyManifest},
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_3_0,
 			},
 		},
 		"TestConflictedListenerSet": {
 			Manifests: []string{validListenerSetManifest, conflictedListenerSetManifest},
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_3_0,
 			},
 		},
 	}

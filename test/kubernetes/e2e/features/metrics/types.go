@@ -42,7 +42,7 @@ var (
 		"TestMetrics": {},
 		"TestMetricsWithListenerSets": {
 			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
-				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: base.GwApiV1_3_0,
 			},
 		},
 	}

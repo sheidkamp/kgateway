@@ -43,8 +43,8 @@ const (
 
 // Named Gateway API version constants for easy reference
 var (
-	// GwApiV1_4_0 represents Gateway API version v1.4.0
-	GwApiV1_4_0 = semver.MustParse("1.4.0")
+	// XListenerSets were added in 1.3 experimental
+	GwApiV1_3_0 = semver.MustParse("1.3.0")
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.
@@ -104,10 +104,10 @@ type BaseTestingSuite struct {
 	// Example:
 	//   SetupByVersion: map[GatewayApiChannel]map[*semver.Version]*TestCase{
 	//     GwApiChannelExperimental: {
-	//       GwApiV1_4_0: &setupExperimentalV1_4,
+	//       GwApiV1_3_0: &setupExperimentalV1_4,
 	//     },
 	//     GwApiChannelStandard: {
-	//       GwApiV1_4_0: &setupStandardV1_4,
+	//       GwApiV1_3_0: &setupStandardV1_4,
 	//     },
 	//   }
 	SetupByVersion map[GatewayApiChannel]map[*semver.Version]*TestCase
