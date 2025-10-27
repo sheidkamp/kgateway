@@ -130,41 +130,37 @@ func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, se
 	return suite
 }
 
-// requirementsMatch checks if the given requirements match the current environment.
-// This implements the matching logic for both setup selection and test skipping.
-// Returns true if the requirements are satisfied by the current channel/version.
-func (s *BaseTestingSuite) requirementsMatch(requirements map[GatewayApiChannel]*semver.Version, currentChannel GatewayApiChannel, currentVersion *semver.Version) bool {
+// testCompatibleWithGwApiVersion checks if the requirements for a test are satisfied by the current channel/version.
+func (s *BaseTestingSuite) testCompatibleWithGwApiVersion(requirements map[GatewayApiChannel]*semver.Version, currentChannel GatewayApiChannel, currentVersion *semver.Version) bool {
 	if len(requirements) == 0 {
 		return true // No requirements = always matches
 	}
 
 	if currentChannel == GwApiChannelExperimental {
-		// 1) If experimental version defined - compare versions
+		// If experimental version defined - compare versions
 		if requiredVersion, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
 			return currentVersion.GreaterThan(requiredVersion) || currentVersion.Equal(requiredVersion)
 		}
-		// 2) If no experimental requirement, check if it's standard-only (has standard but not experimental)
-		if _, hasStandard := requirements[GwApiChannelStandard]; hasStandard {
-			return false // This is standard-only, don't match experimental
-		}
+
 		// No requirements = matches any experimental
 		return true
 	}
 
 	if currentChannel == GwApiChannelStandard {
-		// 1) If standard version defined - compare versions
+		// If standard version defined - compare versions
 		if requiredVersion, hasStandard := requirements[GwApiChannelStandard]; hasStandard {
 			return currentVersion.GreaterThan(requiredVersion) || currentVersion.Equal(requiredVersion)
 		}
-		// 2) If experimental defined but not standard - don't match (experimental-only)
+		// If experimental defined but not standard - don't match (experimental-only)
 		if _, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
 			return false
 		}
-		// 3) No requirements = matches any standard
+		// No requirements = matches any standard
 		return true
 	}
 
-	return false // Unknown channel
+	s.Require().FailNow("unknown Gateway API channel: %s", currentChannel)
+	return false
 }
 
 // selectSetup chooses the appropriate setup TestCase based on the current Gateway API version and channel.
@@ -180,8 +176,8 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 	currentChannel := s.getCurrentGatewayApiChannel()
 
 	if currentVersion == nil {
-		// Can't determine version, fall back to default
-		return &s.Setup
+		// Can't determine version, something is wrong
+		s.Require().FailNow("cannot determine Gateway API version")
 	}
 
 	// Get the version map for the current channel
@@ -192,22 +188,20 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 	}
 
 	// Find the highest version that's <= current version
-	var bestMatch *TestCase
-	var bestVersion *semver.Version
-
-	for minVersion, setup := range versionMap {
-		// Check if current version satisfies the minimum requirement
-		if currentVersion.GreaterThan(minVersion) || currentVersion.Equal(minVersion) {
-			// Pick the setup with the highest version requirement (most specific)
-			if bestVersion == nil || minVersion.GreaterThan(bestVersion) {
-				bestVersion = minVersion
-				bestMatch = setup
-			}
-		}
+	// Get all version keys and sort in descending order (highest first)
+	var versions []*semver.Version
+	for version := range versionMap {
+		versions = append(versions, version)
 	}
+	slices.SortFunc(versions, func(a, b *semver.Version) int {
+		return a.Compare(b) * -1 // sort in descending order
+	})
 
-	if bestMatch != nil {
-		return bestMatch
+	// Find the first (highest) version that satisfies the requirement
+	for _, minVersion := range versions {
+		if currentVersion.GreaterThan(minVersion) || currentVersion.Equal(minVersion) {
+			return versionMap[minVersion]
+		}
 	}
 
 	// Fallback to default Setup if no match
@@ -230,9 +224,6 @@ func (s *BaseTestingSuite) TearDownSuite() {
 
 	// Use the selected setup if available, otherwise fall back to default Setup
 	setupToDelete := s.selectedSetup
-	if setupToDelete == nil {
-		setupToDelete = &s.Setup
-	}
 	s.DeleteManifests(setupToDelete)
 }
 
@@ -524,9 +515,9 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 	currentChannel := s.getCurrentGatewayApiChannel()
 
 	if currentVersion == nil {
-		return false // Can't determine version, don't skip (conservative)
+		s.Require().FailNow("cannot determine Gateway API version")
 	}
 
-	// Use requirementsMatch and invert the result
-	return !s.requirementsMatch(testCase.GatewayApiVersion, currentChannel, currentVersion)
+	// Use testCompatibleWithGwApiVersion and invert the result
+	return !s.testCompatibleWithGwApiVersion(testCase.GatewayApiVersion, currentChannel, currentVersion)
 }
