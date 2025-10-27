@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -69,7 +68,7 @@ type TestCase struct {
 	// If the map is empty/nil, the test runs on any channel/version.
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
-	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs .
+	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
 	GatewayApiVersion map[GatewayApiChannel]*semver.Version
 }
 
@@ -98,15 +97,20 @@ type BaseTestingSuite struct {
 	gwApiChannel GatewayApiChannel
 
 	// SetupByVersion allows defining different setup configurations for different GW API versions and channels.
-	// Key is the TestCase to use, value is the channel/version requirements (same format as TestCase.GatewayApiVersion).
-	// The system will select the setup with the highest matching version requirement for the current channel.
+	// The outer map key is the channel (standard or experimental).
+	// The inner map key is the minimum version, and the value is the TestCase to use.
+	// The system will select the setup with the highest matching version for the current channel.
 	// If no setups match, falls back to the Setup field.
 	// Example:
-	//   SetupByVersion: map[*TestCase]map[GatewayApiChannel]*semver.Version{
-	//     &setupExperimental: {GatewayApiChannelExperimental: v1.4.0},
-	//     &setupStandard: {GatewayApiChannelStandard: v1.4.0, GatewayApiChannelExperimental: v1.3.0},
+	//   SetupByVersion: map[GatewayApiChannel]map[*semver.Version]*TestCase{
+	//     GwApiChannelExperimental: {
+	//       GwApiV1_4_0: &setupExperimentalV1_4,
+	//     },
+	//     GwApiChannelStandard: {
+	//       GwApiV1_4_0: &setupStandardV1_4,
+	//     },
 	//   }
-	SetupByVersion map[*TestCase]map[GatewayApiChannel]*semver.Version
+	SetupByVersion map[GatewayApiChannel]map[*semver.Version]*TestCase
 
 	// selectedSetup tracks which setup was actually used, so we can clean it up in TearDownSuite
 	selectedSetup *TestCase
@@ -180,32 +184,25 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 		return &s.Setup
 	}
 
+	// Get the version map for the current channel
+	versionMap, hasChannel := s.SetupByVersion[currentChannel]
+	if !hasChannel || len(versionMap) == 0 {
+		// No setups defined for this channel, fall back to default
+		return &s.Setup
+	}
+
+	// Find the highest version that's <= current version
 	var bestMatch *TestCase
 	var bestVersion *semver.Version
 
-	// Find all matching setups and pick the most specific (highest version for current channel)
-	for setup, requirements := range s.SetupByVersion {
-		if !s.requirementsMatch(requirements, currentChannel, currentVersion) {
-			continue // Requirements not met
-		}
-
-		// Track the version requirement for the current channel to find "best"
-		var matchVersion *semver.Version
-		if currentChannel == GwApiChannelExperimental {
-			matchVersion = requirements[GwApiChannelExperimental]
-		} else if currentChannel == GwApiChannelStandard {
-			matchVersion = requirements[GwApiChannelStandard]
-		}
-
-		// Pick the setup with the highest version requirement (most specific)
-		if matchVersion != nil {
-			if bestVersion == nil || matchVersion.GreaterThan(bestVersion) {
-				bestVersion = matchVersion
+	for minVersion, setup := range versionMap {
+		// Check if current version satisfies the minimum requirement
+		if currentVersion.GreaterThan(minVersion) || currentVersion.Equal(minVersion) {
+			// Pick the setup with the highest version requirement (most specific)
+			if bestVersion == nil || minVersion.GreaterThan(bestVersion) {
+				bestVersion = minVersion
 				bestMatch = setup
 			}
-		} else if bestMatch == nil {
-			// This setup has no specific version requirement but matches channel
-			bestMatch = setup
 		}
 	}
 
@@ -514,25 +511,6 @@ func (s *BaseTestingSuite) getCurrentGatewayApiChannel() GatewayApiChannel {
 // getCurrentGatewayApiVersion returns the cached Gateway API version
 func (s *BaseTestingSuite) getCurrentGatewayApiVersion() *semver.Version {
 	return s.gwApiVersion
-}
-
-// getGoModuleVersion gets the Gateway API version from go.mod (same as setup-kind.sh)
-func (s *BaseTestingSuite) getGoModuleVersion() string {
-	// Run the same command as setup-kind.sh: go list -m sigs.k8s.io/gateway-api
-	cmd := exec.Command("go", "list", "-m", "sigs.k8s.io/gateway-api")
-	output, err := cmd.Output()
-	if err != nil {
-		// If go command fails, return empty string to fall back to default
-		return ""
-	}
-
-	// Parse the output: "sigs.k8s.io/gateway-api v1.4.0"
-	parts := strings.Fields(strings.TrimSpace(string(output)))
-	if len(parts) >= 2 {
-		return parts[1] // Return the version part
-	}
-
-	return ""
 }
 
 // shouldSkipTest determines if a test should be skipped based on channel/version requirements.
