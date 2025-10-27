@@ -224,7 +224,7 @@ func (s *BaseTestingSuite) SetupSuite() {
 }
 
 func (s *BaseTestingSuite) TearDownSuite() {
-	if testutils.ShouldPersistInstall() {
+	if testutils.ShouldSkipCleanup(s.T()) {
 		return
 	}
 
@@ -270,7 +270,7 @@ func (s *BaseTestingSuite) AfterTest(suiteName, testName string) {
 		s.TestInstallation.PreFailHandler(s.Ctx)
 	}
 
-	if testutils.ShouldPersistInstall() {
+	if testutils.ShouldSkipCleanup(s.T()) {
 		return
 	}
 	s.DeleteManifests(testCase)

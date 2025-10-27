@@ -13,27 +13,37 @@ set -eEuo pipefail
 # The script will automatically generate the most specific go test -run pattern.
 #
 # Environment Variables:
-#   PERSIST_INSTALL - If set to true/1/yes/y, will skip 'make setup' if a kind
-#                     cluster already exists. This speeds up test runs when you're
-#                     iterating locally.
-#   AUTO_SETUP      - If set to true/1/yes/y, will automatically clean up conflicting
-#                     Helm releases if detected. Otherwise, will error out.
-#   CLUSTER_NAME    - Name of the kind cluster (default: kind)
-#   TEST_PKG        - Go test package to run (default: ./test/kubernetes/e2e/tests)
+#   PERSIST_INSTALL       - If set to true/1/yes/y, will skip 'make setup' if a kind
+#                           cluster already exists. This speeds up test runs when you're
+#                           iterating locally.
+#   FAIL_FAST_AND_PERSIST - If set to true (default for this script), skip cleanup on
+#                           test failure to allow resource inspection. Set to false to
+#                           always cleanup. Use --cleanup-on-failure flag to override.
+#   SKIP_ALL_TEARDOWN     - If set to true/1/yes/y, skip all cleanup/teardown operations
+#                           regardless of test success or failure. Use --skip-teardown flag.
+#   AUTO_SETUP            - If set to true/1/yes/y, will automatically clean up conflicting
+#                           Helm releases if detected. Otherwise, will error out.
+#   CLUSTER_NAME          - Name of the kind cluster (default: kind)
+#   TEST_PKG              - Go test package to run (default: ./test/kubernetes/e2e/tests)
 #
 # Usage: ./hack/run-e2e-test.sh [OPTIONS] [TEST_PATTERN]
 #
 # Options:
-#   --rebuild, -r   Delete the kind cluster, rebuild all docker images, create a
-#                   new kind cluster, load images into kind, and then run tests.
-#                   This ensures a completely fresh environment.
-#   --persist, -p   Skip 'make setup' if kind cluster exists (faster iteration).
-#                   Equivalent to setting PERSIST_INSTALL=true.
-#   --list, -l      List all available test suites and top-level tests
-#   --dry-run, -n   Print the test command that would be run without executing it
+#   --rebuild, -r             Delete the kind cluster, rebuild all docker images, create a
+#                             new kind cluster, load images into kind, and then run tests.
+#                             This ensures a completely fresh environment.
+#   --persist, -p             Skip 'make setup' if kind cluster exists (faster iteration).
+#                             Equivalent to setting PERSIST_INSTALL=true.
+#   --cleanup-on-failure, -c  Always cleanup resources even if test fails (disables default
+#                             FAIL_FAST_AND_PERSIST behavior). Useful for CI or running all tests.
+#   --skip-teardown, -s       Skip all cleanup/teardown operations regardless of test result.
+#                             Equivalent to setting SKIP_ALL_TEARDOWN=true.
+#   --list, -l                List all available test suites and top-level tests
+#   --dry-run, -n             Print the test command that would be run without executing it
+#   --help, -h                Show this help message
 #
 # Examples:
-#   # Run an entire test suite
+#   # Run an entire test suite (default: skip cleanup on failure for debugging)
 #   ./hack/run-e2e-test.sh SessionPersistence
 #
 #   # Run a specific test method within a suite
@@ -41,6 +51,15 @@ set -eEuo pipefail
 #
 #   # Run a top-level test function
 #   ./hack/run-e2e-test.sh TestKgateway
+#
+#   # Always cleanup/tear-down, even on failure
+#   ./hack/run-e2e-test.sh --cleanup-on-failure SessionPersistence
+#
+#   # Run a suite within a specific parent test (using slash notation)
+#   ./hack/run-e2e-test.sh TestKgateway/SessionPersistence
+#
+#   # Run a specific test method using slash notation
+#   ./hack/run-e2e-test.sh TestKgateway/^SessionPersistence$/TestHeaderSessionPersistence
 #
 #   # Skip setup if cluster exists (faster iteration) - using flag
 #   ./hack/run-e2e-test.sh --persist SessionPersistence
@@ -150,88 +169,58 @@ check_and_cleanup_helm_conflicts() {
     return 0
 }
 
-# Search for test cases
-find_test_cases() {
-    local pattern="$1"
-
-    log_info "Searching for test cases matching: ${pattern}"
-
-    # Search for:
-    # 1. Top-level test functions: func TestXxx(t *testing.T)
-    # 2. Suite registrations: Register("SuiteName", ...)
-    # 3. Suite test methods: func (s *...) TestXxx()
-
-    # Try to find suite registrations first
-    local suite_matches
-    suite_matches=$(git grep -n "Register(\"${pattern}\"" -- 'test/kubernetes/e2e/tests/*.go' 2>/dev/null || true)
-
-    # Try to find test functions (handle both TestXxx and Xxx patterns)
-    local func_matches
-    if [[ "$pattern" == Test* ]]; then
-        func_matches=$(git grep -n "func ${pattern}" -- 'test/kubernetes/e2e/tests/*_test.go' 2>/dev/null || true)
-    else
-        func_matches=$(git grep -n "func Test${pattern}" -- 'test/kubernetes/e2e/tests/*_test.go' 2>/dev/null || true)
-    fi
-
-    # Try to find test methods in suites (handle both TestXxx and Xxx patterns)
-    local method_matches
-    if [[ "$pattern" == Test* ]]; then
-        method_matches=$(git grep -n "func (.*) ${pattern}" -- 'test/kubernetes/e2e/features' 2>/dev/null || true)
-    else
-        method_matches=$(git grep -n "func (.*) Test${pattern}" -- 'test/kubernetes/e2e/features' 2>/dev/null || true)
-    fi
-
-    # Also try pattern as substring
-    if [[ -z "$suite_matches" && -z "$func_matches" && -z "$method_matches" ]]; then
-        suite_matches=$(git grep -n "Register(\".*${pattern}.*\"" -- 'test/kubernetes/e2e/tests/*.go' 2>/dev/null || true)
-
-        # For partial match, search for Test.*pattern
-        if [[ "$pattern" == Test* ]]; then
-            func_matches=$(git grep -n "func .*${pattern}" -- 'test/kubernetes/e2e/tests/*_test.go' 2>/dev/null || true)
-            method_matches=$(git grep -n "func (.*) .*${pattern}" -- 'test/kubernetes/e2e/features' 2>/dev/null || true)
-        else
-            func_matches=$(git grep -n "func Test.*${pattern}" -- 'test/kubernetes/e2e/tests/*_test.go' 2>/dev/null || true)
-            method_matches=$(git grep -n "func (.*) Test.*${pattern}" -- 'test/kubernetes/e2e/features' 2>/dev/null || true)
-        fi
-    fi
-
-    if [[ -z "$suite_matches" && -z "$func_matches" && -z "$method_matches" ]]; then
-        log_error "No test cases found matching: ${pattern}"
-        echo ""
-        log_info "Available test suites:"
-        git grep -h 'Register("' -- 'test/kubernetes/e2e/tests/*.go' | \
-            sed -E 's/.*Register\("([^"]*)".*/  - \1/' | sort | head -20
-        echo ""
-        log_info "Available top-level tests:"
-        git grep -h '^func Test.*\(t \*testing\.T\)' -- 'test/kubernetes/e2e/tests/*_test.go' | \
-            sed -E 's/func (Test[^(]*).*/  - \1/' | sort | head -20
-        exit 1
-    fi
-
-    # Display findings
-    if [[ -n "$func_matches" ]]; then
-        log_info "Found top-level test functions:"
-        echo "$func_matches" | head -5
-    fi
-
-    if [[ -n "$suite_matches" ]]; then
-        log_info "Found suite registrations:"
-        echo "$suite_matches" | head -5
-    fi
-
-    if [[ -n "$method_matches" ]]; then
-        log_info "Found suite test methods:"
-        echo "$method_matches" | head -10
-    fi
-}
-
 # Build the go test run pattern
 build_test_pattern() {
     local pattern="$1"
 
+    # If pattern contains regex metacharacters, treat it as a regex
+    if [[ "$pattern" =~ [\.\*\+\?\[\]\(\)\|] ]]; then
+        log_info "Detected regex pattern: ${pattern}"
+        # If it looks like a test method pattern (starts with Test), search across all suites
+        if [[ "$pattern" == Test* ]]; then
+            log_info "Searching across all suites for matching test methods"
+            echo ".*/.*/${pattern}"
+        else
+            # Otherwise pass through as-is
+            echo "${pattern}"
+        fi
+        return
+    fi
+
+    # Check if the pattern contains slashes (nested test path like TestKgateway/SessionPersistence/TestHeaderSessionPersistence)
+    if [[ "$pattern" == */* ]]; then
+        log_info "Detected nested test path: ${pattern}"
+
+        # Split by '/', wrap each element with '^' and '$', then join with '/'
+        IFS='/' read -ra parts <<< "$pattern"
+        local result=""
+        for ((i=0; i<${#parts[@]}; i++)); do
+            local part="${parts[i]}"
+            # Strip existing anchors
+            part="${part#^}"
+            part="${part%\$}"
+            # Add to result
+            if [[ $i -eq 0 ]]; then
+                result="^${part}\$"
+            else
+                result="${result}/^${part}\$"
+            fi
+        done
+
+        log_info "Running nested test: ${pattern}"
+        echo "$result"
+        return
+    fi
+
     # Check if it's a top-level test function
     local test_func
-    test_func=$(git grep -h "^func Test${pattern}" -- 'test/kubernetes/e2e/tests/*_test.go' 2>/dev/null | head -1 || true)
+    if [[ "$pattern" == Test* ]]; then
+        # Pattern already starts with Test, search for exact match
+        test_func=$(git grep -h --no-line-number "^func ${pattern}(" -- 'test/kubernetes/e2e/tests/*_test.go' 2>/dev/null | head -1 || true)
+    else
+        # Pattern doesn't start with Test, add it
+        test_func=$(git grep -h --no-line-number "^func Test${pattern}(" -- 'test/kubernetes/e2e/tests/*_test.go' 2>/dev/null | head -1 || true)
+    fi
 
     if [[ -n "$test_func" ]]; then
         # Extract the test function name
@@ -315,7 +304,7 @@ build_test_pattern() {
 
                     if [[ -n "$parent_test" ]]; then
                         log_info "Running suite test: ${parent_test} -> ${suite_name} -> ${method_name}"
-                        echo "^${parent_test}$/${suite_name}/${method_name}$"
+                        echo "^${parent_test}$/^${suite_name}$/^${method_name}$"
                         return
                     fi
                 fi
@@ -374,20 +363,20 @@ build_test_pattern() {
                 local method_name
                 method_name=$(echo "$method_match" | sed -E 's/func .* ([^(]*)\(\).*/\1/')
                 log_info "Running suite test: ${parent_test} -> ${suite_name} -> ${method_name}"
-                echo "^${parent_test}$/${suite_name}/${method_name}$"
+                echo "^${parent_test}$/^${suite_name}$/^${method_name}$"
                 return
             fi
         fi
 
         # Running entire suite
         log_info "Running entire suite: ${parent_test} -> ${suite_name}"
-        echo "^${parent_test}$/${suite_name}$"
+        echo "^${parent_test}$/^${suite_name}$"
         return
     fi
 
     # Fallback: just use the pattern as-is
-    log_warn "Using pattern as-is: ${pattern}"
-    echo "${pattern}"
+    log_error "Test pattern not found: ${pattern}"
+    exit 1
 }
 
 # List available tests
@@ -401,16 +390,94 @@ list_tests() {
         sed -E 's/func (Test[^(]*).*/  - \1/' | sort
 }
 
+# Show help message
+show_help() {
+    cat << EOF
+Usage: $0 [OPTIONS] [TEST_PATTERN]
+
+Script to run a single e2e test case
+
+This script intelligently finds and runs e2e test cases using git grep.
+It can run:
+  - Top-level test functions (e.g., TestKgateway)
+  - Entire test suites (e.g., SessionPersistence)
+  - Individual test methods within suites (e.g., TestCookieSessionPersistence)
+
+Options:
+  --help, -h                Show this help message
+  --list, -l                List all available test suites and top-level tests
+  --rebuild, -r             Delete the kind cluster, rebuild images, and create a fresh cluster
+  --persist, -p             Skip 'make setup' if kind cluster exists (faster iteration)
+  --cleanup-on-failure, -c  Always cleanup resources even if test fails (default: skip cleanup on failure)
+  --skip-teardown, -s       Skip all cleanup/teardown operations regardless of test result
+  --dry-run, -n             Print the test command that would be run without executing it
+
+Environment Variables:
+  PERSIST_INSTALL           If set to true/1/yes/y, skip 'make setup' if kind cluster exists
+  FAIL_FAST_AND_PERSIST     If set to true (default), skip cleanup on test failure
+  SKIP_ALL_TEARDOWN         If set to true/1/yes/y, skip all cleanup/teardown operations
+  AUTO_SETUP                If set to true/1/yes/y, automatically cleanup conflicting Helm releases
+  CLUSTER_NAME              Name of the kind cluster (default: kind)
+  TEST_PKG                  Go test package to run (default: ./test/kubernetes/e2e/tests)
+
+Examples:
+  # Run an entire test suite (default: skip cleanup on failure for debugging)
+  $0 SessionPersistence
+
+  # Run a specific test method within a suite
+  $0 TestCookieSessionPersistence
+
+  # Run a top-level test function
+  $0 TestKgateway
+
+  # Always cleanup/tear-down, even on failure
+  $0 --cleanup-on-failure SessionPersistence
+
+  # Skip all teardown/cleanup regardless of test result
+  $0 --skip-teardown SessionPersistence
+
+  # Run a suite within a specific parent test (using slash notation)
+  $0 TestKgateway/SessionPersistence
+
+  # Run a specific test method using slash notation
+  $0 TestKgateway/^SessionPersistence$/TestHeaderSessionPersistence
+
+  # Skip setup if cluster exists (faster iteration) - using flag
+  $0 --persist SessionPersistence
+
+  # Skip setup if cluster exists (faster iteration) - using env var
+  PERSIST_INSTALL=true $0 SessionPersistence
+
+  # Auto-cleanup conflicting Helm releases
+  AUTO_SETUP=true $0 SessionPersistence
+
+  # Delete cluster and rebuild everything from scratch
+  $0 --rebuild SessionPersistence
+
+  # Use a different cluster name
+  CLUSTER_NAME=my-cluster $0 SessionPersistence
+
+  # Print the test command without running it
+  $0 -n TestCookieSessionPersistence
+EOF
+}
+
 # Main script
 main() {
     local rebuild_cluster=false
     local dry_run=false
     local persist_install=false
+    local cleanup_on_failure=false
+    local skip_teardown=false
     local test_pattern=""
 
     # Parse arguments
     while [[ "$#" -gt 0 ]]; do
         case "$1" in
+            --help|-h)
+                show_help
+                exit 0
+                ;;
             --list|-l)
                 list_tests
                 exit 0
@@ -427,6 +494,14 @@ main() {
                 persist_install=true
                 shift
                 ;;
+            --cleanup-on-failure|-c)
+                cleanup_on_failure=true
+                shift
+                ;;
+            --skip-teardown|-s)
+                skip_teardown=true
+                shift
+                ;;
             *)
                 test_pattern="$1"
                 shift
@@ -439,6 +514,25 @@ main() {
         export PERSIST_INSTALL=true
     fi
 
+    # Set SKIP_ALL_TEARDOWN environment variable if --skip-teardown flag was used
+    if [[ "$skip_teardown" == "true" ]]; then
+        export SKIP_ALL_TEARDOWN=true
+        log_info "All teardown/cleanup is DISABLED (will skip cleanup regardless of test result)"
+    elif is_truthy SKIP_ALL_TEARDOWN; then
+        log_info "All teardown/cleanup is DISABLED (SKIP_ALL_TEARDOWN env var is set)"
+    fi
+
+    # Set FAIL_FAST_AND_PERSIST to true by default (for local development/debugging)
+    # unless --cleanup-on-failure flag was used or it's already set
+    if [[ "$cleanup_on_failure" == "true" ]]; then
+        export FAIL_FAST_AND_PERSIST=false
+        log_info "Cleanup on failure is ENABLED (will cleanup even if tests fail)"
+    elif [[ -z "${FAIL_FAST_AND_PERSIST:-}" ]]; then
+        export FAIL_FAST_AND_PERSIST=true
+        log_info "Cleanup on failure is DISABLED by default (will skip cleanup if tests fail)"
+        log_info "Use --cleanup-on-failure to always cleanup, even on test failure"
+    fi
+
     if [[ -z "$test_pattern" ]]; then
         log_error "Usage: $0 [OPTIONS] TEST_PATTERN"
         echo ""
@@ -446,21 +540,23 @@ main() {
         echo "  $0 SessionPersistence"
         echo "  $0 TestCookieSessionPersistence"
         echo "  $0 TestKgateway"
+        echo "  $0 TestKgateway/SessionPersistence"
+        echo "  $0 TestKgateway/SessionPersistence/TestHeaderSessionPersistence"
         echo "  $0 --persist SessionPersistence"
+        echo "  $0 --cleanup-on-failure SessionPersistence"
         echo "  $0 --rebuild SessionPersistence"
         echo "  $0 -n TestCookieSessionPersistence"
         echo ""
         echo "Options:"
-        echo "  --list, -l      List all available test suites and top-level tests"
-        echo "  --rebuild, -r   Delete the kind cluster, rebuild images, and create a fresh cluster"
-        echo "  --persist, -p   Skip 'make setup' if kind cluster exists (faster iteration)"
-        echo "  --dry-run, -n   Print the test command that would be run without executing it"
+        echo "  --help, -h                Show full help message"
+        echo "  --list, -l                List all available test suites and top-level tests"
+        echo "  --rebuild, -r             Delete the kind cluster, rebuild images, and create a fresh cluster"
+        echo "  --persist, -p             Skip 'make setup' if kind cluster exists (faster iteration)"
+        echo "  --cleanup-on-failure, -c  Always cleanup resources even if test fails (default: skip cleanup on failure)"
+        echo "  --skip-teardown, -s       Skip all cleanup/teardown operations regardless of test result"
+        echo "  --dry-run, -n             Print the test command that would be run without executing it"
         exit 1
     fi
-
-    # Find test cases
-    find_test_cases "$test_pattern"
-    echo ""
 
     # Build the test run pattern
     local run_pattern
@@ -542,12 +638,20 @@ main() {
         echo ""
         echo "make go-test \\"
         echo "    VERSION=\"${test_version}\" \\"
-        echo "    GO_TEST_USER_ARGS=\"-run '$escaped_pattern'\" \\"
+        echo "    GO_TEST_USER_ARGS=\"-failfast -run '$escaped_pattern'\" \\"
         echo "    TEST_PKG=\"${test_pkg}\" TEST_TAG=e2e"
         echo ""
         log_info "Environment variables:"
         if is_truthy PERSIST_INSTALL; then
             echo "  PERSIST_INSTALL=true"
+        fi
+        if is_truthy SKIP_ALL_TEARDOWN; then
+            echo "  SKIP_ALL_TEARDOWN=true (skip all teardown/cleanup)"
+        fi
+        if is_truthy FAIL_FAST_AND_PERSIST; then
+            echo "  FAIL_FAST_AND_PERSIST=true (skip cleanup on failure)"
+        else
+            echo "  FAIL_FAST_AND_PERSIST=false (always cleanup)"
         fi
         echo ""
         log_success "Dry-run completed!"
@@ -564,7 +668,7 @@ main() {
     set -x
     make go-test \
         VERSION="${test_version}" \
-        "GO_TEST_USER_ARGS=-run '$escaped_pattern'" \
+        "GO_TEST_USER_ARGS=-failfast -run '$escaped_pattern'" \
         TEST_PKG="${test_pkg}" TEST_TAG=e2e 2>&1 | tee "$test_output_file"
     test_exit_code=${PIPESTATUS[0]}
     set +x

@@ -52,12 +52,10 @@ const (
 	subsetDstEndpointKey = dstEndpointKey + "-subset"
 )
 
-var (
-	logger = logging.New("plugin/inference-epp")
-)
+var logger = logging.New("plugin/inference-epp")
 
 func NewPlugin(ctx context.Context, commonCols *collections.CommonCollections) sdk.Plugin {
-	p := initInferencePoolCollections(ctx, commonCols)
+	p, cli := initInferencePoolCollections(ctx, commonCols)
 
 	// Wrap the init function so it can capture commonCols.Pods
 	initBackend := func(ctx context.Context, in ir.BackendObjectIR, out *envoyclusterv3.Cluster) *ir.EndpointsForBackend {
@@ -85,6 +83,7 @@ func NewPlugin(ctx context.Context, commonCols *collections.CommonCollections) s
 			wellknown.InferencePoolGVK.GroupKind(): buildRegisterCallback(
 				ctx,
 				commonCols,
+				cli,
 				p.backendsCtl,
 				p.poolIndex,
 				commonCols.LocalityPods,
@@ -304,11 +303,17 @@ func (p *endpointPickerPass) HttpFilters(fc ir.FilterChainCommon) ([]filters.Sta
 			},
 		},
 		ProcessingMode: &extprocv3.ProcessingMode{
-			RequestHeaderMode:   extprocv3.ProcessingMode_SEND,
-			RequestBodyMode:     extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED,
-			RequestTrailerMode:  extprocv3.ProcessingMode_SEND,
-			ResponseBodyMode:    extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED,
-			ResponseHeaderMode:  extprocv3.ProcessingMode_SEND,
+			RequestHeaderMode: extprocv3.ProcessingMode_SEND,
+			// OpenAI standard includes the model and other information the ext_proc server needs in the request body
+			RequestBodyMode: extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED,
+			// If the ext_proc filter has the request_body_mode set to FULL_DUPLEX_STREAMED
+			// then the response_trailer_mode has to be set to SEND
+			RequestTrailerMode: extprocv3.ProcessingMode_SEND,
+			ResponseBodyMode:   extprocv3.ProcessingMode_FULL_DUPLEX_STREAMED,
+			// GIE collects statistics present in the OpenAI standard response message
+			ResponseHeaderMode: extprocv3.ProcessingMode_SEND,
+			// If the ext_proc filter has the response_body_mode set to FULL_DUPLEX_STREAMED
+			// then the response_trailer_mode has to be set to SEND
 			ResponseTrailerMode: extprocv3.ProcessingMode_SEND,
 		},
 		MessageTimeout:   durationpb.New(5 * time.Second),
