@@ -5,6 +5,7 @@ package listenerset
 import (
 	"context"
 
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -12,8 +13,6 @@ import (
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/listener"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
-	"github.com/kgateway-dev/kgateway/v2/pkg/schemes"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e"
@@ -28,16 +27,18 @@ type testingSuite struct {
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
+	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[*semver.Version]*base.TestCase{
+		base.GwApiChannelExperimental: {
+			base.GwApiV1_4_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.4
+		},
+	}
 	return &testingSuite{
-		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: baseSuite,
 	}
 }
 
 func (s *testingSuite) SetupSuite() {
-	if !RequiredCrdExists(s.TestInstallation) {
-		s.T().Skip("Skipping as the XListenerSet CRD is not installed")
-	}
-
 	s.BaseTestingSuite.SetupSuite()
 }
 
@@ -600,10 +601,4 @@ func (s *testingSuite) expectConflictedListenerSetConflicted(obj client.Object) 
 				},
 			},
 		})
-}
-
-func RequiredCrdExists(testInstallation *e2e.TestInstallation) bool {
-	xListenerSetExists, err := schemes.CRDExists(testInstallation.ClusterContext.RestConfig, gwxv1a1.GroupVersion.Group, gwxv1a1.GroupVersion.Version, wellknown.XListenerSetKind)
-	testInstallation.Assertions.Assert.NoError(err)
-	return xListenerSetExists
 }

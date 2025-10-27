@@ -5,6 +5,7 @@ package metrics
 import (
 	"path/filepath"
 
+	semver "github.com/Masterminds/semver/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
@@ -14,7 +15,9 @@ import (
 
 var (
 	// manifests
-	setupManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
+	setupManifest                 = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
+	setupCommonManifest           = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup-common.yaml")
+	setupWithListenerSetsManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup-with-listenersets.yaml")
 
 	// objects
 	proxyObjectMeta = metav1.ObjectMeta{
@@ -28,10 +31,19 @@ var (
 	}
 
 	setup = base.TestCase{
-		Manifests: []string{setupManifest, e2edefaults.CurlPodManifest},
+		Manifests: []string{setupManifest, setupCommonManifest, e2edefaults.CurlPodManifest},
+	}
+
+	setupWithListenerSets = base.TestCase{
+		Manifests: []string{setupWithListenerSetsManifest, setupCommonManifest, e2edefaults.CurlPodManifest},
 	}
 
 	testCases = map[string]*base.TestCase{
 		"TestMetrics": {},
+		"TestMetricsWithListenerSets": {
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+			},
+		},
 	}
 )

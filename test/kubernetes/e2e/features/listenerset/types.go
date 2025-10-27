@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega/gstruct"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,7 +95,8 @@ var (
 
 	curlExitErrorCode = 28
 
-	setup = base.TestCase{
+	setup                 = base.TestCase{}
+	setupWithListenerSets = base.TestCase{
 		Manifests: []string{e2edefaults.CurlPodManifest, setupManifest},
 	}
 
@@ -102,18 +104,33 @@ var (
 	testCases = map[string]*base.TestCase{
 		"TestValidListenerSet": {
 			Manifests: []string{validListenerSetManifest},
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+			},
 		},
 		"TestInvalidListenerSetNotAllowed": {
 			Manifests: []string{invalidListenerSetNotAllowedManifest},
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+			},
 		},
 		"TestInvalidListenerSetNonExistingGW": {
 			Manifests: []string{invalidListenerSetNonExistingGWManifest},
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+			},
 		},
 		"TestPolicies": {
 			Manifests: []string{validListenerSetManifest, validListenerSetManifest2, policyManifest},
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+			},
 		},
 		"TestConflictedListenerSet": {
 			Manifests: []string{validListenerSetManifest, conflictedListenerSetManifest},
+			GatewayApiVersion: map[base.GatewayApiChannel]*semver.Version{
+				base.GwApiChannelExperimental: base.GwApiV1_4_0,
+			},
 		},
 	}
 )

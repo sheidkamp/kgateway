@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -31,8 +32,14 @@ type testingSuite struct {
 
 // NewTestingSuite creates a new testing suite for control plane metrics.
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
+	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[*semver.Version]*base.TestCase{
+		base.GwApiChannelExperimental: {
+			base.GwApiV1_4_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.4
+		},
+	}
 	return &testingSuite{
-		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: baseSuite,
 	}
 }
 
@@ -42,7 +49,7 @@ func (s *testingSuite) checkPodsRunning() {
 	})
 }
 
-func (s *testingSuite) TestMetrics() {
+func (s *testingSuite) testMetrics(useListenerSets bool) {
 	// Make sure pods are running.
 	s.checkPodsRunning()
 
@@ -136,14 +143,6 @@ func (s *testingSuite) TestMetrics() {
 			&metricstest.ExpectedMetricValueTest{
 				Labels: []metrics.Label{
 					{Name: "namespace", Value: "default"},
-					{Name: "parent", Value: "gw1"},
-					{Name: "resource", Value: "XListenerSet"},
-				},
-				Test: metricstest.Equal(1),
-			},
-			&metricstest.ExpectedMetricValueTest{
-				Labels: []metrics.Label{
-					{Name: "namespace", Value: "default"},
 					{Name: "parent", Value: "gw2"},
 					{Name: "resource", Value: "Gateway"},
 				},
@@ -174,6 +173,19 @@ func (s *testingSuite) TestMetrics() {
 				Test: metricstest.Equal(1),
 			},
 		})
+
+		if useListenerSets {
+			gathered.AssertMetricsInclude("kgateway_resources_managed", []metricstest.ExpectMetric{
+				&metricstest.ExpectedMetricValueTest{
+					Labels: []metrics.Label{
+						{Name: "namespace", Value: "default"},
+						{Name: "parent", Value: "gw1"},
+						{Name: "resource", Value: "XListenerSet"},
+					},
+					Test: metricstest.Equal(1),
+				},
+			})
+		}
 
 		gathered.AssertMetricsInclude("kgateway_resources_status_syncs_started_total", []metricstest.ExpectMetric{
 			&metricstest.ExpectedMetricValueTest{
@@ -284,6 +296,12 @@ func (s *testingSuite) TestMetrics() {
 
 		gathered.AssertHistogramPopulated("kgateway_xds_snapshot_transform_duration_seconds")
 
+		expectedGw1ListenerCount := 3
+		expectedGw1RouteCount := 3
+		if useListenerSets {
+			expectedGw1ListenerCount = 4
+			expectedGw1RouteCount = 4
+		}
 		gathered.AssertMetricsInclude("kgateway_xds_snapshot_resources", []metricstest.ExpectMetric{
 			&metricstest.ExpectedMetricValueTest{
 				Labels: []metrics.Label{
@@ -291,7 +309,7 @@ func (s *testingSuite) TestMetrics() {
 					{Name: "namespace", Value: "default"},
 					{Name: "resource", Value: "Listener"},
 				},
-				Test: metricstest.Equal(4),
+				Test: metricstest.Equal(float64(expectedGw1ListenerCount)),
 			},
 			&metricstest.ExpectedMetricValueTest{
 				Labels: []metrics.Label{
@@ -299,7 +317,7 @@ func (s *testingSuite) TestMetrics() {
 					{Name: "namespace", Value: "default"},
 					{Name: "resource", Value: "Route"},
 				},
-				Test: metricstest.Equal(4),
+				Test: metricstest.Equal(float64(expectedGw1RouteCount)),
 			},
 			&metricstest.ExpectedMetricValueTest{
 				Labels: []metrics.Label{
@@ -389,7 +407,7 @@ func (s *testingSuite) TestMetrics() {
 					{Name: "namespace", Value: "default"},
 					{Name: "port", Value: "8080"},
 				},
-				Test: metricstest.Equal(3),
+				Test: metricstest.Equal(float64(3)),
 			},
 			&metricstest.ExpectedMetricValueTest{
 				Labels: []metrics.Label{
@@ -397,8 +415,16 @@ func (s *testingSuite) TestMetrics() {
 					{Name: "namespace", Value: "default"},
 					{Name: "port", Value: "8443"},
 				},
-				Test: metricstest.Equal(3),
+				Test: metricstest.Equal(float64(3)),
 			},
 		})
 	}, 20*time.Second, time.Second)
+}
+
+func (s *testingSuite) TestMetrics() {
+	s.testMetrics(false)
+}
+
+func (s *testingSuite) TestMetricsWithListenerSets() {
+	s.testMetrics(true)
 }
