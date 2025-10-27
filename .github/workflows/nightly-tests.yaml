@@ -67,3 +67,46 @@ jobs:
       with:
         ref: main
     - uses: ./.github/actions/kube-gateway-api-load-tests
+
+  e2e_tests_for_gateway_api_versions:
+    name: E2E Tests for Gateway API Versions
+    if: ${{ github.event.schedule == '0 5 * * *' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        gateway-api-version: [ { version: 'v1.4.0', channel: 'experimental' },
+                              { version: 'v1.4.0', channel: 'standard' },
+                              { version: 'v1.3.0', channel: 'experimental' },
+                              { version: 'v1.3.0', channel: 'standard' },
+                              { version: 'v1.2.0', channel: 'experimental' },
+                              { version: 'v1.2.0', channel: 'standard' }]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Prep Go Runner
+      uses: ./.github/actions/prep-go-runner
+    - name: Dotenv Action
+      uses: falti/dotenv-action@v1.1.4
+      id: dotenv
+      with:
+        path: "./.github/workflows/.env/nightly-tests/max_versions.env"
+        log-variables: true
+    - name: Setup KinD Cluster
+      uses: ./.github/actions/setup-kind-cluster
+      with:
+        kgateway-api-version: ${{ matrix.gateway-api-version.version }}
+        kgateway-api-channel: ${{ matrix.gateway-api-version.channel }}
+        cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
+        kind-version: ${{ matrix.gateway-api-version.kind }}
+        kubectl-version: ${{ steps.dotenv.outputs.kubectl_version }}
+        istio-version: ${{ steps.dotenv.outputs.istio_version }}
+    - id: run-tests
+      uses: ./.github/actions/kubernetes-e2e-tests
+      with:
+        cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
+        test-args: '-v -timeout=25m' # TODO(sheidkamp): Update for full suite
+        run-regex: ${{ matrix.test.go-test-run-regex }}
+        istio-version: '^TestKgatewayMetrics$$|^TestControlPlaneTLS$$|^TestKgateway$$/^HeaderModifiers$$|^TestListenerSet$$|^TestKgateway$$/^BasicRouting$$|'
+        matrix-label: "nightly-gw-api"
+        
