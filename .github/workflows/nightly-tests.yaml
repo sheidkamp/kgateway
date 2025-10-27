@@ -110,6 +110,6 @@ jobs:
       with:
         cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
         test-args: '-v -timeout=60m' # TODO(sheidkamp): Update for full suite
-        run-regex: '^TestKgatewayMetrics$$|^TestControlPlaneTLS$$|^TestKgateway$$/^HeaderModifiers$$|^TestListenerSet$$|^TestKgateway$$/^BasicRouting$$|'
+        run-regex: '^TestKgatewayMetrics$$|^TestControlPlaneTLS$$|^TestKgateway$$/^HeaderModifiers$$|^TestListenerSet$$|^TestKgateway$$/^BasicRouting$$'
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         matrix-label: "nightly-gw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
