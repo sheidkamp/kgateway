@@ -583,7 +583,7 @@ func (tc TestCase) Run(
 	r.NoError(err, "error getting structural schemas")
 
 	for _, file := range tc.InputFiles {
-		objs, err := testutils.LoadFromFiles(file, scheme, gvkToStructuralSchema)
+		objs, err := testutils.LoadFromFiles(file, scheme, gvkToStructuralSchema, "")
 		if err != nil {
 			return nil, err
 		}

@@ -26,7 +26,13 @@ func LoadFromFiles(
 	filename string,
 	scheme *runtime.Scheme,
 	gvkToStructuralSchema map[schema.GroupVersionKind]*apiserverschema.Structural,
+	defaultNamespace string,
 ) ([]client.Object, error) {
+	// Use "default" as fallback if no default namespace is provided
+	if defaultNamespace == "" {
+		defaultNamespace = "default"
+	}
+
 	fileOrDir, err := os.Stat(filename)
 	if err != nil {
 		return nil, err
@@ -68,8 +74,8 @@ func LoadFromFiles(
 
 			_, isGwc := clientObj.(*gwv1.GatewayClass)
 			if !isGwc && clientObj.GetNamespace() == "" {
-				// fill in default namespace
-				clientObj.SetNamespace("default")
+				// fill in default namespace from kubectl context
+				clientObj.SetNamespace(defaultNamespace)
 			}
 			resources = append(resources, clientObj)
 		}

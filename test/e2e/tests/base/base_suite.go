@@ -142,6 +142,10 @@ type BaseTestingSuite struct {
 	MinGwApiVersion map[GwApiChannel]*GwApiVersion
 
 	// setupByVersion allows defining different setup configurations for different GW API versions and channels.
+	// defaultNamespace stores the default namespace from kubectl context (detected once and cached)
+	defaultNamespace string
+
+	// SetupByVersion allows defining different setup configurations for different GW API versions and channels.
 	// The outer map key is the channel (standard or experimental).
 	// The inner map key is the minimum version, and the value is the TestCase to use.
 	// The system will select the setup with the highest matching version for the current channel.
@@ -469,6 +473,8 @@ func (s *BaseTestingSuite) setupHelpers() {
 
 	// Detect and cache Gateway API version and channel once
 	s.detectAndCacheGwApiInfo()
+	// Detect and cache the default namespace from kubectl context
+	s.detectAndCacheDefaultNamespace()
 }
 
 // loadManifestResources populates the `manifestResources` for the given test case, by parsing each
@@ -481,14 +487,14 @@ func (s *BaseTestingSuite) loadManifestResources(testCase *TestCase) {
 
 	var resources []client.Object
 	for _, manifest := range testCase.Manifests {
-		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.Client.Scheme(), s.gvkToStructuralSchema)
+		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.Client.Scheme(), s.gvkToStructuralSchema, s.defaultNamespace)
 		s.Require().NoError(err)
 		resources = append(resources, objs...)
 	}
 	for manifest := range testCase.ManifestsWithTransform {
 		// we don't need to transform the resource since the transformation applies to the spec and not object metadata,
 		// which ensures that parsed Go objects in manifestResources can be used normally
-		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.Client.Scheme(), s.gvkToStructuralSchema)
+		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.Client.Scheme(), s.gvkToStructuralSchema, s.defaultNamespace)
 		s.Require().NoError(err)
 		resources = append(resources, objs...)
 	}
@@ -631,4 +637,12 @@ func (s *BaseTestingSuite) skipSuite() bool {
 
 	// Use checkCompatibleWithApiVersion with empty max requirements (only check min)
 	return !s.checkCompatibleWithApiVersion(s.MinGwApiVersion, nil, currentChannel, currentVersion)
+}
+
+// detectAndCacheDefaultNamespace detects the default namespace from kubectl context
+// and caches the result. This is called once during setup.
+func (s *BaseTestingSuite) detectAndCacheDefaultNamespace() {
+	defaultNs, err := s.TestInstallation.Actions.Kubectl().GetDefaultNamespace(s.Ctx)
+	s.Require().NoError(err, "failed to get default namespace from kubectl context")
+	s.defaultNamespace = defaultNs
 }

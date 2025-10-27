@@ -440,3 +440,20 @@ func (c *Cli) GetLeaseHolder(ctx context.Context, namespace string, leaderElecti
 	stdout = strings.Trim(stdout, "'")
 	return stdout + stderr, err
 }
+
+// GetDefaultNamespace returns the default namespace configured in the current kubectl context.
+// If no namespace is configured, it returns "default".
+func (c *Cli) GetDefaultNamespace(ctx context.Context) (string, error) {
+	stdout, _, err := c.Execute(ctx, "config", "view", "--minify", "--output", "jsonpath={..namespace}")
+	if err != nil {
+		return "", err
+	}
+
+	namespace := strings.TrimSpace(stdout)
+	if namespace == "" {
+		// If no namespace is configured in context, kubectl uses "default"
+		return "default", nil
+	}
+
+	return namespace, nil
+}
