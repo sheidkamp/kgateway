@@ -28,6 +28,10 @@ on:
         description: "Run load testing suite"
         type: boolean
         default: false
+      run-e2e-tests:
+        description: "Run e2e tests"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -70,7 +74,7 @@ jobs:
 
   e2e_tests_for_gateway_api_versions:
     name: E2E Tests for Gateway API Versions
-    if: ${{ github.event.schedule == '0 5 * * *' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run-e2e-tests)}}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     strategy:
