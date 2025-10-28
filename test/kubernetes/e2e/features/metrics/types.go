@@ -37,10 +37,15 @@ var (
 		Manifests: []string{setupWithListenerSetsManifest, setupCommonManifest, e2edefaults.CurlPodManifest},
 	}
 
+	// We only want to run one version of the metrics test because they will interfere with each other.
 	testCases = map[string]*base.TestCase{
-		"TestMetrics": {},
+		"TestMetrics": {
+			MaxGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+			},
+		},
 		"TestMetricsWithListenerSets": {
-			GatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
 			},
 		},

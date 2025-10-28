@@ -33,10 +33,6 @@ inputs:
     required: false
     default: "false"
     description: Whether to install localstack
-  agentgateway:
-    required: false
-    default: "false"
-    description: Enable the agentgateway integration with kgateway
 
 runs:
   using: "composite"
@@ -54,7 +50,6 @@ runs:
         CONFORMANCE_VERSION: ${{ inputs.kgateway-api-version }}
         CONFORMANCE_CHANNEL: ${{ inputs.kgateway-api-channel }}
         LOCALSTACK: ${{ inputs.localstack }}
-        AGENTGATEWAY: ${{ inputs.agentgateway }}
         # AI Tests rely on metal LB
         CONFORMANCE: true
       run: |

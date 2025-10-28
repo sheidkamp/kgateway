@@ -41,19 +41,21 @@ const (
 	GwApiChannelExperimental GatewayApiChannel = "experimental"
 )
 
-// Put this in its own type to avoid having to refer import semver.Version in other files.
+// GwApiVersion is its own type to avoid having to import the implemenation package in other files.
 type GwApiVersion struct {
 	semver.Version
 }
 
+// GwApiVersionMustParse is a helper function to parse a version string into a GwApiVersion.
 func GwApiVersionMustParse(version string) GwApiVersion {
 	return GwApiVersion{Version: *semver.MustParse(version)}
 }
 
 // Named Gateway API version constants for easy reference
 var (
-	// XListenerSets were added in 1.3 experimental
-	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0")
+	GwApiV1_0_0 = GwApiVersionMustParse("1.0.0") // BackendTLSPolicy added to experimental in 1.0
+	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0") // XListenerSets were added in 1.3 experimental
+	GwApiV1_4_0 = GwApiVersionMustParse("1.4.0") // BackendTLSPolicy moved to standard in 1.4
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.
@@ -72,13 +74,23 @@ type TestCase struct {
 	// contained in this test case's manifests.
 	dynamicResources []client.Object
 
-	// GatewayApiVersion specifies the minimum Gateway API version required per channel.
+	// MinGatewayApiVersion specifies the minimum Gateway API version required per channel.
 	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the minimum version.
 	// If the map is empty/nil, the test runs on any channel/version.
+	// The test will only run if the Gateway API version is >= the specified minimum version.
+	// For minimum requirements, if only experimental constraints exist, the test is considered experimental-only and will skip on standard channel.
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
 	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
-	GatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+	MinGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+
+	// MaxGatewayApiVersion specifies the maximum Gateway API version required per channel.
+	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the maximum version.
+	// If the map is empty/nil, the test runs on any channel/version.
+	// The test will only run if the Gateway API version is < the specified maximum version.
+	// Maximum constraints are channel-specific - experimental constraints don't affect standard channel execution.
+	// If the maximum version is less than the minimum version, the test will be skipped.
+	MaxGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
 }
 
 type BaseTestingSuite struct {
@@ -139,37 +151,53 @@ func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, se
 	return suite
 }
 
-// testCompatibleWithGwApiVersion checks if the requirements for a test are satisfied by the current channel/version.
-func (s *BaseTestingSuite) testCompatibleWithGwApiVersion(requirements map[GatewayApiChannel]*GwApiVersion, currentChannel GatewayApiChannel, currentVersion GwApiVersion) bool {
-	if len(requirements) == 0 {
-		return true // No requirements = always matches
+// versionChecker is a function type for checking version constraints
+type versionChecker func(current, required GwApiVersion) bool
+
+// getChannelRequirements returns the version checker logic for a specific channel
+func getChannelRequirements(requirements map[GatewayApiChannel]*GwApiVersion, channel GatewayApiChannel, checker versionChecker, isMinRequirement bool) func(GwApiVersion) bool {
+	switch channel {
+	case GwApiChannelExperimental:
+		if requiredVersion, exists := requirements[GwApiChannelExperimental]; exists {
+			return func(currentVersion GwApiVersion) bool {
+				return checker(currentVersion, *requiredVersion)
+			}
+		}
+		return func(GwApiVersion) bool { return true } // No experimental requirements = matches any experimental
+
+	case GwApiChannelStandard:
+		if requiredVersion, exists := requirements[GwApiChannelStandard]; exists {
+			return func(currentVersion GwApiVersion) bool {
+				return checker(currentVersion, *requiredVersion)
+			}
+		}
+		// If experimental defined but not standard - don't match (test uses experimental-only features)
+		// This logic only applies to minimum requirements, not maximum requirements
+		if isMinRequirement {
+			if _, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
+				return func(GwApiVersion) bool { return false }
+			}
+		}
+		return func(GwApiVersion) bool { return true } // No requirements = matches any standard
+
+	default:
+		return func(GwApiVersion) bool { return false } // Unknown channel
+	}
+}
+
+// checkCompatibleWithApiVersion checks if the requirements for a test are satisfied by the current channel/version.
+func (s *BaseTestingSuite) checkCompatibleWithApiVersion(minRequirements, maxRequirements map[GatewayApiChannel]*GwApiVersion, currentChannel GatewayApiChannel, currentVersion GwApiVersion) bool {
+	minChecker := func(current, required GwApiVersion) bool {
+		return current.GreaterThan(&required.Version) || current.Equal(&required.Version) // >=
+	}
+	maxChecker := func(current, required GwApiVersion) bool {
+		return current.LessThan(&required.Version) // <
 	}
 
-	if currentChannel == GwApiChannelExperimental {
-		// If experimental version defined - compare versions
-		if requiredVersion, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
-			return currentVersion.GreaterThan(&requiredVersion.Version) || currentVersion.Equal(&requiredVersion.Version)
-		}
+	minConstraint := getChannelRequirements(minRequirements, currentChannel, minChecker, true)
+	maxConstraint := getChannelRequirements(maxRequirements, currentChannel, maxChecker, false)
 
-		// No requirements = matches any experimental
-		return true
-	}
-
-	if currentChannel == GwApiChannelStandard {
-		// If standard version defined - compare versions
-		if requiredVersion, hasStandard := requirements[GwApiChannelStandard]; hasStandard {
-			return currentVersion.GreaterThan(&requiredVersion.Version) || currentVersion.Equal(&requiredVersion.Version)
-		}
-		// If experimental defined but not standard - don't match (experimental-only)
-		if _, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
-			return false
-		}
-		// No requirements = matches any standard
-		return true
-	}
-
-	s.Require().FailNow("unknown Gateway API channel: %s", currentChannel)
-	return false
+	return minConstraint(currentVersion) && maxConstraint(currentVersion)
 }
 
 // selectSetup chooses the appropriate setup TestCase based on the current Gateway API version and channel.
@@ -246,7 +274,7 @@ func (s *BaseTestingSuite) BeforeTest(suiteName, testName string) {
 	// Check version requirements before applying manifests
 	if shouldSkip := s.shouldSkipTest(testCase); shouldSkip {
 		s.T().Skipf("Test requires Gateway API %s, but current is %s/%s",
-			testCase.GatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
+			testCase.MinGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
 		return
 	}
 
@@ -516,7 +544,7 @@ func (s *BaseTestingSuite) getCurrentGatewayApiVersion() GwApiVersion {
 // shouldSkipTest determines if a test should be skipped based on channel/version requirements.
 // This is the inverse of requirementsMatch - we skip if requirements are NOT met.
 func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
-	if len(testCase.GatewayApiVersion) == 0 {
+	if len(testCase.MinGatewayApiVersion) == 0 && len(testCase.MaxGatewayApiVersion) == 0 {
 		return false // No requirements = run on any channel/version
 	}
 
@@ -527,6 +555,6 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 		s.Require().FailNow("cannot determine Gateway API version")
 	}
 
-	// Use testCompatibleWithGwApiVersion and invert the result
-	return !s.testCompatibleWithGwApiVersion(testCase.GatewayApiVersion, currentChannel, currentVersion)
+	// Use checkCompatibleWithApiVersion and invert the result
+	return !s.checkCompatibleWithApiVersion(testCase.MinGatewayApiVersion, testCase.MaxGatewayApiVersion, currentChannel, currentVersion)
 }
