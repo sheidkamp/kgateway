@@ -105,6 +105,8 @@ jobs:
         kind-version: ${{ matrix.gateway-api-version.kind }}
         kubectl-version: ${{ steps.dotenv.outputs.kubectl_version }}
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
+        agentgateway: "true"
+
     - id: run-tests
       uses: ./.github/actions/kubernetes-e2e-tests
       with:
@@ -113,4 +115,3 @@ jobs:
         run-regex: "|" #'^TestKgatewayMetrics$$|^TestControlPlaneTLS$$|^TestKgateway$$/^HeaderModifiers$$|^TestListenerSet$$|^TestKgateway$$/^BasicRouting$$'
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         matrix-label: "nightly-gw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
-        agentgateway: "true"
