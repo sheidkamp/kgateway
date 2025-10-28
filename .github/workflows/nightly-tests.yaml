@@ -76,7 +76,7 @@ jobs:
     name: E2E Tests for Gateway API Versions
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run-e2e-tests)}}
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -105,13 +105,11 @@ jobs:
         kind-version: ${{ matrix.gateway-api-version.kind }}
         kubectl-version: ${{ steps.dotenv.outputs.kubectl_version }}
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
-        agentgateway: "true"
-
     - id: run-tests
       uses: ./.github/actions/kubernetes-e2e-tests
       with:
         cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
-        test-args: '-v -timeout=180m'
-        run-regex: "|" #'^TestKgatewayMetrics$$|^TestControlPlaneTLS$$|^TestKgateway$$/^HeaderModifiers$$|^TestListenerSet$$|^TestKgateway$$/^BasicRouting$$'
+        test-args: '-v -timeout=120m'
+        run-regex: "" # All tests
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         matrix-label: "nightly-gw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
