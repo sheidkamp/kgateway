@@ -5,7 +5,6 @@ package listenerset
 import (
 	"context"
 
-	semver "github.com/Masterminds/semver/v3"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,7 +27,7 @@ type testingSuite struct {
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
-	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[*semver.Version]*base.TestCase{
+	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[base.GwApiVersion]*base.TestCase{
 		base.GwApiChannelExperimental: {
 			base.GwApiV1_3_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.3
 		},

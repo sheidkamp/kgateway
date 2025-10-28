@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -33,7 +32,7 @@ type testingSuite struct {
 // NewTestingSuite creates a new testing suite for control plane metrics.
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
-	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[*semver.Version]*base.TestCase{
+	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[base.GwApiVersion]*base.TestCase{
 		base.GwApiChannelExperimental: {
 			base.GwApiV1_3_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.3
 		},

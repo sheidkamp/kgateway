@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -30,7 +29,7 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
 
 	// Define versioned setups - the system will select the appropriate one based on Gateway API version and channel
-	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[*semver.Version]*base.TestCase{
+	baseSuite.SetupByVersion = map[base.GatewayApiChannel]map[base.GwApiVersion]*base.TestCase{
 		base.GwApiChannelExperimental: {
 			base.GwApiV1_3_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.3
 		},

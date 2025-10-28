@@ -41,10 +41,19 @@ const (
 	GwApiChannelExperimental GatewayApiChannel = "experimental"
 )
 
+// Put this in its own type to avoid having to refer import semver.Version in other files.
+type GwApiVersion struct {
+	semver.Version
+}
+
+func GwApiVersionMustParse(version string) GwApiVersion {
+	return GwApiVersion{Version: *semver.MustParse(version)}
+}
+
 // Named Gateway API version constants for easy reference
 var (
 	// XListenerSets were added in 1.3 experimental
-	GwApiV1_3_0 = semver.MustParse("1.3.0")
+	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0")
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.
@@ -69,7 +78,7 @@ type TestCase struct {
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
 	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
-	GatewayApiVersion map[GatewayApiChannel]*semver.Version
+	GatewayApiVersion map[GatewayApiChannel]*GwApiVersion
 }
 
 type BaseTestingSuite struct {
@@ -102,7 +111,7 @@ type BaseTestingSuite struct {
 	// The system will select the setup with the highest matching version for the current channel.
 	// If no setups match, falls back to the Setup field.
 	// Example:
-	//   SetupByVersion: map[GatewayApiChannel]map[*semver.Version]*TestCase{
+	//   SetupByVersion: map[GatewayApiChannel]map[KGatewayVersion]*TestCase{
 	//     GwApiChannelExperimental: {
 	//       GwApiV1_3_0: &setupExperimentalV1_4,
 	//     },
@@ -110,7 +119,7 @@ type BaseTestingSuite struct {
 	//       GwApiV1_3_0: &setupStandardV1_4,
 	//     },
 	//   }
-	SetupByVersion map[GatewayApiChannel]map[*semver.Version]*TestCase
+	SetupByVersion map[GatewayApiChannel]map[GwApiVersion]*TestCase
 
 	// selectedSetup tracks which setup was actually used, so we can clean it up in TearDownSuite
 	selectedSetup *TestCase
@@ -131,7 +140,7 @@ func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, se
 }
 
 // testCompatibleWithGwApiVersion checks if the requirements for a test are satisfied by the current channel/version.
-func (s *BaseTestingSuite) testCompatibleWithGwApiVersion(requirements map[GatewayApiChannel]*semver.Version, currentChannel GatewayApiChannel, currentVersion *semver.Version) bool {
+func (s *BaseTestingSuite) testCompatibleWithGwApiVersion(requirements map[GatewayApiChannel]*GwApiVersion, currentChannel GatewayApiChannel, currentVersion GwApiVersion) bool {
 	if len(requirements) == 0 {
 		return true // No requirements = always matches
 	}
@@ -139,7 +148,7 @@ func (s *BaseTestingSuite) testCompatibleWithGwApiVersion(requirements map[Gatew
 	if currentChannel == GwApiChannelExperimental {
 		// If experimental version defined - compare versions
 		if requiredVersion, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
-			return currentVersion.GreaterThan(requiredVersion) || currentVersion.Equal(requiredVersion)
+			return currentVersion.GreaterThan(&requiredVersion.Version) || currentVersion.Equal(&requiredVersion.Version)
 		}
 
 		// No requirements = matches any experimental
@@ -149,7 +158,7 @@ func (s *BaseTestingSuite) testCompatibleWithGwApiVersion(requirements map[Gatew
 	if currentChannel == GwApiChannelStandard {
 		// If standard version defined - compare versions
 		if requiredVersion, hasStandard := requirements[GwApiChannelStandard]; hasStandard {
-			return currentVersion.GreaterThan(requiredVersion) || currentVersion.Equal(requiredVersion)
+			return currentVersion.GreaterThan(&requiredVersion.Version) || currentVersion.Equal(&requiredVersion.Version)
 		}
 		// If experimental defined but not standard - don't match (experimental-only)
 		if _, hasExperimental := requirements[GwApiChannelExperimental]; hasExperimental {
@@ -175,7 +184,7 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 	currentVersion := s.getCurrentGatewayApiVersion()
 	currentChannel := s.getCurrentGatewayApiChannel()
 
-	if currentVersion == nil {
+	if currentVersion.Version.String() == "" {
 		// Can't determine version, something is wrong
 		s.Require().FailNow("cannot determine Gateway API version")
 	}
@@ -189,17 +198,17 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 
 	// Find the highest version that's <= current version
 	// Get all version keys and sort in descending order (highest first)
-	var versions []*semver.Version
+	var versions []GwApiVersion
 	for version := range versionMap {
 		versions = append(versions, version)
 	}
-	slices.SortFunc(versions, func(a, b *semver.Version) int {
-		return a.Compare(b) * -1 // sort in descending order
+	slices.SortFunc(versions, func(a, b GwApiVersion) int {
+		return a.Compare(&b.Version) * -1 // sort in descending order
 	})
 
 	// Find the first (highest) version that satisfies the requirement
 	for _, minVersion := range versions {
-		if currentVersion.GreaterThan(minVersion) || currentVersion.Equal(minVersion) {
+		if currentVersion.GreaterThan(&minVersion.Version) || currentVersion.Equal(&minVersion.Version) {
 			return versionMap[minVersion]
 		}
 	}
@@ -500,8 +509,8 @@ func (s *BaseTestingSuite) getCurrentGatewayApiChannel() GatewayApiChannel {
 }
 
 // getCurrentGatewayApiVersion returns the cached Gateway API version
-func (s *BaseTestingSuite) getCurrentGatewayApiVersion() *semver.Version {
-	return s.gwApiVersion
+func (s *BaseTestingSuite) getCurrentGatewayApiVersion() GwApiVersion {
+	return GwApiVersion{Version: *s.gwApiVersion}
 }
 
 // shouldSkipTest determines if a test should be skipped based on channel/version requirements.
@@ -514,7 +523,7 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 	currentVersion := s.getCurrentGatewayApiVersion()
 	currentChannel := s.getCurrentGatewayApiChannel()
 
-	if currentVersion == nil {
+	if currentVersion.Version.String() == "" {
 		s.Require().FailNow("cannot determine Gateway API version")
 	}
 
