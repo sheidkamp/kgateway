@@ -8,6 +8,7 @@ on:
 env:
   VERSION: '1.0.0-ci1'
   GITHUB_TOKEN: ${{ github.token }}
+  GO_TEST_RETRIES: 2
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -101,7 +102,6 @@ jobs:
       with:
         cluster-name: ${{ matrix.test.cluster-name }}
         kind-node-version: ${{ steps.dotenv.outputs.node_version }}
-        kind-version: ${{ steps.dotenv.outputs.kind_version }}
         kubectl-version: ${{ steps.dotenv.outputs.kubectl_version }}
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         localstack: ${{ matrix.test.localstack }}
