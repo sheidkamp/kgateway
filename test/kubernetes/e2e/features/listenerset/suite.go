@@ -32,6 +32,9 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 			base.GwApiV1_3_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.3
 		},
 	}
+	baseSuite.MinGatewayApiVersion = map[base.GatewayApiChannel]*base.GwApiVersion{
+		base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+	}
 	return &testingSuite{
 		BaseTestingSuite: baseSuite,
 	}

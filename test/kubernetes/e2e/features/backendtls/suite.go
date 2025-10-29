@@ -67,12 +67,12 @@ var (
 	testCases = map[string]*base.TestCase{
 		"TestBackendTLSPolicyAndStatus": {
 			Manifests: []string{configMapManifest},
-			// Only the v1 version of BackendTLSPolicy is only supported, available Gateway API v1.4+, not v1alpha3 version from experimental
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
-				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
-			},
 		},
+	}
+
+	suiteMinGatewayApiVersion = map[base.GatewayApiChannel]*base.GwApiVersion{
+		base.GwApiChannelStandard:     &base.GwApiV1_4_0,
+		base.GwApiChannelExperimental: &base.GwApiV1_4_0,
 	}
 )
 
@@ -85,8 +85,10 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	setup := base.TestCase{
 		Manifests: append([]string{filepath.Join(fsutils.MustGetThisDir(), "testdata/base.yaml")}, baseSetupManifests...),
 	}
+	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
+	baseSuite.MinGatewayApiVersion = suiteMinGatewayApiVersion
 	return &tsuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: baseSuite,
 		agentgateway:     false,
 	}
 }
@@ -95,8 +97,12 @@ func NewAgentgatewayTestingSuite(ctx context.Context, testInst *e2e.TestInstalla
 	setup := base.TestCase{
 		Manifests: append([]string{filepath.Join(fsutils.MustGetThisDir(), "testdata/base-agw.yaml")}, baseSetupManifests...),
 	}
+
+	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
+	baseSuite.MinGatewayApiVersion = suiteMinGatewayApiVersion
+
 	return &tsuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: baseSuite,
 		agentgateway:     true,
 	}
 }

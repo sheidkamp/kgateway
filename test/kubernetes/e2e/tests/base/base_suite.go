@@ -117,6 +117,17 @@ type BaseTestingSuite struct {
 	// gwApiChannel stores the detected Gateway API channel (detected once and cached)
 	gwApiChannel GatewayApiChannel
 
+	// MinGatewayApiVersion specifies the minimum Gateway API version required for this entire suite.
+	// This is needed on the suite level, because individual tests are skipped after the suite is setup, and the suite setup may apply manifests that are not compatible with the current Gateway API version.
+	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the minimum version.
+	// If the map is empty/nil, the suite runs on any channel/version.
+	// The suite will only run if the Gateway API version is >= the specified minimum version.
+	// For minimum requirements, if only experimental constraints exist, the suite is considered experimental-only and will skip on standard channel.
+	// Matching logic based on installed channel:
+	//   - experimental: If experimental key exists, check version; otherwise run
+	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
+	MinGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+
 	// SetupByVersion allows defining different setup configurations for different GW API versions and channels.
 	// The outer map key is the channel (standard or experimental).
 	// The inner map key is the minimum version, and the value is the TestCase to use.
@@ -248,6 +259,13 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 func (s *BaseTestingSuite) SetupSuite() {
 	// set up the helpers once and store them on the suite
 	s.setupHelpers()
+
+	// Check suite-level version requirements before proceeding
+	if s.suiteRunsOnGwApiVersion() {
+		s.T().Skipf("Suite requires Gateway API %s, but current is %s/%s",
+			s.MinGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
+		return
+	}
 
 	// Select the appropriate setup based on Gateway API version
 	s.selectedSetup = s.selectSetup()
@@ -557,4 +575,21 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 
 	// Use checkCompatibleWithApiVersion and invert the result
 	return !s.checkCompatibleWithApiVersion(testCase.MinGatewayApiVersion, testCase.MaxGatewayApiVersion, currentChannel, currentVersion)
+}
+
+// suiteRunsOnGwApiVersion determines if the entire suite should be skipped based on suite-level minimum version requirements.
+func (s *BaseTestingSuite) suiteRunsOnGwApiVersion() bool {
+	if len(s.MinGatewayApiVersion) == 0 {
+		return false // No requirements = run on any channel/version
+	}
+
+	currentVersion := s.getCurrentGatewayApiVersion()
+	currentChannel := s.getCurrentGatewayApiChannel()
+
+	if currentVersion.Version.String() == "" {
+		s.Require().FailNow("cannot determine Gateway API version")
+	}
+
+	// Use checkCompatibleWithApiVersion with empty max requirements (only check min)
+	return !s.checkCompatibleWithApiVersion(s.MinGatewayApiVersion, nil, currentChannel, currentVersion)
 }

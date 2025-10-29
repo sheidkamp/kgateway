@@ -103,33 +103,18 @@ var (
 	testCases = map[string]*base.TestCase{
 		"TestValidListenerSet": {
 			Manifests: []string{validListenerSetManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
 		},
 		"TestInvalidListenerSetNotAllowed": {
 			Manifests: []string{invalidListenerSetNotAllowedManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
 		},
 		"TestInvalidListenerSetNonExistingGW": {
 			Manifests: []string{invalidListenerSetNonExistingGWManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
 		},
 		"TestPolicies": {
 			Manifests: []string{validListenerSetManifest, validListenerSetManifest2, policyManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
 		},
 		"TestConflictedListenerSet": {
 			Manifests: []string{validListenerSetManifest, conflictedListenerSetManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
 		},
 	}
 )
