@@ -11,9 +11,6 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
 	. "github.com/kgateway-dev/kgateway/v2/test/e2e/tests"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/install"
-	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e"
-	. "github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/tests"
-	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/testutils/install"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
 
