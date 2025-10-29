@@ -28,7 +28,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/helpers"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e"
 	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/defaults"
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"github.com/kgateway-dev/kgateway/v2/test/kubernetes/e2e/tests/base"
 )
 
 var (
@@ -62,70 +62,54 @@ var (
 	}
 	svcGroup = ""
 	svcKind  = "Service"
+
+	// base setup manifests (shared between regular and agentgateway)
+	baseSetupManifests = []string{
+		filepath.Join(fsutils.MustGetThisDir(), "testdata/nginx.yaml"),
+		defaults.CurlPodManifest,
+	}
+
+	// test cases
+	testCases = map[string]*base.TestCase{
+		"TestBackendTLSPolicyAndStatus": {
+			Manifests: []string{configMapManifest},
+			// Only the v1 version of BackendTLSPolicy is only supported, available Gateway API v1.4+, not v1alpha3 version from experimental
+			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
+			},
+		},
+	}
 )
 
 type tsuite struct {
-	suite.Suite
-	ctx              context.Context
-	testInstallation *e2e.TestInstallation
-	baseManifests    []string
-	agentgateway     bool
+	*base.BaseTestingSuite
+	agentgateway bool
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+	setup := base.TestCase{
+		Manifests: append([]string{filepath.Join(fsutils.MustGetThisDir(), "testdata/base.yaml")}, baseSetupManifests...),
+	}
 	return &tsuite{
-		ctx:              ctx,
-		testInstallation: testInst,
-		baseManifests: []string{
-			filepath.Join(fsutils.MustGetThisDir(), "testdata/base.yaml"),
-			filepath.Join(fsutils.MustGetThisDir(), "testdata/nginx.yaml"),
-			defaults.CurlPodManifest,
-		},
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		agentgateway:     false,
 	}
 }
 
 func NewAgentgatewayTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+	setup := base.TestCase{
+		Manifests: append([]string{filepath.Join(fsutils.MustGetThisDir(), "testdata/base-agw.yaml")}, baseSetupManifests...),
+	}
 	return &tsuite{
-		ctx:              ctx,
-		testInstallation: testInst,
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
 		agentgateway:     true,
-		baseManifests: []string{
-			filepath.Join(fsutils.MustGetThisDir(), "testdata/base-agw.yaml"),
-			filepath.Join(fsutils.MustGetThisDir(), "testdata/nginx.yaml"),
-			defaults.CurlPodManifest,
-		},
 	}
 }
 
 func (s *tsuite) TestBackendTLSPolicyAndStatus() {
-	testutils.Cleanup(s.T(), func() {
-		for _, manifest := range s.baseManifests {
-			err := s.testInstallation.Actions.Kubectl().DeleteFileSafe(s.ctx, manifest)
-			s.Require().NoError(err)
-		}
-		s.testInstallation.Assertions.EventuallyObjectsNotExist(s.ctx, proxyService, proxyDeployment, backendTlsPolicy)
-	})
-
-	toCreate := append(s.baseManifests, configMapManifest)
-	for _, manifest := range toCreate {
-		err := s.testInstallation.Actions.Kubectl().ApplyFile(s.ctx, manifest)
-		s.Require().NoError(err)
-	}
-
-	s.testInstallation.Assertions.EventuallyObjectsExist(s.ctx, proxyService, proxyDeployment, backendTlsPolicy, configMap)
-	// TODO: make this a specific assertion to remove the need for c/p the label selector
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, defaults.CurlPod.GetNamespace(), metav1.ListOptions{
-		LabelSelector: defaults.WellKnownAppLabel + "=curl",
-	})
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, nginxMeta.GetNamespace(), metav1.ListOptions{
-		LabelSelector: defaults.WellKnownAppLabel + "=nginx",
-	})
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, nginx2Meta.GetNamespace(), metav1.ListOptions{
-		LabelSelector: defaults.WellKnownAppLabel + "=nginx2",
-	})
-	s.testInstallation.Assertions.EventuallyPodsRunning(s.ctx, proxyObjMeta.GetNamespace(), metav1.ListOptions{
-		LabelSelector: defaults.WellKnownAppLabel + "=gw",
-	})
+	// BaseTestingSuite has already applied setup manifests and test case manifests (configMap)
+	// All objects should already exist and be ready
 
 	tt := []struct {
 		host string
@@ -138,8 +122,8 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 		},
 	}
 	for _, tc := range tt {
-		s.testInstallation.Assertions.AssertEventualCurlResponse(
-			s.ctx,
+		s.TestInstallation.Assertions.AssertEventualCurlResponse(
+			s.Ctx,
 			defaults.CurlPodExecOpt,
 			[]curl.Option{
 				curl.WithHost(kubeutils.ServiceFQDN(proxyService.ObjectMeta)),
@@ -153,8 +137,8 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 		)
 	}
 
-	s.testInstallation.Assertions.AssertEventualCurlResponse(
-		s.ctx,
+	s.TestInstallation.Assertions.AssertEventualCurlResponse(
+		s.Ctx,
 		defaults.CurlPodExecOpt,
 		[]curl.Option{
 			curl.WithHost(kubeutils.ServiceFQDN(proxyService.ObjectMeta)),
@@ -188,7 +172,7 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 	})
 
 	// delete configmap so we can assert status updates correctly
-	err := s.testInstallation.Actions.Kubectl().DeleteFile(s.ctx, configMapManifest)
+	err := s.TestInstallation.Actions.Kubectl().DeleteFile(s.Ctx, configMapManifest)
 	s.Require().NoError(err)
 
 	s.assertPolicyStatus(metav1.Condition{
@@ -202,11 +186,11 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 
 func (s *tsuite) assertPolicyStatus(inCondition metav1.Condition) {
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	p := s.testInstallation.Assertions
+	p := s.TestInstallation.Assertions
 	p.Gomega.Eventually(func(g gomega.Gomega) {
 		tlsPol := &gwv1.BackendTLSPolicy{}
 		objKey := client.ObjectKeyFromObject(backendTlsPolicy)
-		err := s.testInstallation.ClusterContext.Client.Get(s.ctx, objKey, tlsPol)
+		err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx, objKey, tlsPol)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get BackendTLSPolicy %s", objKey)
 
 		g.Expect(tlsPol.Status.Ancestors).To(gomega.HaveLen(2), "ancestors didn't have length of 2")
