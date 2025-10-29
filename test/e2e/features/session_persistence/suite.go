@@ -42,12 +42,12 @@ type testingSuite struct {
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
-	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
-	baseSuite.MinGatewayApiVersion = map[base.GatewayApiChannel]*base.GwApiVersion{
-		base.GwApiChannelExperimental: &base.GwApiV1_1_0, // SessionPersistence is experimental only, added in 1.1.0
-	}
 	return &testingSuite{
-		BaseTestingSuite: baseSuite,
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases,
+			base.WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiV1_1_0, // SessionPersistence is experimental only, added in 1.1.0
+			}),
+		),
 	}
 }
 

@@ -83,10 +83,8 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	setup := base.TestCase{
 		Manifests: append([]string{filepath.Join(fsutils.MustGetThisDir(), "testdata/base.yaml")}, baseSetupManifests...),
 	}
-	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
-	baseSuite.MinGatewayApiVersion = suiteMinGatewayApiVersion
 	return &tsuite{
-		BaseTestingSuite: baseSuite,
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGatewayApiVersion(suiteMinGatewayApiVersion)),
 		agentgateway:     false,
 	}
 }
@@ -96,11 +94,8 @@ func NewAgentgatewayTestingSuite(ctx context.Context, testInst *e2e.TestInstalla
 		Manifests: append([]string{filepath.Join(fsutils.MustGetThisDir(), "testdata/base-agw.yaml")}, baseSetupManifests...),
 	}
 
-	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
-	baseSuite.MinGatewayApiVersion = suiteMinGatewayApiVersion
-
 	return &tsuite{
-		BaseTestingSuite: baseSuite,
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGatewayApiVersion(suiteMinGatewayApiVersion)),
 		agentgateway:     true,
 	}
 }

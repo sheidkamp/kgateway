@@ -125,7 +125,7 @@ type BaseTestingSuite struct {
 	// gwApiChannel stores the detected Gateway API channel (detected once and cached)
 	gwApiChannel GatewayApiChannel
 
-	// MinGatewayApiVersion specifies the minimum Gateway API version required for this entire suite.
+	// minGatewayApiVersion specifies the minimum Gateway API version required for this entire suite.
 	// This is needed on the suite level, because individual tests are skipped after the suite is setup, and the suite setup may apply manifests that are not compatible with the current Gateway API version.
 	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the minimum version.
 	// If the map is empty/nil, the suite runs on any channel/version.
@@ -134,15 +134,15 @@ type BaseTestingSuite struct {
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
 	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
-	MinGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+	minGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
 
-	// SetupByVersion allows defining different setup configurations for different GW API versions and channels.
+	// setupByVersion allows defining different setup configurations for different GW API versions and channels.
 	// The outer map key is the channel (standard or experimental).
 	// The inner map key is the minimum version, and the value is the TestCase to use.
 	// The system will select the setup with the highest matching version for the current channel.
 	// If no setups match, falls back to the Setup field.
 	// Example:
-	//   SetupByVersion: map[GatewayApiChannel]map[KGatewayVersion]*TestCase{
+	//   setupByVersion: map[GatewayApiChannel]map[KGatewayVersion]*TestCase{
 	//     GwApiChannelExperimental: {
 	//       GwApiV1_3_0: &setupExperimentalV1_4,
 	//     },
@@ -150,21 +150,42 @@ type BaseTestingSuite struct {
 	//       GwApiV1_3_0: &setupStandardV1_4,
 	//     },
 	//   }
-	SetupByVersion map[GatewayApiChannel]map[GwApiVersion]*TestCase
+	setupByVersion map[GatewayApiChannel]map[GwApiVersion]*TestCase
 
 	// selectedSetup tracks which setup was actually used, so we can clean it up in TearDownSuite
 	selectedSetup *TestCase
 }
 
+// SuiteOption is a functional option for configuring BaseTestingSuite
+type SuiteOption func(*BaseTestingSuite)
+
+// WithMinGatewayApiVersion sets the minimum Gateway API version requirements for the suite
+func WithMinGatewayApiVersion(minVersions map[GatewayApiChannel]*GwApiVersion) SuiteOption {
+	return func(s *BaseTestingSuite) {
+		s.minGatewayApiVersion = minVersions
+	}
+}
+
+// WithSetupByVersion sets version-specific setup configurations for the suite
+func WithSetupByVersion(setupByVersion map[GatewayApiChannel]map[GwApiVersion]*TestCase) SuiteOption {
+	return func(s *BaseTestingSuite) {
+		s.setupByVersion = setupByVersion
+	}
+}
+
 // NewBaseTestingSuite returns a BaseTestingSuite that performs all the pre-requisites of upgrading helm installations,
 // applying manifests and verifying resources exist before a suite and tests and the corresponding post-run cleanup.
 // The pre-requisites for the suite are defined in the setup parameter and for each test in the individual testCase.
-func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, setupTestCase TestCase, testCases map[string]*TestCase) *BaseTestingSuite {
+func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, setupTestCase TestCase, testCases map[string]*TestCase, opts ...SuiteOption) *BaseTestingSuite {
 	suite := &BaseTestingSuite{
 		Ctx:              ctx,
 		TestInstallation: testInst,
 		Setup:            setupTestCase,
 		TestCases:        testCases,
+	}
+
+	for _, opt := range opts {
+		opt(suite)
 	}
 
 	return suite
@@ -224,7 +245,7 @@ func (s *BaseTestingSuite) checkCompatibleWithApiVersion(minRequirements, maxReq
 // Otherwise, it returns the default Setup.
 func (s *BaseTestingSuite) selectSetup() *TestCase {
 	// If versioned setups are not defined, use the default Setup
-	if len(s.SetupByVersion) == 0 {
+	if len(s.setupByVersion) == 0 {
 		return &s.Setup
 	}
 
@@ -237,7 +258,7 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 	}
 
 	// Get the version map for the current channel
-	versionMap, hasChannel := s.SetupByVersion[currentChannel]
+	versionMap, hasChannel := s.setupByVersion[currentChannel]
 	if !hasChannel || len(versionMap) == 0 {
 		// No setups defined for this channel, fall back to default
 		return &s.Setup
@@ -271,7 +292,7 @@ func (s *BaseTestingSuite) SetupSuite() {
 	// Check suite-level version requirements before proceeding
 	if s.suiteRunsOnGwApiVersion() {
 		s.T().Skipf("Suite requires Gateway API %s, but current is %s/%s",
-			s.MinGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
+			s.minGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
 		return
 	}
 
@@ -587,7 +608,7 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 
 // suiteRunsOnGwApiVersion determines if the entire suite should be skipped based on suite-level minimum version requirements.
 func (s *BaseTestingSuite) suiteRunsOnGwApiVersion() bool {
-	if len(s.MinGatewayApiVersion) == 0 {
+	if len(s.minGatewayApiVersion) == 0 {
 		return false // No requirements = run on any channel/version
 	}
 
@@ -599,5 +620,5 @@ func (s *BaseTestingSuite) suiteRunsOnGwApiVersion() bool {
 	}
 
 	// Use checkCompatibleWithApiVersion with empty max requirements (only check min)
-	return !s.checkCompatibleWithApiVersion(s.MinGatewayApiVersion, nil, currentChannel, currentVersion)
+	return !s.checkCompatibleWithApiVersion(s.minGatewayApiVersion, nil, currentChannel, currentVersion)
 }

@@ -27,14 +27,14 @@ type testingSuite struct {
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
-	baseSuite := base.NewBaseTestingSuite(ctx, testInst, base.TestCase{}, testCases)
 	// This suite applies TrafficPolicy to specific named sections of the HTTPRoute, and requires HTTPRoutes.spec.rules[].name to be present in the Gateway API version.
-	baseSuite.MinGatewayApiVersion = map[base.GatewayApiChannel]*base.GwApiVersion{
-		base.GwApiChannelExperimental: &base.GwApiV1_2_0,
-		base.GwApiChannelStandard:     &base.GwApiV1_3_0,
-	}
 	return &testingSuite{
-		BaseTestingSuite: baseSuite,
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, base.TestCase{}, testCases,
+			base.WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiV1_2_0,
+				base.GwApiChannelStandard:     &base.GwApiV1_3_0,
+			}),
+		),
 	}
 }
 
