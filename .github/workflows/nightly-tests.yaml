@@ -110,6 +110,6 @@ jobs:
       with:
         cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
         test-args: '-v -timeout=120m'
-        run-regex: "" # All tests
+        run-regex: "^Test" # All tests
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         matrix-label: "nightly-gw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"

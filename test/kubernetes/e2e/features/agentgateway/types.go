@@ -40,7 +40,7 @@ var (
 		"TestAgentgatewayTCPRoute": {
 			Manifests: []string{defaults.CurlPodManifest, tcpRouteManifest},
 			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_0_0, // AgentGateway is only supported in experimental API v0.3.0+, though we use as lower bound of 1.0.0
+				base.GwApiChannelExperimental: &base.GwApiV1_0_0, // TCPRoutes were added in experimental API v0.3.0+, though we use as lower bound of 1.0.0
 			},
 		},
 	}
