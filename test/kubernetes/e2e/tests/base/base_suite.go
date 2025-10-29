@@ -54,7 +54,8 @@ func GwApiVersionMustParse(version string) GwApiVersion {
 // Named Gateway API version constants for easy reference
 var (
 	GwApiV1_0_0 = GwApiVersionMustParse("1.0.0") // Minimum version considered for GW API. TCPRoutes were added in experimental channel v0.3.0, and this can be used to gate them or any other pre 1.0 expierimental resource
-	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0") // XListenerSets were added in 1.3 experimental
+	GwApiV1_2_0 = GwApiVersionMustParse("1.2.0") // HTTPRoutes.spec.rules[].name was added in 1.2 experimental
+	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0") // XListenerSets and CORS filters were added in 1.3 experimental, HTTPRoutes.spec.rules[].name was added to standard in 1.3
 	GwApiV1_4_0 = GwApiVersionMustParse("1.4.0") // BackendTLSPolicy moved to standard/v1 in 1.4. alpha1v3 version is not supported
 )
 
