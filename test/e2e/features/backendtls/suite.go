@@ -69,6 +69,7 @@ var (
 	}
 
 	suiteMinGatewayApiVersion = map[base.GatewayApiChannel]*base.GwApiVersion{
+		// BackendTLSPolicy moved to standard and experimental v1 in 1.4. BackendTLSPolicy version alpha1v3  is not supported
 		base.GwApiChannelStandard:     &base.GwApiV1_4_0,
 		base.GwApiChannelExperimental: &base.GwApiV1_4_0,
 	}

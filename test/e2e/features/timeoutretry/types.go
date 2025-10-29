@@ -5,9 +5,10 @@ package timeoutretry
 import (
 	"path/filepath"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
+	testdefaults "github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
+	"github.com/kgateway-dev/kgateway/v2/test/e2e/tests/base"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -15,7 +16,15 @@ const (
 )
 
 var (
-	setupManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
+	setupManifest                = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
+	setupWithNamedRoutesManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup-with-named-routes.yaml")
+
+	setup = base.TestCase{
+		Manifests: []string{setupManifest, testdefaults.CurlPodManifest, testdefaults.HttpbinManifest},
+	}
+	setupWithNamedRoutes = base.TestCase{
+		Manifests: []string{setupWithNamedRoutesManifest, testdefaults.CurlPodManifest, testdefaults.HttpbinManifest},
+	}
 
 	gatewayObjectMeta = metav1.ObjectMeta{
 		Name:      gatewayName,
