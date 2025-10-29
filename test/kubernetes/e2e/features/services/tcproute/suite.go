@@ -28,8 +28,13 @@ type testingSuite struct {
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+
+	baseSuite := base.NewBaseTestingSuite(ctx, testInst, setup, testCases)
+	baseSuite.MinGatewayApiVersion = map[base.GatewayApiChannel]*base.GwApiVersion{
+		base.GwApiChannelExperimental: &base.GwApiAny, // TCPRoute is experimental only
+	}
 	return &testingSuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: baseSuite,
 	}
 }
 
@@ -37,11 +42,7 @@ var (
 	setup = base.TestCase{}
 
 	testCases = map[string]*base.TestCase{
-		"TestConfigureTCPRouteBackingDestinations": {
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
-		},
+		"TestConfigureTCPRouteBackingDestinations": {},
 	}
 )
 

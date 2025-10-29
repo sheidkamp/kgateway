@@ -45,7 +45,6 @@ var (
 			Namespace: "default",
 		},
 	}
-
 	nginxMeta = metav1.ObjectMeta{
 		Name:      "nginx",
 		Namespace: "default",
@@ -61,13 +60,12 @@ var (
 	baseSetupManifests = []string{
 		filepath.Join(fsutils.MustGetThisDir(), "testdata/nginx.yaml"),
 		defaults.CurlPodManifest,
+		configMapManifest,
 	}
 
 	// test cases
 	testCases = map[string]*base.TestCase{
-		"TestBackendTLSPolicyAndStatus": {
-			Manifests: []string{configMapManifest},
-		},
+		"TestBackendTLSPolicyAndStatus": {},
 	}
 
 	suiteMinGatewayApiVersion = map[base.GatewayApiChannel]*base.GwApiVersion{
@@ -108,9 +106,6 @@ func NewAgentgatewayTestingSuite(ctx context.Context, testInst *e2e.TestInstalla
 }
 
 func (s *tsuite) TestBackendTLSPolicyAndStatus() {
-	// BaseTestingSuite has already applied setup manifests and test case manifests (configMap)
-	// All objects should already exist and be ready
-
 	tt := []struct {
 		host string
 	}{

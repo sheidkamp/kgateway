@@ -29,10 +29,10 @@ var (
 	// No testCases since we handle everything manually
 	testCases = map[string]*base.TestCase{
 		"TestConfigureHTTPRouteBackingDestinationsWithService": {},
-		// If the TCPRoute CRD is not installed, the other test tests that HTTPRoute services still work without the CRD
+		// If the TCPRoute CRD is not installed, TestConfigureHTTPRouteBackingDestinationsWithService implicitly tests that HTTPRoute services still work without the CRD
 		"TestConfigureHTTPRouteBackingDestinationsWithServiceAndWithoutTCPRoute": {
 			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_0_0, // TCPRoutes were added in experimental API v0.3.0+, though we use as lower bound of 1.0.0
+				base.GwApiChannelExperimental: &base.GwApiAny, // TCPRoutes are experimental only
 			},
 		},
 	}

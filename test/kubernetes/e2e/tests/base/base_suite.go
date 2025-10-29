@@ -53,10 +53,17 @@ func GwApiVersionMustParse(version string) GwApiVersion {
 
 // Named Gateway API version constants for easy reference
 var (
-	GwApiV1_0_0 = GwApiVersionMustParse("1.0.0") // Minimum version considered for GW API. TCPRoutes were added in experimental channel v0.3.0, and this can be used to gate them or any other pre 1.0 expierimental resource
-	GwApiV1_2_0 = GwApiVersionMustParse("1.2.0") // HTTPRoutes.spec.rules[].name was added in 1.2 experimental
-	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0") // XListenerSets and CORS filters were added in 1.3 experimental, HTTPRoutes.spec.rules[].name was added to standard in 1.3
-	GwApiV1_4_0 = GwApiVersionMustParse("1.4.0") // BackendTLSPolicy moved to standard/v1 in 1.4. alpha1v3 version is not supported
+	// "Any" version of the Gateway API. Using v0.3.0 as the start as that is when TLSRoute and TCPRoute were added to the experimental channel.
+	// This is far earlier than any version of the Gateway API that is supported by kgateway, so can be used as "any"
+	GwApiAny = GwApiVersionMustParse("0.3.0")
+	// SessionPersistence was added in 1.1.0 experimental and is not available in standard
+	GwApiV1_1_0 = GwApiVersionMustParse("1.1.0")
+	// HTTPRoutes.spec.rules[].name was added in 1.2 experimental
+	GwApiV1_2_0 = GwApiVersionMustParse("1.2.0")
+	// XListenerSets and CORS filters were added in 1.3 experimental, HTTPRoutes.spec.rules[].name was added to standard in 1.3
+	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0")
+	// BackendTLSPolicy moved to standard/v1 in 1.4. alpha1v3 version is not supported
+	GwApiV1_4_0 = GwApiVersionMustParse("1.4.0")
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.
