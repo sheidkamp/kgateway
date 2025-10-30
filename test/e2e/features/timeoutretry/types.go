@@ -16,14 +16,10 @@ const (
 )
 
 var (
-	setupManifest                = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
-	setupWithNamedRoutesManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup-with-named-routes.yaml")
+	setupManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
 
 	setup = base.TestCase{
 		Manifests: []string{setupManifest, testdefaults.CurlPodManifest, testdefaults.HttpbinManifest},
-	}
-	setupWithNamedRoutes = base.TestCase{
-		Manifests: []string{setupWithNamedRoutesManifest, testdefaults.CurlPodManifest, testdefaults.HttpbinManifest},
 	}
 
 	gatewayObjectMeta = metav1.ObjectMeta{
