@@ -88,6 +88,11 @@ func (cmd *LocalCmd) Run() *RunError {
 		fmt.Fprintf(os.Stderr, "+ %s\n", PrettyCommand(false, cmd.Args[0], cmd.Args[1:]...))
 	}
 
+	// Debug logging for race investigation
+	if os.Getenv("DEBUG_CMDUTILS_RACE") != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Starting command execution: %s (buffer addr: %p)\n", cmd.Args[0], &combinedOutput)
+	}
+
 	cmd.Stdout = io.MultiWriter(cmd.Stdout, &combinedOutput)
 	cmd.Stderr = io.MultiWriter(cmd.Stderr, &combinedOutput)
 
@@ -99,6 +104,11 @@ func (cmd *LocalCmd) Run() *RunError {
 			stackTrace: err,
 		}
 	}
+
+	if os.Getenv("DEBUG_CMDUTILS_RACE") != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Completed command execution: %s\n", cmd.Args[0])
+	}
+
 	return nil
 }
 
