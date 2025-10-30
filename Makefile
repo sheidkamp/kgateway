@@ -235,7 +235,7 @@ GOTESTSUM ?= go tool gotestsum
 .PHONY: go-test
 go-test: ## Run all tests, or only run the test package at {TEST_PKG} if it is specified
 go-test: reset-bug-report
-	$(GO_TEST_ENV) $(GOTESTSUM) --rerun-fails-abort-on-data-race --rerun-fails=$(GO_TEST_RETRIES) --format=testname --packages="$(TEST_PKG)" -- -ldflags='$(LDFLAGS)' $(if $(TEST_TAG),-tags=$(TEST_TAG)) $(GO_TEST_ARGS) $(GO_TEST_USER_ARGS)
+	$(GO_TEST_ENV) $(GOTESTSUM) --rerun-fails-abort-on-data-race --rerun-fails=$(GO_TEST_RETRIES) --packages="$(TEST_PKG)" -- -ldflags='$(LDFLAGS)' $(if $(TEST_TAG),-tags=$(TEST_TAG)) $(GO_TEST_ARGS) $(GO_TEST_USER_ARGS)
 
 # https://go.dev/blog/cover#heat-maps
 .PHONY: go-test-with-coverage
