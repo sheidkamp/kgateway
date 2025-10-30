@@ -102,6 +102,10 @@ func NewAgentgatewayTestingSuite(ctx context.Context, testInst *e2e.TestInstalla
 }
 
 func (s *tsuite) TestBackendTLSPolicyAndStatus() {
+	// Load the BackendTLSPolicy before proceeding with tests
+	err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx, client.ObjectKeyFromObject(backendTlsPolicy), backendTlsPolicy)
+	s.Require().NoError(err)
+
 	tt := []struct {
 		host string
 	}{
@@ -163,7 +167,7 @@ func (s *tsuite) TestBackendTLSPolicyAndStatus() {
 	})
 
 	// delete configmap so we can assert status updates correctly
-	err := s.TestInstallation.Actions.Kubectl().DeleteFile(s.Ctx, configMapManifest)
+	err = s.TestInstallation.Actions.Kubectl().DeleteFile(s.Ctx, configMapManifest)
 	s.Require().NoError(err)
 
 	s.assertPolicyStatus(metav1.Condition{
