@@ -94,9 +94,9 @@ jobs:
         kgateway-api-version: ${{ matrix.gateway-api-version.version }}
         kgateway-api-channel: ${{ matrix.gateway-api-version.channel }}
         cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
-        kind-version: ${{ matrix.gateway-api-version.kind }}
         kubectl-version: ${{ steps.dotenv.outputs.kubectl_version }}
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
+        kind-node-version: ${{ steps.dotenv.outputs.node_version }}
     - id: run-tests
       uses: ./.github/actions/kubernetes-e2e-tests
       with:
