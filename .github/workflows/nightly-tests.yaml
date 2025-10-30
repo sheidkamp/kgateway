@@ -76,8 +76,8 @@ jobs:
                               { version: 'v1.4.0', channel: 'standard' },
                               { version: 'v1.3.0', channel: 'experimental' },
                               { version: 'v1.3.0', channel: 'standard' },
-                              { version: 'v1.2.0', channel: 'experimental' },
-                              { version: 'v1.2.0', channel: 'standard' }]
+                              { version: 'v1.2.1', channel: 'experimental' },
+                              { version: 'v1.2.1', channel: 'standard' }]
     steps:
     - uses: actions/checkout@v4
     - name: Prep Go Runner

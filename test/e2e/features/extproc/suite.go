@@ -19,9 +19,6 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/gomega/transforms"
 )
 
-// TODO(tim): manifest mapping
-// TODO(tim): validate the GW pod is ready before running tests
-
 var _ e2e.NewSuiteFunc = NewTestingSuite
 
 // testingSuite is a suite of tests for external processing functionality
@@ -36,8 +33,7 @@ var (
 
 	testCases = map[string]*base.TestCase{
 		"TestExtProcWithGatewayTargetRef": {
-			Manifests: []string{gatewayTargetRefManifest},
-			// HTTPRoute section names were added in 1.2 experimental/1.3 standard.
+			Manifests:            []string{gatewayTargetRefManifest},
 			MinGatewayApiVersion: base.GwApiRequireRouteNames,
 		},
 		"TestExtProcWithHTTPRouteTargetRef": {
