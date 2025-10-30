@@ -33,14 +33,18 @@ var (
 		"TestSimpleTlsWithIstioAndBcp": {
 			Manifests: []string{nginxBcpSimpleTlsManifest},
 		},
-		"TestCustomMtlsWithIstioAndBcp": {
+		// BackendTLSPolicy moved from experimental to standard in Gateway API 1.4
+		// The kgateway application does not support the v1alpha3 API version, so we only run these tests on 1.4+
+		"TestCustomMtlsWithIstioAndBcp": (&base.TestCase{
 			Manifests: []string{nginxBcpMtlsManifest},
-		},
+		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+
+			base.GwApiChannelExperimental: &base.GwApiV1_4_0,
+			base.GwApiChannelStandard:     &base.GwApiV1_4_0,
+		}),
 		"TestSimpleTlsWithIstioAndBtp": (&base.TestCase{
 			Manifests: []string{nginxBtpSimpleTlsManifest},
 		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
-			// BackendTLSPolicy moved from experimental to standard in Gateway API 1.4
-			// The kgateway application does not support the v1alpha3 API version, so we only run this test on 1.4+
 			base.GwApiChannelExperimental: &base.GwApiV1_4_0,
 			base.GwApiChannelStandard:     &base.GwApiV1_4_0,
 		}),
