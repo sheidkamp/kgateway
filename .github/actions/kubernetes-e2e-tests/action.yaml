@@ -9,6 +9,9 @@ inputs:
   test-args:
     required: true
     description: The list of arguments passed to the test invocation
+  gotestsum-args:
+      required: false
+      description: The list of arguments passed to the gotestsum invocation
   run-regex:
     required: true
     # In the future, it would be preferable to accept this as a list of strings
@@ -27,6 +30,7 @@ runs:
   - name: Execute tests
     env:
       GO_TEST_USER_ARGS: ${{ inputs.test-args }} -run "${{ inputs.run-regex }}" -v
+      GOTESTSUM_ARGS: ${{ inputs.gotestsum-args }}
       CLUSTER_NAME: ${{ inputs.cluster-name }}
       ISTIO_VERSION: ${{ inputs.istio-version }}
     shell: bash
