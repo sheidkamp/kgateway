@@ -37,11 +37,7 @@ var (
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	return &testingSuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
-			// targetRefs[].sectionName must be set when targeting Gateway resources with retry policy, and HTTPRoute section names were added in 1.2 experimental/1.3 standard.
-			base.GwApiChannelExperimental: &base.GwApiV1_2_0,
-			base.GwApiChannelStandard:     &base.GwApiV1_3_0,
-		})),
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGatewayApiVersion(base.GwApiRequireRouteNames)),
 	}
 }
 

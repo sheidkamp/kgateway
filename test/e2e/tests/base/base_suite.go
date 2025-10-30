@@ -58,12 +58,17 @@ var (
 	GwApiAny = GwApiVersionMustParse("0.3.0")
 	// SessionPersistence was added in 1.1.0 experimental and is not available in standard
 	GwApiV1_1_0 = GwApiVersionMustParse("1.1.0")
-	// HTTPRoutes.spec.rules[].name was added in 1.2 experimental
+	// HTTPRoutes.spec.rules[].name was added in 1.2 experimental (added to standard in 1.4)
 	GwApiV1_2_0 = GwApiVersionMustParse("1.2.0")
-	// XListenerSets and CORS filters were added in 1.3 experimental, HTTPRoutes.spec.rules[].name was added to standard in 1.3
+	// XListenerSets and CORS filters were added in 1.3 experimental
 	GwApiV1_3_0 = GwApiVersionMustParse("1.3.0")
-	// BackendTLSPolicy moved to standard/v1 in 1.4. alpha1v3 version is not supported
+	// BackendTLSPolicy moved to standard/v1 in 1.4. (alpha1v3 version is not supported), HTTPRoutes.spec.rules[].name was added to standard
 	GwApiV1_4_0 = GwApiVersionMustParse("1.4.0")
+
+	GwApiRequireRouteNames = map[GatewayApiChannel]*GwApiVersion{
+		GwApiChannelExperimental: &GwApiV1_2_0,
+		GwApiChannelStandard:     &GwApiV1_4_0,
+	}
 )
 
 // TestCase defines the manifests and resources used by a test or test suite.

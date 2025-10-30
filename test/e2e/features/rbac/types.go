@@ -46,11 +46,8 @@ var (
 	// Individual test cases - test-specific manifests and resources
 	testCases = map[string]*base.TestCase{
 		"TestRBACHeaderAuthorizationWithRouteLevelRBAC": {
-			Manifests: []string{rbacManifestWithSections},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_2_0, // HTTPRoutes.spec.rules[].name was added in 1.2 experimental
-				base.GwApiChannelStandard:     &base.GwApiV1_3_0, // HTTPRoutes.spec.rules[].name was added to standard in 1.3
-			},
+			Manifests:            []string{rbacManifestWithSections},
+			MinGatewayApiVersion: base.GwApiRequireRouteNames,
 		},
 		"TestRBACHeaderAuthorization": {
 			Manifests: []string{rbacManifest},

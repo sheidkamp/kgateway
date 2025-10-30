@@ -38,10 +38,7 @@ var (
 		"TestExtProcWithGatewayTargetRef": {
 			Manifests: []string{gatewayTargetRefManifest},
 			// HTTPRoute section names were added in 1.2 experimental/1.3 standard.
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_2_0,
-				base.GwApiChannelStandard:     &base.GwApiV1_3_0,
-			},
+			MinGatewayApiVersion: base.GwApiRequireRouteNames,
 		},
 		"TestExtProcWithHTTPRouteTargetRef": {
 			Manifests: []string{httpRouteTargetRefManifest},
