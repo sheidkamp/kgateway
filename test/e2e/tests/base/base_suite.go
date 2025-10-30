@@ -125,7 +125,7 @@ type BaseTestingSuite struct {
 	// gwApiChannel stores the detected Gateway API channel (detected once and cached)
 	gwApiChannel GatewayApiChannel
 
-	// minGatewayApiVersion specifies the minimum Gateway API version required for this entire suite.
+	// MinGatewayApiVersion specifies the minimum Gateway API version required for this entire suite.
 	// This is needed on the suite level, because individual tests are skipped after the suite is setup, and the suite setup may apply manifests that are not compatible with the current Gateway API version.
 	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the minimum version.
 	// If the map is empty/nil, the suite runs on any channel/version.
@@ -134,7 +134,7 @@ type BaseTestingSuite struct {
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
 	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
-	minGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+	MinGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
 
 	// setupByVersion allows defining different setup configurations for different GW API versions and channels.
 	// The outer map key is the channel (standard or experimental).
@@ -162,7 +162,7 @@ type SuiteOption func(*BaseTestingSuite)
 // WithMinGatewayApiVersion sets the minimum Gateway API version requirements for the suite
 func WithMinGatewayApiVersion(minVersions map[GatewayApiChannel]*GwApiVersion) SuiteOption {
 	return func(s *BaseTestingSuite) {
-		s.minGatewayApiVersion = minVersions
+		s.MinGatewayApiVersion = minVersions
 	}
 }
 
@@ -292,7 +292,7 @@ func (s *BaseTestingSuite) SetupSuite() {
 	// Check suite-level version requirements before proceeding
 	if s.skipSuiteForGwApiVersion() {
 		// There isn't a way to skip the whole suite, but still need to check here to avoid the setup of potentially incompatible resources.
-		s.T().Logf("Suite requires Gateway API %s, but current is %s/%s", s.minGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
+		s.T().Logf("Suite requires Gateway API %s, but current is %s/%s", s.MinGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
 		return
 	}
 
@@ -324,8 +324,9 @@ func (s *BaseTestingSuite) BeforeTest(suiteName, testName string) {
 	}
 
 	// Check version requirements before applying manifests
-	if skipReason := s.shouldSkipTest(testCase); skipReason != "" {
-		s.T().Skip(skipReason)
+	if shouldSkip := s.shouldSkipTest(testCase); shouldSkip {
+		s.T().Skipf("Test requires Gateway API %s, but current is %s/%s",
+			testCase.MinGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
 		return
 	}
 
@@ -341,8 +342,7 @@ func (s *BaseTestingSuite) AfterTest(suiteName, testName string) {
 
 	// Check if the test was skipped due to version requirements
 	// If so, don't try to delete resources that were never applied
-	if skipReason := s.shouldSkipTest(testCase); skipReason != "" || s.skipSuiteForGwApiVersion() {
-		s.T().Skip(skipReason)
+	if s.shouldSkipTest(testCase) {
 		return
 	}
 
@@ -595,9 +595,9 @@ func (s *BaseTestingSuite) getCurrentGatewayApiVersion() GwApiVersion {
 
 // shouldSkipTest determines if a test should be skipped based on channel/version requirements.
 // This is the inverse of requirementsMatch - we skip if requirements are NOT met.
-func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) string {
+func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 	if len(testCase.MinGatewayApiVersion) == 0 && len(testCase.MaxGatewayApiVersion) == 0 {
-		return "" // No requirements = run on any channel/version
+		return false // No requirements = run on any channel/version
 	}
 
 	currentVersion := s.getCurrentGatewayApiVersion()
@@ -608,16 +608,12 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) string {
 	}
 
 	// Use checkCompatibleWithApiVersion and invert the result
-	compatible := s.checkCompatibleWithApiVersion(testCase.MinGatewayApiVersion, testCase.MaxGatewayApiVersion, currentChannel, currentVersion)
-	if !compatible {
-		return fmt.Sprintf("test requires Gateway API %s, but current is %s/%s", testCase.MinGatewayApiVersion, currentChannel, currentVersion)
-	}
-	return ""
+	return !s.checkCompatibleWithApiVersion(testCase.MinGatewayApiVersion, testCase.MaxGatewayApiVersion, currentChannel, currentVersion)
 }
 
 // skipSuiteForGwApiVersion determines if the entire suite should be skipped based on suite-level minimum version requirements.
 func (s *BaseTestingSuite) skipSuiteForGwApiVersion() bool {
-	if len(s.minGatewayApiVersion) == 0 {
+	if len(s.MinGatewayApiVersion) == 0 {
 		return false // No requirements = run on any channel/version
 	}
 
@@ -629,5 +625,5 @@ func (s *BaseTestingSuite) skipSuiteForGwApiVersion() bool {
 	}
 
 	// Use checkCompatibleWithApiVersion with empty max requirements (only check min)
-	return !s.checkCompatibleWithApiVersion(s.minGatewayApiVersion, nil, currentChannel, currentVersion)
+	return !s.checkCompatibleWithApiVersion(s.MinGatewayApiVersion, nil, currentChannel, currentVersion)
 }
