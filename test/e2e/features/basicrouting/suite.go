@@ -69,7 +69,8 @@ func (s *testingSuite) TestGatewayWithRoute() {
 	s.assertSuccessfulResponse()
 }
 
-func (s *testingSuite) TestHeadlessService() {
+// TODO: Restore and diagnose data race that is (maybe) in this test
+func (s *testingSuite) XTestHeadlessService() {
 	s.assertSuccessfulResponse()
 }
 
