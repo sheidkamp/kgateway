@@ -37,10 +37,11 @@ var (
 		"TestAgentgatewayHTTPRoute": {
 			Manifests: []string{defaults.HttpbinManifest, defaults.CurlPodManifest, httpRouteManifest},
 		},
-		"TestAgentgatewayTCPRoute": (&base.TestCase{
+		"TestAgentgatewayTCPRoute": {
 			Manifests: []string{defaults.CurlPodManifest, tcpRouteManifest},
-		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
-			base.GwApiChannelExperimental: &base.GwApiAny, // TCPRoutes are experimental only
-		}),
+			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiAny, // TCPRoutes are experimental only
+			},
+		},
 	}
 )

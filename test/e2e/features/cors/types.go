@@ -50,11 +50,12 @@ var (
 		"TestHttpRouteCorsInRouteRules": {
 			Manifests: []string{httpRoutesManifest, corsHttpRoutesManifest},
 		},
-		"TestHttpRouteAndTrafficPolicyCors": (&base.TestCase{
+		"TestHttpRouteAndTrafficPolicyCors": {
 			Manifests: []string{httpRoutesManifest, corsHttpRoutesManifest, gwCorsTrafficPolicyManifest},
-		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
-			// CORS filters added to experimental channel in 1.3
-			base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-		}),
+			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+				// CORS filters added to experimental channel in 1.3
+				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+			},
+		},
 	}
 )

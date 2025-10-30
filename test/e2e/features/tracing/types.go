@@ -36,12 +36,13 @@ var (
 		"TestOTelTracing": {
 			Manifests: []string{otelCollectorManifest, policyManifest},
 		},
-		"TestOTelTracingSecure": (&base.TestCase{
+		"TestOTelTracingSecure": {
 			Manifests: []string{otelCollectorSecureManifest, policyManifest},
-		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
 			// BackendTLSPolicy moved from experimental to standard in Gateway API 1.4, and the alpha1v3 version is not supported
-			base.GwApiChannelStandard:     &base.GwApiV1_4_0,
-			base.GwApiChannelExperimental: &base.GwApiV1_4_0,
-		}),
+			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
+				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
+			},
+		},
 	}
 )

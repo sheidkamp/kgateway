@@ -35,19 +35,20 @@ var (
 		},
 		// BackendTLSPolicy moved from experimental to standard in Gateway API 1.4
 		// The kgateway application does not support the v1alpha3 API version, so we only run these tests on 1.4+
-		"TestCustomMtlsWithIstioAndBcp": (&base.TestCase{
+		"TestCustomMtlsWithIstioAndBcp": {
 			Manifests: []string{nginxBcpMtlsManifest},
-		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
-
-			base.GwApiChannelExperimental: &base.GwApiV1_4_0,
-			base.GwApiChannelStandard:     &base.GwApiV1_4_0,
-		}),
-		"TestSimpleTlsWithIstioAndBtp": (&base.TestCase{
+			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
+				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
+			},
+		},
+		"TestSimpleTlsWithIstioAndBtp": {
 			Manifests: []string{nginxBtpSimpleTlsManifest},
-		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
-			base.GwApiChannelExperimental: &base.GwApiV1_4_0,
-			base.GwApiChannelStandard:     &base.GwApiV1_4_0,
-		}),
+			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
+				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
+			},
+		},
 	}
 )
 

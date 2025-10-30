@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -83,7 +82,7 @@ type TestCase struct {
 	// contained in this test case's manifests.
 	dynamicResources []client.Object
 
-	// minGatewayApiVersion specifies the minimum Gateway API version required per channel.
+	// MinGatewayApiVersion specifies the minimum Gateway API version required per channel.
 	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the minimum version.
 	// If the map is empty/nil, the test runs on any channel/version.
 	// The test will only run if the Gateway API version is >= the specified minimum version.
@@ -91,32 +90,15 @@ type TestCase struct {
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
 	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
-	minGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+	MinGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
 
-	// maxGatewayApiVersion specifies the maximum Gateway API version required per channel.
+	// MaxGatewayApiVersion specifies the maximum Gateway API version required per channel.
 	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the maximum version.
 	// If the map is empty/nil, the test runs on any channel/version.
 	// The test will only run if the Gateway API version is < the specified maximum version.
 	// Maximum constraints are channel-specific - experimental constraints don't affect standard channel execution.
 	// If the maximum version is less than the minimum version, the test will be skipped.
-	maxGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
-
-	// versionMutex is used to synchronize access to the version variables. Otherwise we get race conditions.
-	versionMutex sync.RWMutex
-}
-
-func (t *TestCase) WithMinGatewayApiVersion(minVersions map[GatewayApiChannel]*GwApiVersion) *TestCase {
-	t.versionMutex.Lock()
-	defer t.versionMutex.Unlock()
-	t.minGatewayApiVersion = minVersions
-	return t
-}
-
-func (t *TestCase) WithMaxGatewayApiVersion(maxVersions map[GatewayApiChannel]*GwApiVersion) *TestCase {
-	t.versionMutex.Lock()
-	defer t.versionMutex.Unlock()
-	t.maxGatewayApiVersion = maxVersions
-	return t
+	MaxGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
 }
 
 type BaseTestingSuite struct {
@@ -612,11 +594,9 @@ func (s *BaseTestingSuite) getCurrentGatewayApiVersion() GwApiVersion {
 }
 
 // shouldSkipTest determines if a test should be skipped based on channel/version requirements.
-// return the skip message to avoid having to lock the versionMutex again
+// This is the inverse of requirementsMatch - we skip if requirements are NOT met.
 func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) string {
-	testCase.versionMutex.RLock()
-	defer testCase.versionMutex.RUnlock()
-	if len(testCase.minGatewayApiVersion) == 0 && len(testCase.maxGatewayApiVersion) == 0 {
+	if len(testCase.MinGatewayApiVersion) == 0 && len(testCase.MaxGatewayApiVersion) == 0 {
 		return "" // No requirements = run on any channel/version
 	}
 
@@ -628,9 +608,9 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) string {
 	}
 
 	// Use checkCompatibleWithApiVersion and invert the result
-	compatible := s.checkCompatibleWithApiVersion(testCase.minGatewayApiVersion, testCase.maxGatewayApiVersion, currentChannel, currentVersion)
+	compatible := s.checkCompatibleWithApiVersion(testCase.MinGatewayApiVersion, testCase.MaxGatewayApiVersion, currentChannel, currentVersion)
 	if !compatible {
-		return fmt.Sprintf("test requires Gateway API %s, but current is %s/%s", testCase.minGatewayApiVersion, currentChannel, currentVersion)
+		return fmt.Sprintf("test requires Gateway API %s, but current is %s/%s", testCase.MinGatewayApiVersion, currentChannel, currentVersion)
 	}
 	return ""
 }
