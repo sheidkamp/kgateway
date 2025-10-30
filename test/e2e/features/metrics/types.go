@@ -39,15 +39,13 @@ var (
 
 	// We only want to run one version of the metrics test because they will interfere with each other.
 	testCases = map[string]*base.TestCase{
-		"TestMetrics": {
-			MaxGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
-		},
-		"TestMetricsWithListenerSets": {
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
-		},
+		"TestMetrics": (&base.TestCase{
+		}).WithMaxGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+			base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+		}),
+		"TestMetricsWithListenerSets": (&base.TestCase{
+		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+			base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+		}),
 	}
 )

@@ -51,22 +51,20 @@ var (
 				headerModifiersRouteTrafficPolicyManifest,
 			},
 		},
-		"TestMultiLevelHeaderModifiersWithListenerSet": {
+		"TestMultiLevelHeaderModifiersWithListenerSet": (&base.TestCase{
 			Manifests: []string{
 				headerModifiersGwTrafficPolicyManifest,
 				headerModifiersLsTrafficPolicyManifest,
 				headerModifiersRouteTrafficPolicyManifest,
 				headerModifiersRouteListenerSetTrafficPolicyManifest,
 			},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
-		},
-		"TestListenerSetLevelHeaderModifiers": {
+		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+			base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+		}),
+		"TestListenerSetLevelHeaderModifiers": (&base.TestCase{
 			Manifests: []string{headerModifiersLsTrafficPolicyManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
-		},
+		}).WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+			base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+		}),
 	}
 )

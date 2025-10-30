@@ -82,7 +82,7 @@ type TestCase struct {
 	// contained in this test case's manifests.
 	dynamicResources []client.Object
 
-	// MinGatewayApiVersion specifies the minimum Gateway API version required per channel.
+	// minGatewayApiVersion specifies the minimum Gateway API version required per channel.
 	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the minimum version.
 	// If the map is empty/nil, the test runs on any channel/version.
 	// The test will only run if the Gateway API version is >= the specified minimum version.
@@ -90,15 +90,25 @@ type TestCase struct {
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
 	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
-	MinGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+	minGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
 
-	// MaxGatewayApiVersion specifies the maximum Gateway API version required per channel.
+	// maxGatewayApiVersion specifies the maximum Gateway API version required per channel.
 	// Map key is the channel (GatewayApiChannelStandard or GatewayApiChannelExperimental), value is the maximum version.
 	// If the map is empty/nil, the test runs on any channel/version.
 	// The test will only run if the Gateway API version is < the specified maximum version.
 	// Maximum constraints are channel-specific - experimental constraints don't affect standard channel execution.
 	// If the maximum version is less than the minimum version, the test will be skipped.
-	MaxGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+	maxGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+}
+
+func (t *TestCase) WithMinGatewayApiVersion(minVersions map[GatewayApiChannel]*GwApiVersion) *TestCase {
+	t.minGatewayApiVersion = minVersions
+	return t
+}
+
+func (t *TestCase) WithMaxGatewayApiVersion(maxVersions map[GatewayApiChannel]*GwApiVersion) *TestCase {
+	t.maxGatewayApiVersion = maxVersions
+	return t
 }
 
 type BaseTestingSuite struct {
@@ -321,7 +331,7 @@ func (s *BaseTestingSuite) BeforeTest(suiteName, testName string) {
 	// Check version requirements before applying manifests
 	if shouldSkip := s.shouldSkipTest(testCase); shouldSkip {
 		s.T().Skipf("Test requires Gateway API %s, but current is %s/%s",
-			testCase.MinGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
+			testCase.minGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
 		return
 	}
 
@@ -591,7 +601,7 @@ func (s *BaseTestingSuite) getCurrentGatewayApiVersion() GwApiVersion {
 // shouldSkipTest determines if a test should be skipped based on channel/version requirements.
 // This is the inverse of requirementsMatch - we skip if requirements are NOT met.
 func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
-	if len(testCase.MinGatewayApiVersion) == 0 && len(testCase.MaxGatewayApiVersion) == 0 {
+	if len(testCase.minGatewayApiVersion) == 0 && len(testCase.maxGatewayApiVersion) == 0 {
 		return false // No requirements = run on any channel/version
 	}
 
@@ -603,7 +613,7 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 	}
 
 	// Use checkCompatibleWithApiVersion and invert the result
-	return !s.checkCompatibleWithApiVersion(testCase.MinGatewayApiVersion, testCase.MaxGatewayApiVersion, currentChannel, currentVersion)
+	return !s.checkCompatibleWithApiVersion(testCase.minGatewayApiVersion, testCase.maxGatewayApiVersion, currentChannel, currentVersion)
 }
 
 // suiteRunsOnGwApiVersion determines if the entire suite should be skipped based on suite-level minimum version requirements.
