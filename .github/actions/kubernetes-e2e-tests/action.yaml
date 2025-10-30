@@ -10,8 +10,8 @@ inputs:
     required: true
     description: The list of arguments passed to the test invocation
   gotestsum-args:
-      required: false
-      description: The list of arguments passed to the gotestsum invocation
+    required: false
+    description: The list of arguments passed to the gotestsum invocation
   run-regex:
     required: true
     # In the future, it would be preferable to accept this as a list of strings
