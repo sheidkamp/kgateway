@@ -33,8 +33,8 @@ var (
 
 	testCases = map[string]*base.TestCase{
 		"TestExtProcWithGatewayTargetRef": {
-			Manifests:            []string{gatewayTargetRefManifest},
-			MinGatewayApiVersion: base.GwApiRequireRouteNames,
+			Manifests:       []string{gatewayTargetRefManifest},
+			MinGwApiVersion: base.GwApiRequireRouteNames,
 		},
 		"TestExtProcWithHTTPRouteTargetRef": {
 			Manifests: []string{httpRouteTargetRefManifest},

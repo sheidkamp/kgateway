@@ -28,12 +28,12 @@ type testingSuite struct {
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	return &testingSuite{
 		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases,
-			base.WithSetupByVersion(map[base.GatewayApiChannel]map[base.GwApiVersion]*base.TestCase{
+			base.WithSetupByVersion(map[base.GwApiChannel]map[base.GwApiVersion]*base.TestCase{
 				base.GwApiChannelExperimental: {
 					base.GwApiV1_3_0: &setupWithListenerSets, // ListenerSet available in experimental >= 1.3
 				},
 			}),
-			base.WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+			base.WithMinGwApiVersion(map[base.GwApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
 			}),
 		),

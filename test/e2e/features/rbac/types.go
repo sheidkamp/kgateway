@@ -46,8 +46,8 @@ var (
 	// Individual test cases - test-specific manifests and resources
 	testCases = map[string]*base.TestCase{
 		"TestRBACHeaderAuthorizationWithRouteLevelRBAC": {
-			Manifests:            []string{rbacManifestWithSections},
-			MinGatewayApiVersion: base.GwApiRequireRouteNames,
+			Manifests:       []string{rbacManifestWithSections},
+			MinGwApiVersion: base.GwApiRequireRouteNames,
 		},
 		"TestRBACHeaderAuthorization": {
 			Manifests: []string{rbacManifest},

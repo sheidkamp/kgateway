@@ -31,7 +31,7 @@ var (
 		"TestConfigureHTTPRouteBackingDestinationsWithService": {},
 		// If the TCPRoute CRD is not installed, TestConfigureHTTPRouteBackingDestinationsWithService implicitly tests that HTTPRoute services still work without the CRD
 		"TestConfigureHTTPRouteBackingDestinationsWithServiceAndWithoutTCPRoute": {
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiAny, // TCPRoutes are experimental only
 			},
 		},

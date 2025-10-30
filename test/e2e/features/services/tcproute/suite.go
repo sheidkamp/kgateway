@@ -31,7 +31,7 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 
 	return &testingSuite{
 		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases,
-			base.WithMinGatewayApiVersion(map[base.GatewayApiChannel]*base.GwApiVersion{
+			base.WithMinGwApiVersion(map[base.GwApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiAny, // TCPRoute is experimental only
 			}),
 		),

@@ -37,14 +37,14 @@ var (
 		// The kgateway application does not support the v1alpha3 API version, so we only run these tests on 1.4+
 		"TestCustomMtlsWithIstioAndBcp": {
 			Manifests: []string{nginxBcpMtlsManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
 				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
 			},
 		},
 		"TestSimpleTlsWithIstioAndBtp": {
 			Manifests: []string{nginxBtpSimpleTlsManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
 				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
 			},

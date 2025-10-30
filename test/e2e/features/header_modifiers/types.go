@@ -58,13 +58,13 @@ var (
 				headerModifiersRouteTrafficPolicyManifest,
 				headerModifiersRouteListenerSetTrafficPolicyManifest,
 			},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
 			},
 		},
 		"TestListenerSetLevelHeaderModifiers": {
 			Manifests: []string{headerModifiersLsTrafficPolicyManifest},
-			MinGatewayApiVersion: map[base.GatewayApiChannel]*base.GwApiVersion{
+			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
 				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
 			},
 		},
