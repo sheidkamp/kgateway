@@ -110,7 +110,7 @@ jobs:
       uses: ./.github/actions/kubernetes-e2e-tests
       with:
         cluster-name: ${{ matrix.test.cluster-name }}
-        test-args: ${{ matrix.test.go-test-args }}
+        test-args: ${{ matrix.test.go-test-args }} --format=testname
         run-regex: ${{ matrix.test.go-test-run-regex }}
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         matrix-label: "pr"
