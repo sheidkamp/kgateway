@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -99,14 +100,21 @@ type TestCase struct {
 	// Maximum constraints are channel-specific - experimental constraints don't affect standard channel execution.
 	// If the maximum version is less than the minimum version, the test will be skipped.
 	maxGatewayApiVersion map[GatewayApiChannel]*GwApiVersion
+
+	// versionMutex is used to synchronize access to the version variables. Otherwise we get race conditions.
+	versionMutex sync.RWMutex
 }
 
 func (t *TestCase) WithMinGatewayApiVersion(minVersions map[GatewayApiChannel]*GwApiVersion) *TestCase {
+	t.versionMutex.Lock()
+	defer t.versionMutex.Unlock()
 	t.minGatewayApiVersion = minVersions
 	return t
 }
 
 func (t *TestCase) WithMaxGatewayApiVersion(maxVersions map[GatewayApiChannel]*GwApiVersion) *TestCase {
+	t.versionMutex.Lock()
+	defer t.versionMutex.Unlock()
 	t.maxGatewayApiVersion = maxVersions
 	return t
 }
@@ -329,9 +337,8 @@ func (s *BaseTestingSuite) BeforeTest(suiteName, testName string) {
 	}
 
 	// Check version requirements before applying manifests
-	if shouldSkip := s.shouldSkipTest(testCase); shouldSkip {
-		s.T().Skipf("Test requires Gateway API %s, but current is %s/%s",
-			testCase.minGatewayApiVersion, s.getCurrentGatewayApiChannel(), s.getCurrentGatewayApiVersion())
+	if skipReason := s.shouldSkipTest(testCase); skipReason != "" {
+		s.T().Skipf(skipReason)
 		return
 	}
 
@@ -347,7 +354,7 @@ func (s *BaseTestingSuite) AfterTest(suiteName, testName string) {
 
 	// Check if the test was skipped due to version requirements
 	// If so, don't try to delete resources that were never applied
-	if shouldSkip := s.shouldSkipTest(testCase); shouldSkip {
+	if skipReason := s.shouldSkipTest(testCase); skipReason == "" {
 		return
 	}
 
@@ -599,10 +606,12 @@ func (s *BaseTestingSuite) getCurrentGatewayApiVersion() GwApiVersion {
 }
 
 // shouldSkipTest determines if a test should be skipped based on channel/version requirements.
-// This is the inverse of requirementsMatch - we skip if requirements are NOT met.
-func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
+// return the skip message to avoid having to lock the versionMutex again
+func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) string {
+	testCase.versionMutex.RLock()
+	defer testCase.versionMutex.RUnlock()
 	if len(testCase.minGatewayApiVersion) == 0 && len(testCase.maxGatewayApiVersion) == 0 {
-		return false // No requirements = run on any channel/version
+		return "" // No requirements = run on any channel/version
 	}
 
 	currentVersion := s.getCurrentGatewayApiVersion()
@@ -613,7 +622,11 @@ func (s *BaseTestingSuite) shouldSkipTest(testCase *TestCase) bool {
 	}
 
 	// Use checkCompatibleWithApiVersion and invert the result
-	return !s.checkCompatibleWithApiVersion(testCase.minGatewayApiVersion, testCase.maxGatewayApiVersion, currentChannel, currentVersion)
+	compatible := s.checkCompatibleWithApiVersion(testCase.minGatewayApiVersion, testCase.maxGatewayApiVersion, currentChannel, currentVersion)
+	if !compatible {
+		return fmt.Sprintf("test requires Gateway API %s, but current is %s/%s", testCase.minGatewayApiVersion, currentChannel, currentVersion)
+	}
+	return ""
 }
 
 // suiteRunsOnGwApiVersion determines if the entire suite should be skipped based on suite-level minimum version requirements.
