@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -291,8 +290,8 @@ func (s *BaseTestingSuite) selectSetup() *TestCase {
 }
 
 func (s *BaseTestingSuite) SetupSuite() {
-	// set up the helpers once and store them on the suite
-	s.setupHelpers()
+	// Detect and cache Gateway API version and channel once
+	s.detectAndCacheGwApiInfo()
 
 	// Check suite-level version requirements before proceeding
 	if s.skipSuite() {
@@ -300,6 +299,9 @@ func (s *BaseTestingSuite) SetupSuite() {
 		s.T().Logf("Suite requires Gateway API %s, but current is %s/%s", s.MinGwApiVersion, s.getCurrentGwApiChannel(), s.getCurrentGwApiVersion())
 		return
 	}
+
+	// set up the helpers once and store them on the suite
+	s.setupHelpers()
 
 	// Select the appropriate setup based on Gateway API version
 	s.selectedSetup = s.selectSetup()
@@ -466,9 +468,6 @@ func (s *BaseTestingSuite) setupHelpers() {
 	var err error
 	s.gvkToStructuralSchema, err = testutils.GetStructuralSchemas(filepath.Join(testutils.GitRootDirectory(), s.CrdPath))
 	s.Require().NoError(err)
-
-	// Detect and cache Gateway API version and channel once
-	s.detectAndCacheGwApiInfo()
 }
 
 // loadManifestResources populates the `manifestResources` for the given test case, by parsing each
@@ -562,30 +561,22 @@ func (h *defaultGatewayHelper) IsSelfManaged(ctx context.Context, gw *gwv1.Gatew
 }
 
 // detectAndCacheGwApiInfo detects the Gateway API version and channel from installed CRDs
-// and caches the results. This is called once during setup.
+// and caches the results. This is called once during suite setup.
 func (s *BaseTestingSuite) detectAndCacheGwApiInfo() {
-	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
-	err := s.TestInstallation.ClusterContext.Client.List(s.Ctx, crdList)
-	s.Require().NoError(err, "failed to list CRDs to detect Gateway API version/channel")
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx, client.ObjectKey{Name: "gateways.gateway.networking.k8s.io"}, crd)
+	s.Require().NoError(err, "failed to get Gateway CRD to detect Gateway API version/channel")
 
-	for _, crd := range crdList.Items {
-		if strings.Contains(crd.Name, "gateways.gateway.networking.k8s.io") {
-			channel, hasChannel := crd.Annotations["gateway.networking.k8s.io/channel"]
-			s.Require().True(hasChannel, "Gateway CRD missing 'gateway.networking.k8s.io/channel' annotation")
-			s.gwApiChannel = GwApiChannel(channel)
+	channel, hasChannel := crd.Annotations["gateway.networking.k8s.io/channel"]
+	s.Require().True(hasChannel, "Gateway CRD missing 'gateway.networking.k8s.io/channel' annotation")
+	s.gwApiChannel = GwApiChannel(channel)
 
-			versionStr, hasVersion := crd.Annotations["gateway.networking.k8s.io/bundle-version"]
-			s.Require().True(hasVersion, "Gateway CRD missing 'gateway.networking.k8s.io/bundle-version' annotation")
+	versionStr, hasVersion := crd.Annotations["gateway.networking.k8s.io/bundle-version"]
+	s.Require().True(hasVersion, "Gateway CRD missing 'gateway.networking.k8s.io/bundle-version' annotation")
 
-			version, err := semver.NewVersion(versionStr)
-			s.Require().NoError(err, "failed to parse Gateway API version '%s'", versionStr)
-			s.gwApiVersion = version
-
-			return
-		}
-	}
-
-	s.Require().FailNow("Gateway CRD 'gateways.gateway.networking.k8s.io' not found in cluster")
+	version, err := semver.NewVersion(versionStr)
+	s.Require().NoError(err, "failed to parse Gateway API version '%s'", versionStr)
+	s.gwApiVersion = version
 }
 
 // getCurrentGwApiChannel returns the cached Gateway API channel
