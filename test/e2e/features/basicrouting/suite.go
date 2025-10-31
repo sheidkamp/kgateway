@@ -42,7 +42,7 @@ var (
 		},
 	}
 	testCases = map[string]*base.TestCase{
-		"TestGatewayWithRoute": {
+		"TestXGatewayWithRoute": {
 			Manifests: []string{serviceManifest},
 		},
 		"TestHeadlessService": {
@@ -65,7 +65,8 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	}
 }
 
-func (s *testingSuite) TestGatewayWithRoute() {
+// TODO (sheidkamp) updating ordering for debugging, revert
+func (s *testingSuite) TestXGatewayWithRoute() {
 	s.assertSuccessfulResponse()
 }
 
