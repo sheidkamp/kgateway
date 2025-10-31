@@ -65,7 +65,7 @@ jobs:
     - uses: ./.github/actions/kube-gateway-api-load-tests
 
   kgateway_e2e_tests_for_gateway_api_versions:
-    name: E2E Tests for Gateway API Versions
+    name: GwApi E2E
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run-e2e-tests)}}
     runs-on: ubuntu-22.04
     timeout-minutes: 120
