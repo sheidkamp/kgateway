@@ -1597,6 +1597,8 @@ github.com/solo-io/go-utils v0.27.3 h1:1LxErw8pisPAuH1Vk6FKRgnvkwgm7mHrpjZow0hvf
 github.com/solo-io/go-utils v0.27.3/go.mod h1:cwbQIYO1/BeU4aPB0Yy8WzzS77dfVTZyCVqbA4YsRSY=
 github.com/solo-io/go-utils v0.28.7-0.20251031201743-b01ed4b160ff h1:06lBkcjkEmYe16jcxaR2Yt6sXxrjvmGkXKTEaHBZ4zI=
 github.com/solo-io/go-utils v0.28.7-0.20251031201743-b01ed4b160ff/go.mod h1:xA4ARGfGXD2QRRGpFFX6AQVTn4mUklnzrS5FJ5Xcgbo=
+github.com/solo-io/go-utils v0.28.7-0.20251031202326-eebe5810cba2 h1:MOQpW/mVWbKimXfQN2D9H8TEf6m21DL0At10sL9o+4Y=
+github.com/solo-io/go-utils v0.28.7-0.20251031202326-eebe5810cba2/go.mod h1:xA4ARGfGXD2QRRGpFFX6AQVTn4mUklnzrS5FJ5Xcgbo=
 github.com/sonatard/noctx v0.4.0 h1:7MC/5Gg4SQ4lhLYR6mvOP6mQVSxCrdyiExo7atBs27o=
 github.com/sonatard/noctx v0.4.0/go.mod h1:64XdbzFb18XL4LporKXp8poqZtPKbCrqQ402CV+kJas=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=
