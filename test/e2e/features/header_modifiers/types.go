@@ -15,6 +15,8 @@ import (
 var (
 	// Manifests.
 	commonManifest                                       = filepath.Join(fsutils.MustGetThisDir(), "testdata", "common.yaml")
+	setupWithListenerSetsManifest                        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup-with-listenersets.yaml")
+	setupManifest                                        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
 	headerModifiersRouteTrafficPolicyManifest            = filepath.Join(fsutils.MustGetThisDir(), "testdata", "header-modifiers-route.yaml")
 	headerModifiersRouteListenerSetTrafficPolicyManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "header-modifiers-route-ls.yaml")
 	headerModifiersGwTrafficPolicyManifest               = filepath.Join(fsutils.MustGetThisDir(), "testdata", "header-modifiers-gw.yaml")
@@ -25,8 +27,14 @@ var (
 		Namespace: "default",
 	}
 
+	commonSetupManifests = []string{commonManifest, testdefaults.HttpbinManifest, testdefaults.CurlPodManifest}
+
 	setup = base.TestCase{
-		Manifests: []string{commonManifest, testdefaults.HttpbinManifest, testdefaults.CurlPodManifest},
+		Manifests: append([]string{setupManifest}, commonSetupManifests...),
+	}
+
+	setupWithListenerSets = base.TestCase{
+		Manifests: append([]string{setupWithListenerSetsManifest}, commonSetupManifests...),
 	}
 
 	testCases = map[string]*base.TestCase{
@@ -36,15 +44,28 @@ var (
 		"TestGatewayLevelHeaderModifiers": {
 			Manifests: []string{headerModifiersGwTrafficPolicyManifest},
 		},
-		"TestListenerSetLevelHeaderModifiers": {
-			Manifests: []string{headerModifiersLsTrafficPolicyManifest},
-		},
 		"TestMultiLevelHeaderModifiers": {
 			Manifests: []string{
 				headerModifiersGwTrafficPolicyManifest,
 				headerModifiersLsTrafficPolicyManifest,
 				headerModifiersRouteTrafficPolicyManifest,
+			},
+		},
+		"TestMultiLevelHeaderModifiersWithListenerSet": {
+			Manifests: []string{
+				headerModifiersGwTrafficPolicyManifest,
+				headerModifiersLsTrafficPolicyManifest,
+				headerModifiersRouteTrafficPolicyManifest,
 				headerModifiersRouteListenerSetTrafficPolicyManifest,
+			},
+			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
+			},
+		},
+		"TestListenerSetLevelHeaderModifiers": {
+			Manifests: []string{headerModifiersLsTrafficPolicyManifest},
+			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
+				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
 			},
 		},
 	}
