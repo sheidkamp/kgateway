@@ -78,8 +78,8 @@ jobs:
                               { version: 'v1.3.0', channel: 'standard' },
                               { version: 'v1.2.1', channel: 'experimental' },
                               { version: 'v1.2.1', channel: 'standard' }]
-        test-regex: [ {name: "kgateway", regex: "^TestKgateway$/^BasicRouting$/^TestHeadlessService$|TestKgateway$/^HttpListenerPolicy$/^TestAccessLogEmittedToStdout$|^TestKgateway$/^HTTPRouteServices$/^TestConfigureHTTPRouteBackingDestinationsWithServiceAndWithoutTCPRoute$"} ]
-                   #   {name: "agentgateway", regex: "^TestA" } ]
+        test-regex: [ {name: "kgateway", regex: "^TestKgateway$$/^BasicRouting$$/^TestHeadlessService$$/^HttpListenerPolicy$$/^TestAccessLogEmittedToStdout$$/^HTTPRouteServices$$/^TestConfigureHTTPRouteBackingDestinationsWithServiceAndWithoutTCPRoute$$"} ]
+                   #   {name: "agentgateway", regex: "^TestA" }
     steps:
     - uses: actions/checkout@v4
     - name: Prep Go Runner
