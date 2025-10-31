@@ -99,6 +99,10 @@ jobs:
         kind-node-version: ${{ steps.dotenv.outputs.node_version }}
     - id: run-tests
       uses: ./.github/actions/kubernetes-e2e-tests
+      env:
+        VERSION: '1.0.0-ci1'
+        GITHUB_TOKEN: ${{ github.token }}
+        GO_TEST_RETRIES: '2'
       with:
         cluster-name: "egw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
         test-args: '-v -timeout=120m'
