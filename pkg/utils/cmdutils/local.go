@@ -89,9 +89,8 @@ func (cmd *LocalCmd) Run() *RunError {
 	}
 
 	// Debug logging for race investigation
-	if os.Getenv("DEBUG_CMDUTILS_RACE") != "" {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Starting command execution: %s (buffer addr: %p)\n", cmd.Args[0], &combinedOutput)
-	}
+
+	fmt.Fprintf(os.Stderr, "[DEBUG] Starting command execution: %s (buffer addr: %p)\n", cmd.Args[0], &combinedOutput)
 
 	cmd.Stdout = io.MultiWriter(cmd.Stdout, &combinedOutput)
 	cmd.Stderr = io.MultiWriter(cmd.Stderr, &combinedOutput)
@@ -105,9 +104,7 @@ func (cmd *LocalCmd) Run() *RunError {
 		}
 	}
 
-	if os.Getenv("DEBUG_CMDUTILS_RACE") != "" {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Completed command execution: %s\n", cmd.Args[0])
-	}
+	fmt.Fprintf(os.Stderr, "[DEBUG] Completed command execution: %s\n", cmd.Args[0])
 
 	return nil
 }
