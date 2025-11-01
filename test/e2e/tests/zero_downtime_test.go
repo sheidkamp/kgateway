@@ -14,7 +14,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
 
-func XTestZeroDowntimeRollout(t *testing.T) {
+func TestZeroDowntimeRollout(t *testing.T) {
 	ctx := context.Background()
 	installNs, nsEnvPredefined := envutils.LookupOrDefault(testutils.InstallNamespace, "zero-downtime")
 	testInstallation := e2e.CreateTestInstallation(
