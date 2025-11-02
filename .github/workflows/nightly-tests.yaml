@@ -66,7 +66,7 @@ jobs:
 
   kgateway_e2e_tests_for_gateway_api_versions:
     name: GwApi E2E
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run-e2e-tests)}}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run-e2e-tests) || github.event.schedule == '0 5 * * *' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     strategy:
@@ -78,8 +78,6 @@ jobs:
                               { version: 'v1.3.0', channel: 'standard' },
                               { version: 'v1.2.1', channel: 'experimental' },
                               { version: 'v1.2.1', channel: 'standard' }]
-        test-regex: [ {name: "kgateway", regex: "^Test[^A]"},
-                      {name: "agentgateway", regex: "^TestA" } ]
     steps:
     - uses: actions/checkout@v4
     - name: Prep Go Runner
@@ -95,7 +93,7 @@ jobs:
       with:
         kgateway-api-version: ${{ matrix.gateway-api-version.version }}
         kgateway-api-channel: ${{ matrix.gateway-api-version.channel }}
-        cluster-name: "kgw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}-${{ matrix.test-regex.name }}"
+        cluster-name: "kgw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
         kubectl-version: ${{ steps.dotenv.outputs.kubectl_version }}
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         kind-node-version: ${{ steps.dotenv.outputs.node_version }}
@@ -106,10 +104,10 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
         GO_TEST_RETRIES: '2'
       with:
-        cluster-name: "kgw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}-${{ matrix.test-regex.name }}"
+        cluster-name: "kgw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
         test-args: '-v -timeout=120m'
-        run-regex: ${{ matrix.test-regex.regex }}
+        run-regex: "^Test"
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
-        matrix-label: "nightly-kgw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}-${{ matrix.test-regex.name }}"
+        matrix-label: "nightly"
         gosum-test-args: '--format=standard-verbose'
 

@@ -88,10 +88,6 @@ func (cmd *LocalCmd) Run() *RunError {
 		fmt.Fprintf(os.Stderr, "+ %s\n", PrettyCommand(false, cmd.Args[0], cmd.Args[1:]...))
 	}
 
-	// Debug logging for race investigation
-
-	fmt.Fprintf(os.Stderr, "[DEBUG] Starting command execution in Run(): %s (buffer addr: %p)\n", cmd.Args[0], &combinedOutput)
-
 	cmd.Stdout = io.MultiWriter(cmd.Stdout, &combinedOutput)
 	cmd.Stderr = io.MultiWriter(cmd.Stderr, &combinedOutput)
 
@@ -104,8 +100,6 @@ func (cmd *LocalCmd) Run() *RunError {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] Completed command execution in Run(): %s\n", cmd.Args[0])
-
 	return nil
 }
 
@@ -116,8 +110,6 @@ func (cmd *LocalCmd) Start() *RunError {
 		// Print to stderr to avoid interfering with stdout intended for parsing
 		fmt.Fprintf(os.Stderr, "+ %s\n", PrettyCommand(false, cmd.Args[0], cmd.Args[1:]...))
 	}
-
-	fmt.Fprintf(os.Stderr, "[DEBUG] Starting command execution in Start(): %s (buffer addr: %p)\n", cmd.Args[0], &cmd.combinedOutput)
 
 	cmd.Stdout = io.MultiWriter(cmd.Stdout, cmd.combinedOutput)
 	cmd.Stderr = io.MultiWriter(cmd.Stderr, cmd.combinedOutput)
@@ -131,14 +123,12 @@ func (cmd *LocalCmd) Start() *RunError {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] Leaving command execution in Start(): %s (buffer addr: %p)\n", cmd.Args[0], &cmd.combinedOutput)
 	return nil
 }
 
 // Wait waits for the command to finish
 // If the returned error is non-nil, it should be of type *RunError
 func (cmd *LocalCmd) Wait() *RunError {
-	fmt.Fprintf(os.Stderr, "[DEBUG] Starting execution in Wait(): %s (buffer addr: %p)\n", cmd.Args[0], &cmd.combinedOutput)
 
 	if err := cmd.Cmd.Wait(); err != nil {
 		return &RunError{
@@ -149,7 +139,6 @@ func (cmd *LocalCmd) Wait() *RunError {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] Completed execution in Wait(): %s (buffer addr: %p)\n", cmd.Args[0], &cmd.combinedOutput)
 	return nil
 }
 

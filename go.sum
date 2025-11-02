@@ -1595,6 +1595,8 @@ github.com/solo-io/go-list-licenses v0.1.4/go.mod h1:x6LSp/NrYgVXwNum7ZOiaAYTpg6
 github.com/solo-io/go-utils v0.20.2/go.mod h1:6e8K1spnMWwlnJRSNp/J84GEyJbrcK4Gm7i+ehzCi8c=
 github.com/solo-io/go-utils v0.27.3 h1:1LxErw8pisPAuH1Vk6FKRgnvkwgm7mHrpjZow0hvfnA=
 github.com/solo-io/go-utils v0.27.3/go.mod h1:cwbQIYO1/BeU4aPB0Yy8WzzS77dfVTZyCVqbA4YsRSY=
+github.com/solo-io/go-utils v0.28.7-0.20251101000126-af29aeac216d h1:mzlcRr19qpd3VvMCF6is0ITBnQXOe8+oRpJuubCEvBo=
+github.com/solo-io/go-utils v0.28.7-0.20251101000126-af29aeac216d/go.mod h1:xA4ARGfGXD2QRRGpFFX6AQVTn4mUklnzrS5FJ5Xcgbo=
 github.com/sonatard/noctx v0.4.0 h1:7MC/5Gg4SQ4lhLYR6mvOP6mQVSxCrdyiExo7atBs27o=
 github.com/sonatard/noctx v0.4.0/go.mod h1:64XdbzFb18XL4LporKXp8poqZtPKbCrqQ402CV+kJas=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=
