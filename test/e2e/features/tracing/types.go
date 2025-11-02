@@ -39,10 +39,7 @@ var (
 		"TestOTelTracingSecure": {
 			Manifests: []string{otelCollectorSecureManifest, policyManifest},
 			// BackendTLSPolicy moved from experimental to standard in Gateway API 1.4, and the alpha1v3 version is not supported
-			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
-				base.GwApiChannelStandard:     &base.GwApiV1_4_0,
-				base.GwApiChannelExperimental: &base.GwApiV1_4_0,
-			},
+			MinGwApiVersion: base.GwApiRequireBackendTLSPolicy,
 		},
 	}
 )

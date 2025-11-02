@@ -51,11 +51,8 @@ var (
 			Manifests: []string{httpRoutesManifest, corsHttpRoutesManifest},
 		},
 		"TestHttpRouteAndTrafficPolicyCors": {
-			Manifests: []string{httpRoutesManifest, corsHttpRoutesManifest, gwCorsTrafficPolicyManifest},
-			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
-				// CORS filters added to experimental channel in 1.3
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
+			Manifests:       []string{httpRoutesManifest, corsHttpRoutesManifest, gwCorsTrafficPolicyManifest},
+			MinGwApiVersion: base.GwApiRequireCorsFilters,
 		},
 	}
 )

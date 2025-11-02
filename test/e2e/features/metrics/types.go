@@ -40,14 +40,10 @@ var (
 	// We only want to run one version of the metrics test because they will interfere with each other.
 	testCases = map[string]*base.TestCase{
 		"TestMetrics": {
-			MaxGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
+			MaxGwApiVersion: base.GwApiRequireListenerSets,
 		},
 		"TestMetricsWithListenerSets": {
-			MinGwApiVersion: map[base.GwApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			},
+			MinGwApiVersion: base.GwApiRequireListenerSets,
 		},
 	}
 )

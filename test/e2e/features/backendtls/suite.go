@@ -67,12 +67,6 @@ var (
 	testCases = map[string]*base.TestCase{
 		"TestBackendTLSPolicyAndStatus": {},
 	}
-
-	suiteMinGwApiVersion = map[base.GwApiChannel]*base.GwApiVersion{
-		// BackendTLSPolicy moved to standard and experimental v1 in 1.4. BackendTLSPolicy version alpha1v3  is not supported
-		base.GwApiChannelStandard:     &base.GwApiV1_4_0,
-		base.GwApiChannelExperimental: &base.GwApiV1_4_0,
-	}
 )
 
 type tsuite struct {
@@ -85,7 +79,7 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 		Manifests: append([]string{filepath.Join(fsutils.MustGetThisDir(), "testdata/base.yaml")}, baseSetupManifests...),
 	}
 	return &tsuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGwApiVersion(suiteMinGwApiVersion)),
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGwApiVersion(base.GwApiRequireBackendTLSPolicy)),
 		agentgateway:     false,
 	}
 }
@@ -96,7 +90,7 @@ func NewAgentgatewayTestingSuite(ctx context.Context, testInst *e2e.TestInstalla
 	}
 
 	return &tsuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGwApiVersion(suiteMinGwApiVersion)),
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases, base.WithMinGwApiVersion(base.GwApiRequireBackendTLSPolicy)),
 		agentgateway:     true,
 	}
 }

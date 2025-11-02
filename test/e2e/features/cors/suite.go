@@ -27,10 +27,7 @@ type testingSuite struct {
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	return &testingSuite{
 		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases,
-			base.WithMinGwApiVersion(map[base.GwApiChannel]*base.GwApiVersion{
-				// CORS filters added to experimental channel in 1.3
-				base.GwApiChannelExperimental: &base.GwApiV1_3_0,
-			}),
+			base.WithMinGwApiVersion(base.GwApiRequireCorsFilters),
 		),
 	}
 }
