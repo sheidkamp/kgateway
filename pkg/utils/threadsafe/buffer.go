@@ -2,6 +2,7 @@ package threadsafe
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 )
 
@@ -14,6 +15,8 @@ type Buffer struct {
 // Write appends the contents of p to the buffer, growing the buffer as needed.
 // It returns the number of bytes written and is thread-safe.
 func (b *Buffer) Write(p []byte) (n int, err error) {
+	fmt.Println("Writing to threadsafe buffer")
+	defer fmt.Println("Done writing to threadsafe buffer")
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	return b.buffer.Write(p)
