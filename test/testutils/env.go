@@ -63,6 +63,10 @@ const (
 	// ClusterName is the name of the cluster used for e2e tests
 	ClusterName = "CLUSTER_NAME"
 
+	// DefaultNamespace is the default namespace to use for resources that don't specify one
+	// Typically "default" for kind/k8s clusters, may differ for OpenShift/CRC
+	DefaultNamespace = "DEFAULT_NAMESPACE"
+
 	// This can be used to override the default KubeCtx created.
 	// The default KubeCtx used is "kind-<ClusterName>"
 	KubeCtx = "KUBE_CTX"
@@ -82,6 +86,14 @@ func ShouldPersistInstall() bool {
 // ShouldSkipIstioInstall returns true if istio installation and teardown should be skipped.
 func ShouldSkipIstioInstall() bool {
 	return envutils.IsEnvTruthy(SkipIstioInstall)
+}
+
+// GetDefaultNamespace returns the default namespace to use for resources that don't specify one.
+// This namespace is assumed to already exist with the appropriate permissions for the test suite to operate.
+// This can be overridden via the DEFAULT_NAMESPACE environment variable.
+// Defaults to "default" if not set.
+func GetDefaultNamespace() string {
+	return envutils.GetOrDefault(DefaultNamespace, "default", false)
 }
 
 // ShouldFailFastAndPersist returns true if tests should skip cleanup on failure.
