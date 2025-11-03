@@ -28,10 +28,14 @@ func (b *Buffer) String() string {
 
 // Bytes returns a slice of length b.Len() holding the unread portion of the buffer.
 // The slice is valid for use only until the next buffer modification.
+// Returns a deep copy of the buffer bytes to avoid race conditions.
 func (b *Buffer) Bytes() []byte {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
-	return b.buffer.Bytes()
+	original := b.buffer.Bytes()
+	deep := make([]byte, len(original))
+	copy(deep, original)
+	return deep
 }
 
 // Len returns the number of bytes of the unread portion of the buffer.
