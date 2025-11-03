@@ -52,10 +52,8 @@ func GwApiVersionMustParse(version string) GwApiVersion {
 
 // Named Gateway API version constants for easy reference
 var (
-	// "Any" version of the Gateway API. Using v0.3.0 as the start as that is when TLSRoute and TCPRoute were added to the experimental channel.
-	// This is far earlier than any version of the Gateway API that is supported by kgateway, so can be used as "any"
-	// TODO: break tis up into "requireTlsRoute"
-	GwApiAny = GwApiVersionMustParse("0.3.0")
+	// TLSRoutes and TCPRoutes were added to experimental in 0.3.0. They are not available in standard as of 1.4.0
+	GwApiV0_3_0 = GwApiVersionMustParse("0.3.0")
 	// SessionPersistence was added in 1.1.0 experimental and is not available in standard as of 1.4.0
 	GwApiV1_1_0 = GwApiVersionMustParse("1.1.0")
 	// HTTPRoutes.spec.rules[].name was added in 1.2.0 experimental (added to standard in 1.4.0)
@@ -81,6 +79,18 @@ var (
 
 	GwApiRequireCorsFilters = map[GwApiChannel]*GwApiVersion{
 		GwApiChannelExperimental: &GwApiV1_3_0,
+	}
+
+	GwApiRequireTlsRoutes = map[GwApiChannel]*GwApiVersion{
+		GwApiChannelExperimental: &GwApiV0_3_0,
+	}
+
+	GwApiRequireTcpRoutes = map[GwApiChannel]*GwApiVersion{
+		GwApiChannelExperimental: &GwApiV0_3_0,
+	}
+
+	GwApiRequireSessionPersistence = map[GwApiChannel]*GwApiVersion{
+		GwApiChannelExperimental: &GwApiV1_1_0,
 	}
 )
 

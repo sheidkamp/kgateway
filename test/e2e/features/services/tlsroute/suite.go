@@ -37,9 +37,7 @@ var (
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	return &testingSuite{
 		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases,
-			base.WithMinGwApiVersion(map[base.GwApiChannel]*base.GwApiVersion{
-				base.GwApiChannelExperimental: &base.GwApiAny, // TLSRoute is experimental only
-			}),
+			base.WithMinGwApiVersion(base.GwApiRequireTlsRoutes),
 		),
 	}
 }
