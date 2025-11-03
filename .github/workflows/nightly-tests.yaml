@@ -108,6 +108,6 @@ jobs:
         test-args: '-v -timeout=120m'
         run-regex: "^Test"
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
-        matrix-label: "nightly"
+        matrix-label: "nightly-kgw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
         gosum-test-args: '--format=standard-verbose'
 
