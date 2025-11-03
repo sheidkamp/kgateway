@@ -360,8 +360,6 @@ func (c *Cli) Execute(ctx context.Context, args ...string) (string, string, erro
 	stderr := new(strings.Builder)
 
 	err := cmdutils.Command(ctx, "kubectl", args...).
-		// For convenience, we set the stdout and stderr to the receiver
-		// This can still be overwritten by consumers who use the commands
 		WithStdout(stdout).
 		WithStderr(stderr).Run().Cause()
 
