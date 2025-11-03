@@ -29,6 +29,8 @@ KIND="${KIND:-go tool kind}"
 HELM="${HELM:-go tool helm}"
 # If true, use localstack for lambda functions
 LOCALSTACK="${LOCALSTACK:-false}"
+# The default namespace to use for the kind cluster. Defaults to "default".
+DEFAULT_NAMESPACE="${DEFAULT_NAMESPACE:-default}"
 
 # Export the variables so they are available in the environment
 export VERSION CLUSTER_NAME
@@ -48,6 +50,9 @@ function create_kind_cluster_or_skip() {
     --image "kindest/node:$CLUSTER_NODE_VERSION" \
     --config="$SCRIPT_DIR/cluster.yaml"
   echo "Finished setting up cluster $CLUSTER_NAME"
+
+  # Set the default namespace for the kind cluster
+  kubectl config set-context --current --namespace=$DEFAULT_NAMESPACE
 
   # so that you can just build the kind image alone if needed
   if [[ $JUST_KIND == 'true' ]]; then
