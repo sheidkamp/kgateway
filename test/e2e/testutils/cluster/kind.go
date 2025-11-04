@@ -4,7 +4,6 @@ package cluster
 
 import (
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/schemes"
@@ -61,7 +60,7 @@ func MustKindContextWithScheme(clusterName string, scheme *runtime.Scheme) *Cont
 		Name:        clusterName,
 		KubeContext: kubeCtx,
 		RestConfig:  restCfg,
-		Cli:         kubectl.NewCli().WithKubeContext(kubeCtx).WithReceiver(io.Discard),
+		Cli:         kubectl.NewCli().WithKubeContext(kubeCtx).WithReceiver(os.Stdout),
 		Client:      clt,
 		Clientset:   clientset,
 	}

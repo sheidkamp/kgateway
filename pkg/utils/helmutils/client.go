@@ -3,9 +3,9 @@ package helmutils
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/cmdutils"
+	"github.com/kgateway-dev/kgateway/v2/pkg/utils/threadsafe"
 )
 
 // Client is a utility for executing `helm` commands
@@ -25,23 +25,12 @@ func NewClient() *Client {
 	}
 }
 
-// threadSafeWriter wraps an io.Writer with mutex protection for concurrent writes
-type threadSafeWriter struct {
-	w  io.Writer
-	mu sync.Mutex
-}
-
-func (tsw *threadSafeWriter) Write(p []byte) (n int, err error) {
-	tsw.mu.Lock()
-	defer tsw.mu.Unlock()
-	return tsw.w.Write(p)
-}
-
 // WithReceiver sets the io.Writer that will be used by default for the stdout and stderr
 // of cmdutils.Cmd created by the Client
-// Wrap this in a threadsafe struct to avoid data races
+// This modifies the value in place, so affects shared references to the Client and future commands run by the Client.
+// Wrap this in a threadsafe struct to avoid data races when wrapped in io.MultiWriter in cmdutils.
 func (c *Client) WithReceiver(receiver io.Writer) *Client {
-	c.receiver = &threadSafeWriter{w: receiver}
+	c.receiver = &threadsafe.ThreadSafeWriter{W: receiver}
 	return c
 }
 

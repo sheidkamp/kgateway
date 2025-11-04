@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"reflect"
 	"strings"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/threadsafe"
@@ -82,15 +81,13 @@ func (cmd *LocalCmd) WithStderr(w io.Writer) Cmd {
 // Run runs the command
 // If the returned error is non-nil, it should be of type *RunError
 func (cmd *LocalCmd) Run() *RunError {
+	// Combined output is used to capture the stdout and stderr of the command for logging
 	var combinedOutput threadsafe.Buffer
 
 	if printCommands {
 		// Print to stderr to avoid interfering with stdout intended for parsing
 		fmt.Fprintf(os.Stderr, "+ %s\n", PrettyCommand(false, cmd.Args[0], cmd.Args[1:]...))
 	}
-
-	fmt.Println("stdout is", reflect.TypeOf(cmd.Stdout))
-	fmt.Println("stderr is", reflect.TypeOf(cmd.Stderr))
 
 	cmd.Stdout = io.MultiWriter(cmd.Stdout, &combinedOutput)
 	cmd.Stderr = io.MultiWriter(cmd.Stderr, &combinedOutput)
@@ -114,9 +111,6 @@ func (cmd *LocalCmd) Start() *RunError {
 		// Print to stderr to avoid interfering with stdout intended for parsing
 		fmt.Fprintf(os.Stderr, "+ %s\n", PrettyCommand(false, cmd.Args[0], cmd.Args[1:]...))
 	}
-
-	fmt.Println("stdout is", reflect.TypeOf(cmd.Stdout))
-	fmt.Println("stderr is", reflect.TypeOf(cmd.Stderr))
 
 	cmd.Stdout = io.MultiWriter(cmd.Stdout, cmd.combinedOutput)
 	cmd.Stderr = io.MultiWriter(cmd.Stderr, cmd.combinedOutput)

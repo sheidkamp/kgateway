@@ -15,11 +15,11 @@ inputs:
   istio-version:
     required: true
     description: The version of Istio
-  kgateway-api-version:
+  gateway-api-version:
     required: false
     default: "" # If this is undefined the setup-kind script has its own default value
     description: The version of the gateway-api to use
-  kgateway-api-channel:
+  gateway-api-channel:
     required: false
     default: "" # If this is undefined the setup-kind script has its own default value
     description: The channel of the gateway-api to use
@@ -41,8 +41,8 @@ runs:
         CLUSTER_NAME: ${{ inputs.cluster-name }}
         CLUSTER_NODE_VERSION: ${{ inputs.kind-node-version }}
         ISTIO_VERSION: ${{ inputs.istio-version }}
-        CONFORMANCE_VERSION: ${{ inputs.kgateway-api-version }}
-        CONFORMANCE_CHANNEL: ${{ inputs.kgateway-api-channel }}
+        CONFORMANCE_VERSION: ${{ inputs.gateway-api-version }}
+        CONFORMANCE_CHANNEL: ${{ inputs.gateway-api-channel }}
         LOCALSTACK: ${{ inputs.localstack }}
         # AI Tests rely on metal LB
         CONFORMANCE: true

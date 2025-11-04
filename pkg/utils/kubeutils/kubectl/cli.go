@@ -54,8 +54,10 @@ type CurlResponse struct {
 
 // WithReceiver sets the io.Writer that will be used by default for the stdout and stderr
 // of cmdutils.Cmd created by the Cli
+// This modifies the value in place, so affects shared references to the Cli and future commands run by the Cli.
+// Wrap this in a threadsafe struct to avoid data races when wrapped in io.MultiWriter in cmdutils.
 func (c *Cli) WithReceiver(receiver io.Writer) *Cli {
-	c.receiver = receiver
+	c.receiver = &threadsafe.ThreadSafeWriter{W: receiver}
 	return c
 }
 
