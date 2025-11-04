@@ -100,7 +100,6 @@ func (cmd *LocalCmd) Run() *RunError {
 			stackTrace: err,
 		}
 	}
-
 	return nil
 }
 
@@ -123,7 +122,6 @@ func (cmd *LocalCmd) Start() *RunError {
 			stackTrace: err,
 		}
 	}
-
 	return nil
 }
 
@@ -139,7 +137,6 @@ func (cmd *LocalCmd) Wait() *RunError {
 			stackTrace: err,
 		}
 	}
-
 	return nil
 }
 
