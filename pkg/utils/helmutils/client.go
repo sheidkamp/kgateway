@@ -26,21 +26,33 @@ func NewClient() *Client {
 
 // WithReceiver sets the io.Writer that will be used by default for the stdout and stderr
 // of cmdutils.Cmd created by the Client
+// It returns a new Client instance with the updated receiver to avoid mutating shared instances
 func (c *Client) WithReceiver(receiver io.Writer) *Client {
-	c.receiver = receiver
-	return c
+	return &Client{
+		receiver:  receiver,
+		namespace: c.namespace,
+		helmPath:  c.helmPath,
+	}
 }
 
 // WithNamespace sets the namespace that all commands will be invoked against
+// It returns a new Client instance with the updated namespace to avoid mutating shared instances
 func (c *Client) WithNamespace(ns string) *Client {
-	c.namespace = ns
-	return c
+	return &Client{
+		receiver:  c.receiver,
+		namespace: ns,
+		helmPath:  c.helmPath,
+	}
 }
 
 // WithHelmPath sets the path to the helm executable
+// It returns a new Client instance with the updated helm path to avoid mutating shared instances
 func (c *Client) WithHelmPath(path string) *Client {
-	c.helmPath = path
-	return c
+	return &Client{
+		receiver:  c.receiver,
+		namespace: c.namespace,
+		helmPath:  path,
+	}
 }
 
 // Command returns a Cmd that executes kubectl command, including the --context if it is defined
