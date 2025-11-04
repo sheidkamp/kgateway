@@ -475,7 +475,7 @@ func (tc TestCase) Run(
 	}
 
 	for _, file := range tc.InputFiles {
-		objs, err := testutils.LoadFromFiles(file, scheme, gvkToStructuralSchema, "")
+		objs, err := testutils.LoadFromFiles(file, scheme, gvkToStructuralSchema)
 		if err != nil {
 			return ActualTestResult{}, err
 		}
