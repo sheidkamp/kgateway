@@ -46,25 +46,16 @@ func NewClient() *Client {
 
 // WithReceiver sets the io.Writer that will be used by default for the stdout and stderr
 // of cmdutils.Cmd created by the Client
-// It returns a new Client instance with the updated receiver to avoid mutating shared instances
 func (c *Client) WithReceiver(receiver io.Writer) *Client {
-	return &Client{
-		receiver:    receiver,
-		curlOptions: c.curlOptions,
-	}
+	c.receiver = receiver
+	return c
 }
 
 // WithCurlOptions sets the default set of curl.Option that will be used by default with
 // the cmdutils.Cmd created by the Client
-// It returns a new Client instance with the updated curl options to avoid mutating shared instances
 func (c *Client) WithCurlOptions(options ...curl.Option) *Client {
-	newOptions := make([]curl.Option, len(c.curlOptions)+len(options))
-	copy(newOptions, c.curlOptions)
-	copy(newOptions[len(c.curlOptions):], options)
-	return &Client{
-		receiver:    c.receiver,
-		curlOptions: newOptions,
-	}
+	c.curlOptions = append(c.curlOptions, options...)
+	return c
 }
 
 // Command returns a curl Command, using the provided curl.Option as well as the client.curlOptions

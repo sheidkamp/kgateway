@@ -3,6 +3,7 @@ package helmutils
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/cmdutils"
 )
@@ -24,35 +25,36 @@ func NewClient() *Client {
 	}
 }
 
+// threadSafeWriter wraps an io.Writer with mutex protection for concurrent writes
+type threadSafeWriter struct {
+	w  io.Writer
+	mu sync.Mutex
+}
+
+func (tsw *threadSafeWriter) Write(p []byte) (n int, err error) {
+	tsw.mu.Lock()
+	defer tsw.mu.Unlock()
+	return tsw.w.Write(p)
+}
+
 // WithReceiver sets the io.Writer that will be used by default for the stdout and stderr
 // of cmdutils.Cmd created by the Client
-// It returns a new Client instance with the updated receiver to avoid mutating shared instances
+// Wrap this in a threadsafe struct to avoid data races
 func (c *Client) WithReceiver(receiver io.Writer) *Client {
-	return &Client{
-		receiver:  receiver,
-		namespace: c.namespace,
-		helmPath:  c.helmPath,
-	}
+	c.receiver = &threadSafeWriter{w: receiver}
+	return c
 }
 
 // WithNamespace sets the namespace that all commands will be invoked against
-// It returns a new Client instance with the updated namespace to avoid mutating shared instances
 func (c *Client) WithNamespace(ns string) *Client {
-	return &Client{
-		receiver:  c.receiver,
-		namespace: ns,
-		helmPath:  c.helmPath,
-	}
+	c.namespace = ns
+	return c
 }
 
 // WithHelmPath sets the path to the helm executable
-// It returns a new Client instance with the updated helm path to avoid mutating shared instances
 func (c *Client) WithHelmPath(path string) *Client {
-	return &Client{
-		receiver:  c.receiver,
-		namespace: c.namespace,
-		helmPath:  path,
-	}
+	c.helmPath = path
+	return c
 }
 
 // Command returns a Cmd that executes kubectl command, including the --context if it is defined
