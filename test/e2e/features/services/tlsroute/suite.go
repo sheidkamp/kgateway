@@ -35,8 +35,9 @@ var (
 )
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+	tlsRouteCtx, _ := context.WithTimeout(ctx, ctxTimeout)
 	return &testingSuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases,
+		BaseTestingSuite: base.NewBaseTestingSuite(tlsRouteCtx, testInst, setup, testCases,
 			base.WithMinGwApiVersion(base.GwApiRequireTlsRoutes),
 		),
 	}

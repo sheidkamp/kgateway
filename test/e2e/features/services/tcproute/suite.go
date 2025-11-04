@@ -28,9 +28,9 @@ type testingSuite struct {
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
-
+	tcpRouteCtx, _ := context.WithTimeout(ctx, ctxTimeout)
 	return &testingSuite{
-		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases,
+		BaseTestingSuite: base.NewBaseTestingSuite(tcpRouteCtx, testInst, setup, testCases,
 			base.WithMinGwApiVersion(base.GwApiRequireTcpRoutes),
 		),
 	}

@@ -128,7 +128,6 @@ func (cmd *LocalCmd) Start() *RunError {
 // Wait waits for the command to finish
 // If the returned error is non-nil, it should be of type *RunError
 func (cmd *LocalCmd) Wait() *RunError {
-
 	if err := cmd.Cmd.Wait(); err != nil {
 		return &RunError{
 			command:    cmd.Args,
