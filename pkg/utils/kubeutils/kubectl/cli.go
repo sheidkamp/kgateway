@@ -17,6 +17,7 @@ import (
 	"github.com/avast/retry-go/v4"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/portforward"
+	"github.com/kgateway-dev/kgateway/v2/pkg/utils/threadsafe"
 )
 
 // Cli is a utility for executing `kubectl` commands
@@ -356,12 +357,12 @@ func (c *Cli) Execute(ctx context.Context, args ...string) (string, string, erro
 		}
 	}
 
-	stdout := new(strings.Builder)
-	stderr := new(strings.Builder)
+	stdout := threadsafe.Buffer{}
+	stderr := threadsafe.Buffer{}
 
 	err := cmdutils.Command(ctx, "kubectl", args...).
-		WithStdout(stdout).
-		WithStderr(stderr).Run().Cause()
+		WithStdout(&stdout).
+		WithStderr(&stderr).Run().Cause()
 
 	return stdout.String(), stderr.String(), err
 }
