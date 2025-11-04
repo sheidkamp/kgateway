@@ -54,21 +54,15 @@ type CurlResponse struct {
 
 // WithReceiver sets the io.Writer that will be used by default for the stdout and stderr
 // of cmdutils.Cmd created by the Cli
-// It returns a new Cli instance with the updated receiver to avoid mutating shared instances
 func (c *Cli) WithReceiver(receiver io.Writer) *Cli {
-	return &Cli{
-		receiver:    receiver,
-		kubeContext: c.kubeContext,
-	}
+	c.receiver = receiver
+	return c
 }
 
 // WithKubeContext sets the --context for the kubectl command invoked by the Cli
-// It returns a new Cli instance with the updated context to avoid mutating shared instances
 func (c *Cli) WithKubeContext(kubeContext string) *Cli {
-	return &Cli{
-		receiver:    c.receiver,
-		kubeContext: kubeContext,
-	}
+	c.kubeContext = kubeContext
+	return c
 }
 
 // Command returns a Cmd that executes kubectl command, including the --context if it is defined
