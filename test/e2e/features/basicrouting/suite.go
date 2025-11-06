@@ -65,7 +65,6 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	}
 }
 
-// TODO (sheidkamp) updating ordering for debugging, revert
 func (s *testingSuite) TestGatewayWithRoute() {
 	s.assertSuccessfulResponse()
 }

@@ -49,7 +49,7 @@ func NewClient() *Client {
 // This modifies the value in place, so affects shared references to the Client and future commands run by the Client.
 // Wrap this in a threadsafe struct to avoid data races when wrapped in io.MultiWriter in cmdutils.
 func (c *Client) WithReceiver(receiver io.Writer) *Client {
-	c.receiver = &threadsafe.ThreadSafeWriter{W: receiver}
+	c.receiver = &threadsafe.WriterWrapper{W: receiver}
 	return c
 }
 

@@ -5,13 +5,13 @@ import (
 	"sync"
 )
 
-// threadSafeWriter wraps an io.Writer with mutex protection for concurrent writes
-type ThreadSafeWriter struct {
+// WriterWrapper wraps an io.Writer with mutex protection for concurrent writes
+type WriterWrapper struct {
 	W  io.Writer
 	mu sync.Mutex
 }
 
-func (tsw *ThreadSafeWriter) Write(p []byte) (n int, err error) {
+func (tsw *WriterWrapper) Write(p []byte) (n int, err error) {
 	tsw.mu.Lock()
 	defer tsw.mu.Unlock()
 	return tsw.W.Write(p)
