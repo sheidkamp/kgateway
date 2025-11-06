@@ -103,10 +103,16 @@ jobs:
         VERSION: '1.0.0-ci1'
         GITHUB_TOKEN: ${{ github.token }}
         GO_TEST_RETRIES: '1' # Use a higher number of retries because there are so many tests and we don't want to rerun
-        GOTESTSUM_ARGS: '-json' # High value for "rerun-fails-max-failures" because 3 failed tests can result in gotestsum thinking there's 40+ failures
+        GOTESTSUM_ARGS: '--jsonfile=test-results.json' # High value for "rerun-fails-max-failures" because 3 failed tests can result in gotestsum thinking there's 40+ failures
       with:
         cluster-name: "kgw-api-e2e-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
         test-args: '-v -timeout=120m'
         run-regex: "^Test"
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         matrix-label: "nightly-kgw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
+    - name: Upload test results artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api.channel }}
+        path: test-results.json
+        retention-days: 1
