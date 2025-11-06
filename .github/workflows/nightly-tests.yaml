@@ -110,8 +110,8 @@ jobs:
         run-regex: "^Test"
         istio-version: ${{ steps.dotenv.outputs.istio_version }}
         matrix-label: "nightly-kgw-api-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api-version.channel }}"
-    - if: ${{ always()}}
-    - name: Upload test results artifact
+    - if: ${{ always() }}
+      name: Upload test results artifact
       uses: actions/upload-artifact@v4
       with:
         name: test-results-${{ matrix.gateway-api-version.version }}-${{ matrix.gateway-api.channel }}
