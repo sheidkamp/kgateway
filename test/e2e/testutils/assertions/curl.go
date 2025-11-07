@@ -89,7 +89,16 @@ func (p *Provider) assertCurlReturnResponse(
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
 	expectedResponse *matchers.HttpResponse,
+	g ...Gomega,
 ) *http.Response {
+	// Get the Gomega instance to use
+	var gomega Gomega
+	if len(g) > 0 && g[0] != nil {
+		gomega = g[0]
+	} else {
+		gomega = p.Gomega
+	}
+
 	// We rely on the curlPod to execute a curl, therefore we must assert that it actually exists
 	p.EventuallyObjectsExist(ctx, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,13 +116,13 @@ func (p *Provider) assertCurlReturnResponse(
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == expectedResponse.IgnoreExitCode {
 			fmt.Printf("Ignoring curl exit code %d: %v\n", expectedResponse.IgnoreExitCode, err)
 		} else {
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(HaveOccurred())
 		}
 	}
 
 	// Do the transform in a separate step instead of a WithTransform to avoid having to do it twice
 	curlHttpResponse := transforms.WithCurlResponse(curlResponse)
-	Expect(curlHttpResponse).To(matchers.HaveHttpResponse(expectedResponse))
+	gomega.Expect(curlHttpResponse).To(matchers.HaveHttpResponse(expectedResponse))
 	fmt.Printf("success: %+v", curlResponse)
 
 	return curlHttpResponse
@@ -124,8 +133,9 @@ func (p *Provider) assertCurlResponse(
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
 	expectedResponse *matchers.HttpResponse,
+	g ...Gomega,
 ) {
-	resp := p.assertCurlReturnResponse(ctx, podOpts, curlOptions, expectedResponse)
+	resp := p.assertCurlReturnResponse(ctx, podOpts, curlOptions, expectedResponse, g...)
 	resp.Body.Close()
 }
 
@@ -147,7 +157,7 @@ func (p *Provider) AssertEventuallyConsistentCurlResponse(
 	}
 
 	p.Gomega.Consistently(func(g Gomega) {
-		p.assertCurlResponse(ctx, podOpts, curlOptions, expectedResponse)
+		p.assertCurlResponse(ctx, podOpts, curlOptions, expectedResponse, g)
 	}).
 		WithTimeout(pollTimeout).
 		WithPolling(pollInterval).
