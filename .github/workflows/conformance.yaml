@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   kube_gateway_api_conformance_tests:
-    name: kubernetes gateway api conformance tests (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
+    name: k8s gw API conformance (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     if: ${{ !github.event.pull_request.draft }}
@@ -39,7 +39,7 @@ jobs:
         conformance-channel: ${{ matrix.gateway-api-version.channel }}
 
   kube_inference_extension_conformance_tests:
-    name: kubernetes gateway api inference extension conformance tests (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
+    name: k8s gw API inference extension conformance (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     if: ${{ !github.event.pull_request.draft }}
@@ -64,7 +64,7 @@ jobs:
         conformance-channel: ${{ matrix.gateway-api-version.channel }}
 
   kube_agent_gateway_conformance_tests:
-    name: kubernetes gateway api agent-gateway conformance tests (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
+    name: k8s gw API agent-gateway conformance (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     if: ${{ !github.event.pull_request.draft }}

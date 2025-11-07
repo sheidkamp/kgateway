@@ -63,6 +63,7 @@ runs:
       CLUSTER_NODE_VERSION: ${{ matrix.kube-version.node }}
       CONFORMANCE: "true"
       CONFORMANCE_VERSION: ${{ env.CONFORMANCE_VERSION }}
+      CONFORMANCE_CHANNEL: ${{ env.CONFORMANCE_CHANNEL }}
     run: ./hack/kind/setup-kind.sh
 
   - name: Install kgateway via helm
