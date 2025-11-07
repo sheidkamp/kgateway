@@ -8,16 +8,6 @@ on:
 env:
   VERSION: '1.0.0-ci1'
   GITHUB_TOKEN: ${{ github.token }} # necessary to pass upgrade tests
-  # Gateway API versions to test against
-  gateway-api-versions: |
-    [
-      { "version": "v1.4.0", "channel": "experimental" },
-      { "version": "v1.4.0", "channel": "standard" },
-      { "version": "v1.3.0", "channel": "experimental" },
-      { "version": "v1.3.0", "channel": "standard" },
-      { "version": "v1.2.1", "channel": "experimental" },
-      { "version": "v1.2.1", "channel": "standard" }
-    ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -33,7 +23,12 @@ jobs:
       fail-fast: false
       matrix:
         kube-version: [ { node: 'v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a', kubectl: 'v1.34.1', kind: 'v0.30.0' } ]
-        gateway-api-version: ${{ fromJSON(env.gateway-api-versions) }}
+        gateway-api-version: [ { version: 'v1.4.0', channel: 'experimental' },
+                              { version: 'v1.4.0', channel: 'standard' },
+                              { version: 'v1.3.0', channel: 'experimental' },
+                              { version: 'v1.3.0', channel: 'standard' },
+                              { version: 'v1.2.1', channel: 'experimental' },
+                              { version: 'v1.2.1', channel: 'standard' } ]
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
@@ -52,7 +47,12 @@ jobs:
       fail-fast: false
       matrix:
         kube-version: [ { node: 'v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a', kubectl: 'v1.34.1', kind: 'v0.30.0' } ]
-        gateway-api-version: ${{ fromJSON(env.gateway-api-versions) }}
+        gateway-api-version: [ { version: 'v1.4.0', channel: 'experimental' },
+                              { version: 'v1.4.0', channel: 'standard' },
+                              { version: 'v1.3.0', channel: 'experimental' },
+                              { version: 'v1.3.0', channel: 'standard' },
+                              { version: 'v1.2.1', channel: 'experimental' },
+                              { version: 'v1.2.1', channel: 'standard' } ]
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
@@ -74,7 +74,12 @@ jobs:
       fail-fast: false
       matrix:
         kube-version: [ { node: 'v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a', kubectl: 'v1.34.1', kind: 'v0.30.0' } ]
-        gateway-api-version: ${{ fromJSON(env.gateway-api-versions) }}
+        gateway-api-version: [ { version: 'v1.4.0', channel: 'experimental' },
+                              { version: 'v1.4.0', channel: 'standard' },
+                              { version: 'v1.3.0', channel: 'experimental' },
+                              { version: 'v1.3.0', channel: 'standard' },
+                              { version: 'v1.2.1', channel: 'experimental' },
+                              { version: 'v1.2.1', channel: 'standard' } ]
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
