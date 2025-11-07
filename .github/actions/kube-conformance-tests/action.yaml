@@ -1,18 +1,37 @@
-name: Agent Gateway Conformance Tests
-description: run kubernetes gateway api conformance tests for agent-gateway
+name: KGateway Conformance Tests
+description: Run KGateway conformance tests
 inputs:
+  test-type:
+    description: "Type of test to run: gateway-api, agent-gateway, inference-extension"
+    required: true
   api-version:
     description: "Override of the sig Gateway API to test against."
     required: false
+  conformance-channel:
+    description: "Gateway API conformance channel (experimental or standard)"
+    required: false
+  conformance-version:
+    description: "Gateway API conformance version (e.g., v1.4.0)"
+    required: false
+  additional-helm-values:
+    description: "Path to additional Helm values file"
+    required: false
+  enable-inference-extension:
+    description: "Enable inference extension (default: false)"
+    required: false
+    default: "false"
 runs:
   using: "composite"
   steps:
   - name: Prep Go Runner
     uses: ./.github/actions/prep-go-runner
+
+
   - uses: azure/setup-kubectl@v4
     id: kubectl
     with:
       version: ${{ matrix.kube-version.kubectl }}
+
   - name: Set and retrieve environment variables
     shell: bash
     run: |
@@ -26,7 +45,17 @@ runs:
         echo "VERSION=${{ matrix.version }}" >> $GITHUB_ENV
         echo "SKIP_DOCKER=true" >> $GITHUB_ENV
       fi
-      echo "CONFORMANCE_VERSION=${{ inputs.API_VERSION }}" >> $GITHUB_ENV
+
+      # Set conformance environment variables
+      if [[ -n "${{ inputs.conformance-version }}" ]]; then
+        echo "CONFORMANCE_VERSION=${{ inputs.conformance-version }}" >> $GITHUB_ENV
+      elif [[ -n "${{ inputs.api-version }}" ]]; then
+        echo "CONFORMANCE_VERSION=${{ inputs.api-version }}" >> $GITHUB_ENV
+      fi
+
+      if [[ -n "${{ inputs.conformance-channel }}" ]]; then
+        echo "CONFORMANCE_CHANNEL=${{ inputs.conformance-channel }}" >> $GITHUB_ENV
+      fi
 
   - name: Setup test env
     shell: bash
@@ -39,21 +68,29 @@ runs:
   - name: Install kgateway via helm
     shell: bash
     run: |
+      # Set inference extension flag
+      INFERENCE_EXT_FLAG=""
+      if [[ "${{ inputs.enable-inference-extension }}" == "true" ]]; then
+        INFERENCE_EXT_FLAG="--set inferenceExtension.enabled=true"
+      fi
+
       # Check if additional Helm values file is provided
       ADDITIONAL_VALUES=""
-      if [[ -n "${HELM_ADDITIONAL_VALUES}" && -f "${HELM_ADDITIONAL_VALUES}" ]]; then
-        ADDITIONAL_VALUES="-f ${HELM_ADDITIONAL_VALUES}"
-        echo "Using additional Helm values from: ${HELM_ADDITIONAL_VALUES}"
+      if [[ -n "${{ inputs.additional-helm-values }}" && -f "${{ inputs.additional-helm-values }}" ]]; then
+        ADDITIONAL_VALUES="-f ${{ inputs.additional-helm-values }}"
+        echo "Using additional Helm values from: ${{ inputs.additional-helm-values }}"
       fi
 
       if [[ -z "${{ matrix.version }}" ]]; then
         # If matrix.version is empty, use the local chart path specified in the Makefile.
-          helm upgrade -i -n kgateway-system kgateway-crds ./install/helm/kgateway-crds/ \
-          --create-namespace
+        helm upgrade -i -n kgateway-system kgateway-crds ./install/helm/kgateway-crds/ \
+          --create-namespace \
+          ${INFERENCE_EXT_FLAG}
         helm upgrade -i -n kgateway-system kgateway ./install/helm/kgateway/ \
           --create-namespace \
           --set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES="true" \
           --set image.tag=${VERSION} --set image.registry=ghcr.io/kgateway-dev \
+          ${INFERENCE_EXT_FLAG} \
           ${ADDITIONAL_VALUES}
       else
         # TODO(tim): this will require changes once the new helm chart is integrated
@@ -61,18 +98,35 @@ runs:
         # Else, use the provided version to install kgateway from the helm repository.
         helm upgrade -i -n kgateway-system kgateway-crds oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway-crds \
           --version ${VERSION} \
-          --create-namespace
+          --create-namespace \
+          ${INFERENCE_EXT_FLAG}
         helm upgrade -i -n kgateway-system kgateway oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway \
           --version ${VERSION} \
           --create-namespace \
           --set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES="true" \
           --set image.tag=${VERSION} \
+          ${INFERENCE_EXT_FLAG} \
           ${ADDITIONAL_VALUES}
       fi
 
-  - name: Run the kubernetes gateway API conformance tests
+  - name: Run tests
     shell: bash
-    run: make agw-conformance
+    run: |
+      case "${{ inputs.test-type }}" in
+        "gateway-api")
+          make conformance
+          ;;
+        "agent-gateway")
+          make agw-conformance
+          ;;
+        "inference-extension")
+          make gie-conformance
+          ;;
+        *)
+          echo "Unknown test type: ${{ inputs.test-type }}"
+          exit 1
+          ;;
+      esac
 
   - name: Capture debug information when tests fail
     if: ${{ failure() }}
@@ -94,5 +148,11 @@ runs:
     with:
       # Name of the path to upload. The VERSION variable refers to the Makefile
       # VERSION variable.
-      name: conformance-kgateway-agentgateway-report@k8s${{ matrix.kube-version.kubectl }}
-      path: _test/conformance/${{ env.VERSION }}-report.yaml
+      name: |
+        ${{ inputs.test-type == 'gateway-api' && format('conformance-kgateway-gateway-report@k8s{0}', matrix.kube-version.kubectl) ||
+            inputs.test-type == 'agent-gateway' && format('conformance-kgateway-agentgateway-report@k8s{0}', matrix.kube-version.kubectl) ||
+            inputs.test-type == 'inference-extension' && format('conformance-kgateway-gateway-inference-extension-report@k8s{0}', matrix.kube-version.kubectl) }}
+      path: |
+        ${{ inputs.test-type == 'gateway-api' && format('_test/conformance/{0}-report.yaml', env.VERSION) ||
+            inputs.test-type == 'agent-gateway' && format('_test/conformance/{0}-report.yaml', env.VERSION) ||
+            inputs.test-type == 'inference-extension' && format('_test/conformance/{0}-inference-extension-report.yaml', env.VERSION) }}

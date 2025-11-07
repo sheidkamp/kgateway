@@ -28,7 +28,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
-      uses: ./.github/actions/kube-gateway-api-conformance-tests
+      uses: ./.github/actions/kube-conformance-tests
+      with:
+        test-type: gateway-api
 
   kube_inference_extension_conformance_tests:
     name: kubernetes gateway api inference extension conformance tests (${{matrix.image-variant}})
@@ -44,7 +46,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
-      uses: ./.github/actions/kube-inference-extension-conformance-tests
+      uses: ./.github/actions/kube-conformance-tests
+      with:
+        test-type: inference-extension
+        enable-inference-extension: true
 
   kube_agent_gateway_conformance_tests:
     name: kubernetes gateway api agent-gateway conformance tests (${{matrix.image-variant}})
@@ -53,7 +58,6 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     env:
       CONFORMANCE_GATEWAY_CLASS: agentgateway
-      HELM_ADDITIONAL_VALUES: test/e2e/tests/manifests/agent-gateway-integration.yaml
     strategy:
       fail-fast: false
       matrix:
@@ -63,4 +67,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
-      uses: ./.github/actions/kube-agent-gateway-conformance-tests
+      uses: ./.github/actions/kube-conformance-tests
+      with:
+        test-type: agent-gateway
+        additional-helm-values: test/e2e/tests/manifests/agent-gateway-integration.yaml
