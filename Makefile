@@ -699,11 +699,11 @@ run-load-tests-production: ## Run production load tests (5000 routes)
 # Targets for running Kubernetes Gateway API conformance tests
 #----------------------------------------------------------------------------------
 
-# Pull the conformance test suite from the k8s gateway api repo and copy it into the test dir.
+# Pull the conformance test suite from the k8s gateway api repo and update go.mod to use CONFORMANCE_VERSION
 $(TEST_ASSET_DIR)/conformance/conformance_test.go:
 	mkdir -p $(TEST_ASSET_DIR)/conformance
 	echo "//go:build conformance" > $@
-	cat $(shell go list -json -m sigs.k8s.io/gateway-api | jq -r '.Dir')/conformance/conformance_test.go >> $@
+	curl -s https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/refs/tags/$(CONFORMANCE_VERSION)/conformance/conformance_test.go >> $@
 	go fmt $@
 
 CONFORMANCE_SUPPORTED_PROFILES ?= -conformance-profiles=GATEWAY-HTTP,GATEWAY-GRPC,GATEWAY-TLS
@@ -713,12 +713,24 @@ CONFORMANCE_ARGS := -gateway-class=$(CONFORMANCE_GATEWAY_CLASS) $(CONFORMANCE_SU
 
 .PHONY: conformance ## Run the conformance test suite
 conformance: $(TEST_ASSET_DIR)/conformance/conformance_test.go ## Run the Gateway API conformance suite
-	go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v $(TEST_ASSET_DIR)/conformance/... -args $(CONFORMANCE_ARGS)
+	@original_version=$$(go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api); \
+	go get sigs.k8s.io/gateway-api@$(CONFORMANCE_VERSION); \
+	go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v $(TEST_ASSET_DIR)/conformance/... -args $(CONFORMANCE_ARGS); \
+	result=$$?; \
+	go get sigs.k8s.io/gateway-api@$$original_version; \
+	go mod tidy; \
+	exit $$result
 
 # Run only the specified conformance test. The name must correspond to the ShortName of one of the k8s gateway api conformance tests.
 conformance-%: $(TEST_ASSET_DIR)/conformance/conformance_test.go ## Run only the specified Gateway API conformance test by ShortName
+	@original_version=$$(go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api); \
+	go get sigs.k8s.io/gateway-api@$(CONFORMANCE_VERSION); \
 	go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v $(TEST_ASSET_DIR)/conformance/... -args $(CONFORMANCE_ARGS) \
-	-run-test=$*
+	-run-test=$*; \
+	result=$$?; \
+	go get sigs.k8s.io/gateway-api@$$original_version; \
+	go mod tidy; \
+	exit $$result
 
 #----------------------------------------------------------------------------------
 # Targets for running Agent Gateway conformance tests
@@ -732,12 +744,24 @@ AGW_CONFORMANCE_ARGS := -gateway-class=$(AGW_CONFORMANCE_GATEWAY_CLASS) $(AGW_CO
 
 .PHONY: agw-conformance ## Run the agent gateway conformance test suite
 agw-conformance: $(TEST_ASSET_DIR)/conformance/conformance_test.go
-	CONFORMANCE_GATEWAY_CLASS=$(AGW_CONFORMANCE_GATEWAY_CLASS) go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v $(TEST_ASSET_DIR)/conformance/... -args $(AGW_CONFORMANCE_ARGS)
+	@original_version=$$(go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api); \
+	go get sigs.k8s.io/gateway-api@$(CONFORMANCE_VERSION); \
+	CONFORMANCE_GATEWAY_CLASS=$(AGW_CONFORMANCE_GATEWAY_CLASS) go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v $(TEST_ASSET_DIR)/conformance/... -args $(AGW_CONFORMANCE_ARGS); \
+	result=$$?; \
+	go get sigs.k8s.io/gateway-api@$$original_version; \
+	go mod tidy; \
+	exit $$result
 
 # Run only the specified agent gateway conformance test
 agw-conformance-%: $(TEST_ASSET_DIR)/conformance/conformance_test.go
+	@original_version=$$(go list -m -f '{{.Version}}' sigs.k8s.io/gateway-api); \
+	go get sigs.k8s.io/gateway-api@$(CONFORMANCE_VERSION); \
 	CONFORMANCE_GATEWAY_CLASS=$(AGW_CONFORMANCE_GATEWAY_CLASS) go test -mod=mod -ldflags='$(LDFLAGS)' -tags conformance -test.v $(TEST_ASSET_DIR)/conformance/... -args $(AGW_CONFORMANCE_ARGS) \
-	-run-test=$*
+	-run-test=$*; \
+	result=$$?; \
+	go get sigs.k8s.io/gateway-api@$$original_version; \
+	go mod tidy; \
+	exit $$result
 
 #----------------------------------------------------------------------------------
 # Targets for running Gateway API Inference Extension conformance tests
