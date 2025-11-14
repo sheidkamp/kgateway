@@ -71,10 +71,10 @@ runs:
     run: |
       # Set experimental features flag based on conformance channel
       EXPERIMENTAL_FLAG=""
-      if [[ "${{ inputs.conformance-channel }}" == "experimental" ]]; then
-        EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"true\""
-      else
+      if [[ "${{ inputs.conformance-channel }}" == "standard" ]]; then
         EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"false\""
+      else
+        EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"true\""
       fi
 
       # Set inference extension flag
