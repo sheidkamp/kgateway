@@ -67,7 +67,7 @@ runs:
       # Set experimental features flag based on conformance channel
       EXPERIMENTAL_FLAG=""
       if [[ "${{ inputs.api-channel }}" == "experimental" ]]; then
-        EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"true\""
+        EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=true"
       fi
 
       echo "EXPERIMENTAL_FLAG: $EXPERIMENTAL_FLAG"
@@ -92,6 +92,7 @@ runs:
           ${INFERENCE_EXT_FLAG}
         helm upgrade -i -n kgateway-system kgateway ./install/helm/kgateway/ \
           --create-namespace \
+          ${EXPERIMENTAL_FLAG} \
           --set image.tag=${VERSION} --set image.registry=ghcr.io/kgateway-dev \
           ${INFERENCE_EXT_FLAG} \
           ${ADDITIONAL_VALUES}
@@ -106,6 +107,7 @@ runs:
         helm upgrade -i -n kgateway-system kgateway oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway \
           --version ${VERSION} \
           --create-namespace \
+          ${EXPERIMENTAL_FLAG} \
           --set image.tag=${VERSION} \
           ${INFERENCE_EXT_FLAG} \
           ${ADDITIONAL_VALUES}
