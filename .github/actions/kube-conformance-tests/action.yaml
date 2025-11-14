@@ -69,6 +69,14 @@ runs:
   - name: Install kgateway via helm
     shell: bash
     run: |
+      # Set experimental features flag based on conformance channel
+      EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"true\""
+      if [[ "${{ inputs.conformance-channel }}" == "standard" ]]; then
+        EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"false\""
+      fi
+
+      echo "EXPERIMENTAL_FLAG: $EXPERIMENTAL_FLAG"
+
       # Set inference extension flag
       INFERENCE_EXT_FLAG=""
       if [[ "${{ inputs.enable-inference-extension }}" == "true" ]]; then
@@ -86,11 +94,11 @@ runs:
         # If matrix.version is empty, use the local chart path specified in the Makefile.
         helm upgrade -i -n kgateway-system kgateway-crds ./install/helm/kgateway-crds/ \
           --create-namespace \
-          --set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES="${{ inputs.conformance-channel == 'standard' && 'false' || 'true' }}" \
+          ${EXPERIMENTAL_FLAG} \
           ${INFERENCE_EXT_FLAG}
         helm upgrade -i -n kgateway-system kgateway ./install/helm/kgateway/ \
           --create-namespace \
-          --set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES="${{ inputs.conformance-channel == 'standard' && 'false' || 'true' }}" \
+          ${EXPERIMENTAL_FLAG} \
           --set image.tag=${VERSION} --set image.registry=ghcr.io/kgateway-dev \
           ${INFERENCE_EXT_FLAG} \
           ${ADDITIONAL_VALUES}
@@ -101,12 +109,11 @@ runs:
         helm upgrade -i -n kgateway-system kgateway-crds oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway-crds \
           --version ${VERSION} \
           --create-namespace \
-          --set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES="${{ inputs.conformance-channel == 'standard' && 'false' || 'true' }}" \
+          ${EXPERIMENTAL_FLAG} \
           ${INFERENCE_EXT_FLAG}
         helm upgrade -i -n kgateway-system kgateway oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway \
           --version ${VERSION} \
           --create-namespace \
-          --set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES="${{ inputs.conformance-channel == 'standard' && 'false' || 'true' }}" \
           --set image.tag=${VERSION} \
           ${INFERENCE_EXT_FLAG} \
           ${ADDITIONAL_VALUES}
