@@ -30,7 +30,7 @@ jobs:
       uses: ./.github/actions/kube-conformance-tests
       with:
         test-type: gateway-api
-        conformance-channel: ${{ matrix. gateway-api-channel }}
+        conformance-channel: ${{ matrix.gateway-api-channel }}
 
   kube_inference_extension_conformance_tests:
     name: k8s gw API inference extension conformance (gw-api=${{matrix.gateway-api-channel}})

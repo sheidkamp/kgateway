@@ -70,12 +70,12 @@ runs:
     shell: bash
     run: |
       # Set experimental features flag based on conformance channel
-      EXPERIMENTAL_FLAG=""
+      EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"true\""
       if [[ "${{ inputs.conformance-channel }}" == "standard" ]]; then
         EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"false\""
-      else
-        EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"true\""
       fi
+
+      echo "EXPERIMENTAL_FLAG: ${{ EXPERIMENTAL_FLAG }}"
 
       # Set inference extension flag
       INFERENCE_EXT_FLAG=""
