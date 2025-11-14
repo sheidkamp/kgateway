@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/kube/kubetypes"
 	"istio.io/istio/pkg/security"
+	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -38,6 +39,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/krtutil"
 	"github.com/kgateway-dev/kgateway/v2/pkg/schemes"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/envutils"
+	"github.com/kgateway-dev/kgateway/v2/pkg/utils/gwapiutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/namespaces"
 	"github.com/kgateway-dev/kgateway/v2/pkg/validator"
 )
@@ -439,6 +441,14 @@ func (s *setup) buildKgatewayWithConfig(
 
 	ucc := uccBuilder(ctx, krtOpts, augmentedPodsForUcc)
 
+	// Detect Gateway API channel (standard or experimental) to adjust supported features
+	apiChannel := detectGatewayAPIChannel(ctx, s.restConfig)
+	if apiChannel != "" {
+		slog.Info("detected Gateway API channel", "channel", apiChannel)
+	} else {
+		slog.Warn("Gateway API channel not detected during setup, will use default feature support")
+	}
+
 	gatewayClassInfos := controller.GetDefaultClassInfo(
 		setupOpts.GlobalSettings,
 		s.gatewayClassName,
@@ -446,6 +456,7 @@ func (s *setup) buildKgatewayWithConfig(
 		s.agentgatewayClassName,
 		s.gatewayControllerName,
 		s.agwControllerName,
+		apiChannel,
 		s.additionalGatewayClasses,
 	)
 
@@ -512,4 +523,23 @@ func SetupLogging(levelStr string) {
 		klogLogger := logr.FromSlogHandler(logging.New("klog").Handler())
 		klog.SetLogger(klogLogger)
 	})
+}
+
+// detectGatewayAPIChannel detects the installed Gateway API channel by reading the
+// Gateway CRD annotations. Returns the channel name (e.g. "standard" or "experimental"),
+// or an empty string if detection fails.
+func detectGatewayAPIChannel(ctx context.Context, restConfig *rest.Config) string {
+	// Create a direct client that doesn't depend on the manager cache
+	clientset, err := apiextensionsclientset.NewForConfig(restConfig)
+	if err != nil {
+		slog.Debug("failed to create apiextensions client for channel detection", "error", err)
+		return ""
+	}
+
+	apiInfo, err := gwapiutils.DetectGatewayAPIVersionWithClient(ctx, clientset.ApiextensionsV1().CustomResourceDefinitions())
+	if err != nil {
+		slog.Debug("Gateway API channel detection failed during setup", "error", err)
+		return ""
+	}
+	return string(apiInfo.Channel)
 }

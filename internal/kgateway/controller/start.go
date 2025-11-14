@@ -363,6 +363,7 @@ func GetDefaultClassInfo(
 	agwClassName,
 	controllerName,
 	agwControllerName string,
+	apiChannel string,
 	additionalClassInfos map[string]*deployer.GatewayClassInfo,
 ) map[string]*deployer.GatewayClassInfo {
 	classInfos := map[string]*deployer.GatewayClassInfo{}
@@ -372,7 +373,7 @@ func GetDefaultClassInfo(
 			Labels:            map[string]string{},
 			Annotations:       map[string]string{},
 			ControllerName:    controllerName,
-			SupportedFeatures: deployer.GetSupportedFeaturesForStandardGateway(),
+			SupportedFeatures: deployer.GetSupportedFeaturesForStandardGateway(apiChannel),
 		}
 	}
 	// Only enable waypoint gateway class if it's enabled in the settings
@@ -384,7 +385,7 @@ func GetDefaultClassInfo(
 				"ambient.istio.io/waypoint-inbound-binding": "PROXY/15088",
 			},
 			ControllerName:    controllerName,
-			SupportedFeatures: deployer.GetSupportedFeaturesForWaypointGateway(),
+			SupportedFeatures: deployer.GetSupportedFeaturesForWaypointGateway(apiChannel),
 		}
 	}
 	// Only enable agentgateway gateway class if it's enabled in the settings
@@ -394,7 +395,7 @@ func GetDefaultClassInfo(
 			Labels:            map[string]string{},
 			Annotations:       map[string]string{},
 			ControllerName:    agwControllerName,
-			SupportedFeatures: deployer.GetSupportedFeaturesForAgentGateway(),
+			SupportedFeatures: deployer.GetSupportedFeaturesForAgentGateway(apiChannel),
 		}
 	}
 	maps.Copy(classInfos, additionalClassInfos)

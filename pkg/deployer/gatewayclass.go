@@ -28,8 +28,8 @@ type GatewayClassInfo struct {
 
 // GetSupportedFeaturesForStandardGateway returns the supported features for the standard Gateway class.
 // This is derived from the conformance test configuration where we exempt certain features.
-func GetSupportedFeaturesForStandardGateway() []gwv1.SupportedFeature {
-	exemptFeatures := getCommonExemptFeatures()
+func GetSupportedFeaturesForStandardGateway(apiChannel string) []gwv1.SupportedFeature {
+	exemptFeatures := getCommonExemptFeatures(apiChannel)
 	// backfill individual features that we don't support yet.
 	exemptFeatures.Insert(
 		features.GatewayStaticAddressesFeature,
@@ -40,15 +40,15 @@ func GetSupportedFeaturesForStandardGateway() []gwv1.SupportedFeature {
 
 // GetSupportedFeaturesForWaypointGateway returns the supported features for the waypoint Gateway class.
 // Waypoint gateways have similar support to standard gateways but may have some differences.
-func GetSupportedFeaturesForWaypointGateway() []gwv1.SupportedFeature {
+func GetSupportedFeaturesForWaypointGateway(apiChannel string) []gwv1.SupportedFeature {
 	// For now, waypoint gateways support the same features as standard gateways
-	return GetSupportedFeaturesForStandardGateway()
+	return GetSupportedFeaturesForStandardGateway(apiChannel)
 }
 
 // GetSupportedFeaturesForAgentGateway returns the supported features for the agent Gateway class.
 // Agent gateways support additional features beyond the standard gateway class.
-func GetSupportedFeaturesForAgentGateway() []gwv1.SupportedFeature {
-	exemptFeatures := getCommonExemptFeatures()
+func GetSupportedFeaturesForAgentGateway(apiChannel string) []gwv1.SupportedFeature {
+	exemptFeatures := getCommonExemptFeatures(apiChannel)
 	// Agent gateways support GatewayHTTPListenerIsolation and GatewayPort8080,
 	// but still don't support GatewayStaticAddresses.
 	exemptFeatures.Insert(features.GatewayStaticAddressesFeature)
@@ -56,7 +56,7 @@ func GetSupportedFeaturesForAgentGateway() []gwv1.SupportedFeature {
 }
 
 // getCommonExemptFeatures returns the set of features that are commonly unsupported across all gateway classes.
-func getCommonExemptFeatures() sets.Set[features.Feature] {
+func getCommonExemptFeatures(apiChannel string) sets.Set[features.Feature] {
 	exemptFeatures := sets.New[features.Feature]()
 	// we don't support any mesh features at all.
 	for _, feature := range features.MeshCoreFeatures.UnsortedList() {
@@ -72,6 +72,15 @@ func getCommonExemptFeatures() sets.Set[features.Feature] {
 	for _, feature := range features.BackendTLSPolicyExtendedFeatures.UnsortedList() {
 		exemptFeatures.Insert(feature)
 	}
+
+	if apiChannel == features.FeatureChannelStandard {
+		for _, feature := range features.AllFeatures.UnsortedList() {
+			if feature.Channel == features.FeatureChannelExperimental {
+				exemptFeatures.Insert(feature)
+			}
+		}
+	}
+
 	return exemptFeatures
 }
 
