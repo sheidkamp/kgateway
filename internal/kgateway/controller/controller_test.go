@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	"sigs.k8s.io/gateway-api/pkg/features"
 
 	apisettings "github.com/kgateway-dev/kgateway/v2/api/settings"
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1"
@@ -324,7 +325,7 @@ func (s *ControllerSuite) TestGatewayClassStatus() {
 		require.Equal(c, gc.Generation, condition.ObservedGeneration)
 
 		// Check SupportedFeatures
-		require.ElementsMatch(c, gc.Status.SupportedFeatures, deployer.GetSupportedFeaturesForStandardGateway("experimental"))
+		require.ElementsMatch(c, gc.Status.SupportedFeatures, deployer.GetSupportedFeaturesForStandardGateway(features.FeatureChannelExperimental))
 	}, defaultPollTimeout, 500*time.Millisecond, "timed out waiting for GatewayClass to be present")
 }
 
@@ -721,7 +722,7 @@ func (s *ControllerSuite) startController(
 		CommonCollections:        commonCols,
 	}
 
-	supportedFeatures := deployer.GetSupportedFeaturesForStandardGateway("experimental")
+	supportedFeatures := deployer.GetSupportedFeaturesForStandardGateway(features.FeatureChannelExperimental)
 	classConfigs := map[string]*deployer.GatewayClassInfo{
 		altGatewayClassName: {
 			Description:       "alt GatewayClass",

@@ -706,7 +706,14 @@ $(TEST_ASSET_DIR)/conformance/conformance_test.go:
 	cat $(shell go list -json -m sigs.k8s.io/gateway-api | jq -r '.Dir')/conformance/conformance_test.go >> $@
 	go fmt $@
 
+# Determine conformance profiles based on CONFORMANCE_CHANNEL env var
+# Set CONFORMANCE_CHANNEL=standard to exclude TLS routes (experimental feature)
+# Default (experimental or unset) includes all profiles including TLS routes
+ifeq ($(CONFORMANCE_CHANNEL),standard)
+CONFORMANCE_SUPPORTED_PROFILES ?= -conformance-profiles=GATEWAY-HTTP,GATEWAY-GRPC
+else
 CONFORMANCE_SUPPORTED_PROFILES ?= -conformance-profiles=GATEWAY-HTTP,GATEWAY-GRPC,GATEWAY-TLS
+endif
 CONFORMANCE_GATEWAY_CLASS ?= kgateway
 CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/$(VERSION)-report.yaml -organization=kgateway-dev -project=kgateway -version=$(VERSION) -url=github.com/kgateway-dev/kgateway -contact=github.com/kgateway-dev/kgateway/issues/new/choose
 CONFORMANCE_ARGS := -gateway-class=$(CONFORMANCE_GATEWAY_CLASS) $(CONFORMANCE_SUPPORTED_PROFILES) $(CONFORMANCE_REPORT_ARGS)
@@ -725,7 +732,8 @@ conformance-%: $(TEST_ASSET_DIR)/conformance/conformance_test.go ## Run only the
 #----------------------------------------------------------------------------------
 
 # Agent Gateway conformance test configuration
-AGW_CONFORMANCE_SUPPORTED_PROFILES ?= -conformance-profiles=GATEWAY-HTTP,GATEWAY-GRPC,GATEWAY-TLS
+# Use same profile logic as regular conformance tests
+AGW_CONFORMANCE_SUPPORTED_PROFILES ?= $(CONFORMANCE_SUPPORTED_PROFILES)
 AGW_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
 AGW_CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/agw-$(VERSION)-report.yaml -organization=kgateway-dev -project=kgateway -version=$(VERSION) -url=github.com/kgateway-dev/kgateway -contact=github.com/kgateway-dev/kgateway/issues/new/choose
 AGW_CONFORMANCE_ARGS := -gateway-class=$(AGW_CONFORMANCE_GATEWAY_CLASS) $(AGW_CONFORMANCE_SUPPORTED_PROFILES) $(AGW_CONFORMANCE_REPORT_ARGS)
