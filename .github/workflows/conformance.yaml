@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   kube_gateway_api_conformance_tests:
-    name: k8s gw API conformance (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
+    name: k8s gw API conformance (gw-api=${{matrix.gateway-api-channel}})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     if: ${{ !github.event.pull_request.draft }}
@@ -23,23 +23,17 @@ jobs:
       fail-fast: false
       matrix:
         kube-version: [ { node: 'v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a', kubectl: 'v1.34.1', kind: 'v0.30.0' } ]
-        gateway-api-version: [ { version: 'v1.4.0', channel: 'experimental' },
-                              { version: 'v1.4.0', channel: 'standard' },
-                              { version: 'v1.3.0', channel: 'experimental' },
-                              { version: 'v1.3.0', channel: 'standard' },
-                              { version: 'v1.2.1', channel: 'experimental' },
-                              { version: 'v1.2.1', channel: 'standard' } ]
+        gateway-api-channel: [ 'experimental', 'standard' ]
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
       uses: ./.github/actions/kube-conformance-tests
       with:
         test-type: gateway-api
-        conformance-version: ${{ matrix.gateway-api-version.version }}
-        conformance-channel: ${{ matrix.gateway-api-version.channel }}
+        conformance-channel: ${{ matrix. gateway-api-channel }}
 
   kube_inference_extension_conformance_tests:
-    name: k8s gw API inference extension conformance (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
+    name: k8s gw API inference extension conformance (gw-api=${{matrix.gateway-api-channel}})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     if: ${{ !github.event.pull_request.draft }}
@@ -47,12 +41,7 @@ jobs:
       fail-fast: false
       matrix:
         kube-version: [ { node: 'v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a', kubectl: 'v1.34.1', kind: 'v0.30.0' } ]
-        gateway-api-version: [ { version: 'v1.4.0', channel: 'experimental' },
-                              { version: 'v1.4.0', channel: 'standard' },
-                              { version: 'v1.3.0', channel: 'experimental' },
-                              { version: 'v1.3.0', channel: 'standard' },
-                              { version: 'v1.2.1', channel: 'experimental' },
-                              { version: 'v1.2.1', channel: 'standard' } ]
+        gateway-api-channel: [ 'experimental', 'standard' ]
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
@@ -60,11 +49,10 @@ jobs:
       with:
         test-type: inference-extension
         enable-inference-extension: true
-        conformance-version: ${{ matrix.gateway-api-version.version }}
-        conformance-channel: ${{ matrix.gateway-api-version.channel }}
+        conformance-channel: ${{ matrix.gateway-api-channel }}
 
   kube_agent_gateway_conformance_tests:
-    name: k8s gw API agent-gateway conformance (gw-api=${{matrix.gateway-api-version.version}}-${{matrix.gateway-api-version.channel}})
+    name: k8s gw API agent-gateway conformance (gw-api=${{matrix.gateway-api-channel}})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     if: ${{ !github.event.pull_request.draft }}
@@ -74,12 +62,7 @@ jobs:
       fail-fast: false
       matrix:
         kube-version: [ { node: 'v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a', kubectl: 'v1.34.1', kind: 'v0.30.0' } ]
-        gateway-api-version: [ { version: 'v1.4.0', channel: 'experimental' },
-                              { version: 'v1.4.0', channel: 'standard' },
-                              { version: 'v1.3.0', channel: 'experimental' },
-                              { version: 'v1.3.0', channel: 'standard' },
-                              { version: 'v1.2.1', channel: 'experimental' },
-                              { version: 'v1.2.1', channel: 'standard' } ]
+        gateway-api-channel: [ 'experimental', 'standard' ]
     steps:
     - uses: actions/checkout@v4
     - id: run-tests
@@ -87,5 +70,4 @@ jobs:
       with:
         test-type: agent-gateway
         additional-helm-values: test/e2e/tests/manifests/agent-gateway-integration.yaml
-        conformance-version: ${{ matrix.gateway-api-version.version }}
-        conformance-channel: ${{ matrix.gateway-api-version.channel }}
+        conformance-channel: ${{ matrix.gateway-api-channel }}
