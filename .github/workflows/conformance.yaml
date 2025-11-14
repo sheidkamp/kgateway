@@ -30,7 +30,7 @@ jobs:
       uses: ./.github/actions/kube-conformance-tests
       with:
         test-type: gateway-api
-        conformance-channel: ${{ matrix.gateway-api-channel }}
+        api-channel: ${{ matrix.gateway-api-channel }}
 
   kube_inference_extension_conformance_tests:
     name: kubernetes gateway api inference extension conformance tests (${{matrix.gateway-api-channel}})
@@ -49,7 +49,7 @@ jobs:
       with:
         test-type: inference-extension
         enable-inference-extension: true
-        conformance-channel: ${{ matrix.gateway-api-channel }}
+        api-channel: ${{ matrix.gateway-api-channel }}
 
   kube_agent_gateway_conformance_tests:
     name: kubernetes gateway api agent-gateway conformance tests (${{matrix.gateway-api-channel}})
@@ -70,4 +70,4 @@ jobs:
       with:
         test-type: agent-gateway
         additional-helm-values: test/e2e/tests/manifests/agent-gateway-integration.yaml
-        conformance-channel: ${{ matrix.gateway-api-channel }}
+        api-channel: ${{ matrix.gateway-api-channel }}

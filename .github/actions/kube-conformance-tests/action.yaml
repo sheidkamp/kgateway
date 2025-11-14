@@ -7,11 +7,8 @@ inputs:
   api-version:
     description: "Override of the sig Gateway API to test against."
     required: false
-  conformance-channel:
+  api-channel:
     description: "Gateway API conformance channel (experimental or standard)"
-    required: false
-  conformance-version:
-    description: "Gateway API conformance version (e.g., v1.4.0)"
     required: false
   additional-helm-values:
     description: "Path to additional Helm values file"
@@ -47,14 +44,12 @@ runs:
       fi
 
       # Set conformance environment variables
-      if [[ -n "${{ inputs.conformance-version }}" ]]; then
-        echo "CONFORMANCE_VERSION=${{ inputs.conformance-version }}" >> $GITHUB_ENV
-      elif [[ -n "${{ inputs.api-version }}" ]]; then
+      if [[ -n "${{ inputs.api-version }}" ]]; then
         echo "CONFORMANCE_VERSION=${{ inputs.api-version }}" >> $GITHUB_ENV
       fi
 
-      if [[ -n "${{ inputs.conformance-channel }}" ]]; then
-        echo "CONFORMANCE_CHANNEL=${{ inputs.conformance-channel }}" >> $GITHUB_ENV
+      if [[ -n "${{ inputs.api-channel }}" ]]; then
+        echo "CONFORMANCE_CHANNEL=${{ inputs.api-channel }}" >> $GITHUB_ENV
       fi
 
   - name: Setup test env
@@ -71,7 +66,7 @@ runs:
     run: |
       # Set experimental features flag based on conformance channel
       EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"true\""
-      if [[ "${{ inputs.conformance-channel }}" == "standard" ]]; then
+      if [[ "${{ inputs.api-channel }}" == "standard" ]]; then
         EXPERIMENTAL_FLAG="--set controller.extraEnv.KGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES=\"false\""
       fi
 
