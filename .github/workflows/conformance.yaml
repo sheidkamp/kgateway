@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   kube_gateway_api_conformance_tests:
-    name: kubernetes gateway api conformance tests(${{matrix.gateway-api-channel}})
+    name: kubernetes gateway api conformance tests (${{matrix.gateway-api-channel}})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     if: ${{ !github.event.pull_request.draft }}

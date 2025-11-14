@@ -91,11 +91,9 @@ runs:
       fi
 
       if [[ -z "${{ matrix.version }}" ]]; then
-        echo "Using local chart path"
         # If matrix.version is empty, use the local chart path specified in the Makefile.
         helm upgrade -i -n kgateway-system kgateway-crds ./install/helm/kgateway-crds/ \
           --create-namespace \
-          ${EXPERIMENTAL_FLAG} \
           ${INFERENCE_EXT_FLAG}
         helm upgrade -i -n kgateway-system kgateway ./install/helm/kgateway/ \
           --create-namespace \
@@ -104,7 +102,6 @@ runs:
           ${INFERENCE_EXT_FLAG} \
           ${ADDITIONAL_VALUES}
       else
-        echo "Using remote chart path"
         # TODO(tim): this will require changes once the new helm chart is integrated
         # and published with the release pipeline.
         # Else, use the provided version to install kgateway from the helm repository.
