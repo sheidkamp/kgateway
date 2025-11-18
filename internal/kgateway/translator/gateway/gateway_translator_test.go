@@ -58,7 +58,7 @@ func TestBasic(t *testing.T) {
 		})
 	})
 
-	t.Run("gateway with TLS listener with ALPN protocols", func(t *testing.T) {
+	t.Run("gateway with TLS listener with TLS options", func(t *testing.T) {
 		test(t, translatorTestCase{
 			inputFile:  "gateway-only/tls.yaml",
 			outputFile: "gateway-only/tls.yaml",

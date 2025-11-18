@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/kgateway-dev/kgateway/v2/api/annotations"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/krtcollections"
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/query"
 	route "github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/httproute"
@@ -803,11 +802,6 @@ func translateSslConfig(
 		return nil, nil
 	}
 
-	var alpnProtocols []string
-	if tls.Options[annotations.AlpnProtocols] != "" {
-		alpnProtocols = strings.Split(string(tls.Options[annotations.AlpnProtocols]), ",")
-	}
-
 	// TODO: support multiple certificate refs
 	if len(tls.CertificateRefs) != 1 {
 		return nil, fmt.Errorf("only one certificate ref is supported for now")
@@ -836,12 +830,17 @@ func translateSslConfig(
 	privateKey := secret.Data[corev1.TLSPrivateKeyKey]
 	rootCa := secret.Data[corev1.ServiceAccountRootCAKey]
 
-	return &ir.TlsBundle{
-		PrivateKey:    privateKey,
-		CertChain:     certChain,
-		CA:            rootCa,
-		AlpnProtocols: alpnProtocols,
-	}, nil
+	tlsBundle := &ir.TlsBundle{
+		PrivateKey: privateKey,
+		CertChain:  certChain,
+		CA:         rootCa,
+	}
+
+	if err := sslutils.ApplyTLSExtensionOptions(tls.Options, tlsBundle); err != nil {
+		return nil, err
+	}
+
+	return tlsBundle, nil
 }
 
 // makeVhostName computes the name of a virtual host based on the parent name and domain.

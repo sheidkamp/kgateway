@@ -481,10 +481,19 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 		},
 	}
 
-	//	var requireClientCert *wrappers.BoolValue
-	//	if common.GetValidationContextType() != nil {
-	//		requireClientCert = &wrappers.BoolValue{Value: !dc.GetOneWayTls().GetValue()}
-	//	}
+	if ssl.MinTLSVersion != nil {
+		common.TlsParams.TlsMinimumProtocolVersion = *ssl.MinTLSVersion
+	}
+	if ssl.MaxTLSVersion != nil {
+		common.TlsParams.TlsMaximumProtocolVersion = *ssl.MaxTLSVersion
+	}
+	if len(ssl.CipherSuites) > 0 {
+		common.TlsParams.CipherSuites = ssl.CipherSuites
+	}
+	if len(ssl.EcdhCurves) > 0 {
+		common.TlsParams.EcdhCurves = ssl.EcdhCurves
+	}
+	// TODO: add verify subject alt names (validation context)
 
 	out := &envoytlsv3.DownstreamTlsContext{
 		CommonTlsContext: common,

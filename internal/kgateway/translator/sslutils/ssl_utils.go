@@ -4,9 +4,15 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strings"
 
+	envoytlsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/cert"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/kgateway-dev/kgateway/v2/api/annotations"
+	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/ir"
 )
 
 var (
@@ -90,4 +96,111 @@ func GetCACertFromConfigMap(cm *corev1.ConfigMap) (string, error) {
 
 	cleanedChain := string(cleanedChainBytes)
 	return cleanedChain, nil
+}
+
+type TLSExtensionOptionFunc = func(in string, out *ir.TlsBundle) error
+
+func ApplyCipherSuites(in string, out *ir.TlsBundle) error {
+	cipherSuites := strings.Split(in, ",")
+	out.CipherSuites = cipherSuites
+	return nil
+}
+
+func ApplyEcdhCurves(in string, out *ir.TlsBundle) error {
+	ecdhCurves := strings.Split(in, ",")
+	out.EcdhCurves = ecdhCurves
+	return nil
+}
+
+func ApplyAlpnProtocols(in string, out *ir.TlsBundle) error {
+	alpnProtocols := strings.Split(in, ",")
+	out.AlpnProtocols = alpnProtocols
+	return nil
+}
+
+func ApplyMinTLSVersion(in string, out *ir.TlsBundle) error {
+	protocol, ok := parseTLSProtocol(in)
+	if !ok {
+		return fmt.Errorf("invalid minimum tls version: %s", in)
+	}
+
+	out.MinTLSVersion = &protocol
+	return nil
+}
+
+func ApplyMaxTLSVersion(in string, out *ir.TlsBundle) error {
+	protocol, ok := parseTLSProtocol(in)
+	if !ok {
+		return fmt.Errorf("invalid maximum tls version: %s", in)
+	}
+
+	out.MaxTLSVersion = &protocol
+	return nil
+}
+
+func ApplyVerifySubjectAltName(in string, out *ir.TlsBundle) error {
+	altNames := strings.Split(in, ",")
+	out.VerifySubjectAltNames = altNames
+	return nil
+}
+
+var TLSExtensionOptionFuncs = map[gwv1.AnnotationKey]TLSExtensionOptionFunc{
+	annotations.CipherSuites:          ApplyCipherSuites,
+	annotations.MinTLSVersion:         ApplyMinTLSVersion,
+	annotations.MaxTLSVersion:         ApplyMaxTLSVersion,
+	annotations.VerifySubjectAltNames: ApplyVerifySubjectAltName,
+	annotations.EcdhCurves:            ApplyEcdhCurves,
+	annotations.AlpnProtocols:         ApplyAlpnProtocols,
+}
+
+// ApplyTLSExtensionOptions applies the TLS options to the TLS bundle IR
+// This function will never exit early, even if an error is encountered.
+// It will apply all options and return a wrapped error with all errors encountered.
+func ApplyTLSExtensionOptions(options map[gwv1.AnnotationKey]gwv1.AnnotationValue, out *ir.TlsBundle) error {
+	var errs error
+	for key, option := range options {
+		if extensionFunc, ok := TLSExtensionOptionFuncs[key]; ok {
+			if err := extensionFunc(string(option), out); err != nil {
+				errs = errors.Join(errs, err)
+			}
+		} else {
+			errs = errors.Join(errs, fmt.Errorf("unknown tls option: %s", key))
+		}
+	}
+
+	if err := validateTLSVersions(out); err != nil {
+		errs = errors.Join(errs, err)
+	}
+
+	return errs
+}
+
+func validateTLSVersions(out *ir.TlsBundle) error {
+	if out.MinTLSVersion != nil && out.MaxTLSVersion != nil {
+		if *out.MaxTLSVersion < *out.MinTLSVersion {
+			return fmt.Errorf("maximum tls version %s is less than minimum tls version %s",
+				out.MaxTLSVersion.String(),
+				out.MinTLSVersion.String(),
+			)
+		}
+	}
+	return nil
+}
+
+// parseTLSProtocol parses a TLS version string and returns the corresponding Envoy TLS protocol.
+// The version string is expected to be in the format "1.0", "1.1", "1.2", or "1.3".
+// If the version string is not a valid TLS version, false is returned.
+func parseTLSProtocol(version string) (envoytlsv3.TlsParameters_TlsProtocol, bool) {
+	switch version {
+	case "1.0":
+		return envoytlsv3.TlsParameters_TLSv1_0, true
+	case "1.1":
+		return envoytlsv3.TlsParameters_TLSv1_1, true
+	case "1.2":
+		return envoytlsv3.TlsParameters_TLSv1_2, true
+	case "1.3":
+		return envoytlsv3.TlsParameters_TLSv1_3, true
+	default:
+		return 0, false
+	}
 }
