@@ -483,6 +483,21 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 	if len(tlsConfig.EcdhCurves) > 0 {
 		common.TlsParams.EcdhCurves = tlsConfig.EcdhCurves
 	}
+
+	if len(tlsConfig.VerifyCertificateHash) > 0 {
+		if common.ValidationContextType == nil {
+			common.ValidationContextType = &envoytlsv3.CommonTlsContext_ValidationContext{
+				ValidationContext: &envoytlsv3.CertificateValidationContext{
+					VerifyCertificateHash: tlsConfig.VerifyCertificateHash,
+				},
+			}
+		} else {
+			// Check that ValidationContextType is a ValidationContext
+			if _, ok := common.ValidationContextType.(*envoytlsv3.CommonTlsContext_ValidationContext); ok {
+				common.ValidationContextType.(*envoytlsv3.CommonTlsContext_ValidationContext).ValidationContext.VerifyCertificateHash = tlsConfig.VerifyCertificateHash
+			}
+		}
+	}
 	// TODO: add verify subject alt names (validation context) https://github.com/kgateway-dev/kgateway/issues/12955
 
 	out := &envoytlsv3.DownstreamTlsContext{

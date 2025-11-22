@@ -90,6 +90,7 @@ type TLSConfig struct {
 	MinTLSVersion         *envoytlsv3.TlsParameters_TlsProtocol
 	MaxTLSVersion         *envoytlsv3.TlsParameters_TlsProtocol
 	VerifySubjectAltNames []string
+	VerifyCertificateHash []string
 }
 
 type TLSCertificate struct {

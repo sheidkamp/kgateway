@@ -16,6 +16,7 @@ spec:
         kgateway.dev/ecdh-curves: "X25519MLKEM768,X25519,P-256"
         kgateway.dev/min-tls-version: "1.2"
         kgateway.dev/max-tls-version: "1.3"
+        kgateway.dev/verify-certificate-hash: "7D:86:C6:65:4C:82:29:36:4E:CF:E4:D4:96:4C:69:41:00:90:AE:09:E9:B4:D0:C9:B2:AD:78:54:17:5A:D5:1D"
         # TODO: add verify subject alt names https://github.com/kgateway-dev/kgateway/issues/12955
       certificateRefs:
         - name: https
@@ -27,6 +28,7 @@ spec:
     tls:
       options:
         kgateway.dev/alpn-protocols: "allow-empty"
+        kgateway.dev/verify-certificate-hash: "7D86C6654C8229364ECFE4D4964C69410090AE09E9B4D0C9B2AD7854175AD51D,7D:86:C6:65:4C:82:29:36:4E:CF:E4:D4:96:4C:69:41:00:90:AE:09:E9:B4:D0:C9:B2:AD:78:54:17:5A:D5:1D"
       mode: Terminate
       certificateRefs:
         - name: https

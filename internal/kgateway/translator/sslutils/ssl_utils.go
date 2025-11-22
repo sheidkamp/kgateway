@@ -164,6 +164,17 @@ func ApplyVerifySubjectAltNames(in string, out *ir.TLSConfig) error {
 	return nil
 }
 
+func ApplyVerifyCertificateHash(in string, out *ir.TlsBundle) error {
+	// Todo - allow multiline yaml style definition of array?
+	// Todo add validation
+	hashes := []string{}
+	for _, hash := range strings.Split(in, ",") {
+		hashes = append(hashes, strings.TrimSpace(hash))
+	}
+	out.VerifyCertificateHash = hashes
+	return nil
+}
+
 var TLSExtensionOptionFuncs = map[gwv1.AnnotationKey]TLSExtensionOptionFunc{
 	annotations.CipherSuites:          ApplyCipherSuites,
 	annotations.MinTLSVersion:         ApplyMinTLSVersion,
@@ -171,6 +182,7 @@ var TLSExtensionOptionFuncs = map[gwv1.AnnotationKey]TLSExtensionOptionFunc{
 	annotations.VerifySubjectAltNames: ApplyVerifySubjectAltNames,
 	annotations.EcdhCurves:            ApplyEcdhCurves,
 	annotations.AlpnProtocols:         ApplyAlpnProtocols,
+	annotations.VerifyCertificateHash: ApplyVerifyCertificateHash,
 }
 
 // ApplyTLSExtensionOptions applies the TLS options to the TLS bundle IR

@@ -53,4 +53,6 @@ const (
 	// Use in the TLS options field of a TLS listener.
 	// TODO: implement https://github.com/kgateway-dev/kgateway/issues/12955
 	VerifySubjectAltNames gwv1.AnnotationKey = "kgateway.dev/verify-subject-alt-names"
+
+	VerifyCertificateHash gwv1.AnnotationKey = "kgateway.dev/verify-certificate-hash"
 )
