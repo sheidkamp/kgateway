@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	//"github.com/onsi/gomega"
 	"github.com/onsi/gomega/gstruct"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -79,8 +78,7 @@ func (s *testingSuite) TestALPNProtocol() {
 		s.assertEventualCurlResponse(curl.WithHTTP2())
 	})
 
-	// TODO: Find another way to do the negative test
-	// It doesn't beacuase Curl will fallback to a supported protocol if the one it specified is not supported
+	// the negative test doesn't behave as expected because Curl will fallback to a supported protocol if the one it specified is not supported by the server
 	// s.Run("HTTP1.1 fallback", func() {
 	// 	// Should fail with HTTP1.1
 	// 	s.assertEventualCurlError(curl.WithHTTP11())
@@ -193,7 +191,7 @@ func (s *testingSuite) assertEventualCurlError(opts ...curl.Option) {
 		s.Ctx,
 		testdefaults.CurlPodExecOpt,
 		curlOpts,
-		0, // any error code
+		35, // CURLE_HTTP2_STREAM_ERROR
 		10*time.Second,
 	)
 }
