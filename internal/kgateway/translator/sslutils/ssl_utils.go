@@ -164,7 +164,7 @@ func ApplyVerifySubjectAltNames(in string, out *ir.TLSConfig) error {
 	return nil
 }
 
-func ApplyVerifyCertificateHash(in string, out *ir.TlsBundle) error {
+func ApplyVerifyCertificateHash(in string, out *ir.TLSConfig) error {
 	// Todo - allow multiline yaml style definition of array?
 	// Todo add validation
 	hashes := []string{}

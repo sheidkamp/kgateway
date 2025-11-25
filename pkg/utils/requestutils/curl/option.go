@@ -317,3 +317,13 @@ func WithTLSMaxVersion(version string) Option {
 		config.tlsMaxVersion = version
 	}
 }
+
+// WithClientCert returns the Option to configure client certificate and key for mutual TLS
+// https://curl.se/docs/manpage.html#-E
+// https://curl.se/docs/manpage.html#--key
+func WithClientCert(certPath, keyPath string) Option {
+	return func(config *requestConfig) {
+		config.clientCertPath = certPath
+		config.clientKeyPath = keyPath
+	}
+}

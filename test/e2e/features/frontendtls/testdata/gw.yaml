@@ -23,6 +23,34 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - name: https-mtls
+      protocol: HTTPS
+      port: 8443
+      tls:
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: test-tls
+        options:
+          # SHA256 fingerprint of client.crt - see CLIENT_CERTS_README.md for generation
+          kgateway.dev/verify-certificate-hash: "E9:A5:B5:3C:8D:EA:57:2F:1A:35:D5:79:49:60:74:FD:F4:1D:7D:5E:98:BA:EB:05:CD:88:72:F6:73:BB:BF:AA"
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-mtls-alt
+      protocol: HTTPS
+      port: 9443
+      tls:
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: test-tls
+        options:
+          # SHA256 fingerprint of client-invalid.crt - see CLIENT_CERTS_README.md for generation
+          kgateway.dev/verify-certificate-hash: "FC:1B:6F:22:5E:D0:65:10:D2:68:A4:7E:33:63:C1:99:48:DD:19:BB:B8:A9:2C:21:16:05:F4:60:47:57:AB:B9"
+      allowedRoutes:
+        namespaces:
+          from: All
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -33,6 +61,44 @@ spec:
     - name: gw
   hostnames:
     - "example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+      - name: httpbin
+        port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mtls-route
+spec:
+  parentRefs:
+    - name: gw
+      sectionName: https-mtls
+  hostnames:
+    - "mtls.example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+      - name: httpbin
+        port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mtls-alt-route
+spec:
+  parentRefs:
+    - name: gw
+      sectionName: https-mtls-alt
+  hostnames:
+    - "mtls-alt.example.com"
   rules:
     - matches:
         - path:

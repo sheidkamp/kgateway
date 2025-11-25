@@ -27,6 +27,14 @@ var (
 	// manifests
 	gatewayManifest   = filepath.Join(fsutils.MustGetThisDir(), "testdata", "gw.yaml")
 	tlsSecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "tls-secret.yaml")
+	clientCertsSecret = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-certs-secret.yaml")
+	curlPodWithCerts  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "curl-pod-with-certs.yaml")
+
+	// client certificates paths inside the curl pod (mounted from secret)
+	clientCertPath8443 = "/etc/client-certs/client-8443.crt"
+	clientKeyPath8443  = "/etc/client-certs/client-8443.key"
+	clientCertPath9443 = "/etc/client-certs/client-9443.crt"
+	clientKeyPath9443  = "/etc/client-certs/client-9443.key"
 
 	// objects
 	proxyObjectMeta = metav1.ObjectMeta{
@@ -38,19 +46,21 @@ var (
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	setup := base.TestCase{
 		Manifests: []string{
-			testdefaults.CurlPodManifest,
+			curlPodWithCerts,
 			testdefaults.HttpbinManifest,
+			clientCertsSecret,
 			tlsSecretManifest,
 			gatewayManifest,
 		},
 	}
 
 	testCases := map[string]*base.TestCase{
-		"TestALPNProtocol":  {},
-		"TestCipherSuites":  {},
-		"TestECDHCurves":    {},
-		"TestMinTLSVersion": {},
-		"TestMaxTLSVersion": {},
+		"TestALPNProtocol":          {},
+		"TestCipherSuites":          {},
+		"TestECDHCurves":            {},
+		"TestMinTLSVersion":         {},
+		"TestMaxTLSVersion":         {},
+		"TestVerifyCertificateHash": {},
 	}
 	return &testingSuite{
 		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
@@ -65,6 +75,18 @@ func commonCurlOpts() []curl.Option {
 		curl.WithScheme("https"),
 		curl.IgnoreServerCert(),
 		curl.WithHeader("Host", "example.com"),
+		curl.VerboseOutput(),
+	}
+}
+
+// commonCurlOptsForMTLS returns the common curl options for the mTLS listener (port 8443)
+func commonCurlOptsForMTLS(hostname string, port int) []curl.Option {
+	return []curl.Option{
+		curl.WithHost(kubeutils.ServiceFQDN(proxyObjectMeta)),
+		curl.WithPort(port),
+		curl.WithScheme("https"),
+		curl.IgnoreServerCert(),
+		curl.WithHeader("Host", hostname),
 		curl.VerboseOutput(),
 	}
 }
@@ -171,6 +193,60 @@ func (s *testingSuite) TestMaxTLSVersion() {
 	})
 }
 
+func (s *testingSuite) TestVerifyCertificateHash() {
+	s.Run("valid client cert succeeds on first mTLS listener", func() {
+		// Client certificate with hash matching the first listener's verify-certificate-hash should succeed
+		s.assertEventualCurlResponseForMTLS(
+			"mtls.example.com",
+			8443,
+			curl.WithClientCert(clientCertPath8443, clientKeyPath8443),
+		)
+	})
+
+	s.Run("invalid client cert fails on first mTLS listener", func() {
+		// Client certificate with hash NOT matching the first listener's verify-certificate-hash should fail
+		s.assertEventualCurlErrorForMTLS(
+			"mtls.example.com",
+			8443,
+			curl.WithClientCert(clientCertPath9443, clientKeyPath9443),
+		)
+	})
+
+	s.Run("no client cert fails on first mTLS listener", func() {
+		// No client certificate should fail when gateway requires verify-certificate-hash
+		s.assertEventualCurlErrorForMTLS("mtls.example.com", 8443)
+	})
+
+	s.Run("invalid client cert succeeds on second mTLS listener", func() {
+		// The "invalid" cert should work on the second listener (configured with its hash)
+		s.assertEventualCurlResponseForMTLS(
+			"mtls-alt.example.com",
+			9443,
+			curl.WithClientCert(clientCertPath9443, clientKeyPath9443),
+		)
+	})
+
+	s.Run("valid client cert fails on second mTLS listener", func() {
+		// The "valid" cert should fail on the second listener (different hash)
+		s.assertEventualCurlErrorForMTLS(
+			"mtls-alt.example.com",
+			9443,
+			curl.WithClientCert(clientCertPath8443, clientKeyPath8443),
+		)
+	})
+
+	s.Run("no client cert fails on second mTLS listener", func() {
+		// No client certificate should fail on the second mTLS listener too
+		s.assertEventualCurlErrorForMTLS("mtls-alt.example.com", 9443)
+	})
+
+	s.Run("regular listener works without client cert", func() {
+		// Original listener (port 443) should still work without client certificate
+		// This validates that only the mTLS listeners require client certs
+		s.assertEventualCurlResponse()
+	})
+}
+
 // assertEventualCurlResponse is a helper that wraps AssertEventualCurlResponse with common test settings
 func (s *testingSuite) assertEventualCurlResponse(opts ...curl.Option) {
 	curlOpts := append(commonCurlOpts(), opts...)
@@ -194,6 +270,33 @@ func (s *testingSuite) assertEventualCurlError(opts ...curl.Option) {
 		testdefaults.CurlPodExecOpt,
 		curlOpts,
 		35, // CURLE_HTTP2_STREAM_ERROR
+		10*time.Second,
+	)
+}
+
+// assertEventualCurlResponseForMTLS is a helper for the mTLS listener (port 8443)
+func (s *testingSuite) assertEventualCurlResponseForMTLS(hostname string, port int, opts ...curl.Option) {
+	curlOpts := append(commonCurlOptsForMTLS(hostname, port), opts...)
+	s.TestInstallation.Assertions.AssertEventualCurlResponse(
+		s.Ctx,
+		testdefaults.CurlPodExecOpt,
+		curlOpts,
+		&testmatchers.HttpResponse{
+			StatusCode: http.StatusOK,
+			Body:       gstruct.Ignore(),
+		},
+		20*time.Second,
+	)
+}
+
+// assertEventualCurlErrorForMTLS is a helper for the mTLS listener (port 8443)
+func (s *testingSuite) assertEventualCurlErrorForMTLS(hostname string, port int, opts ...curl.Option) {
+	curlOpts := append(commonCurlOptsForMTLS(hostname, port), opts...)
+	s.TestInstallation.Assertions.AssertEventualCurlError(
+		s.Ctx,
+		testdefaults.CurlPodExecOpt,
+		curlOpts,
+		0, // any error code
 		10*time.Second,
 	)
 }
