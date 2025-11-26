@@ -54,5 +54,8 @@ const (
 	// TODO: implement https://github.com/kgateway-dev/kgateway/issues/12955
 	VerifySubjectAltNames gwv1.AnnotationKey = "kgateway.dev/verify-subject-alt-names"
 
+	// VerifyCertificateHash is the annotation key used to set the verify certificate hash used by the client.
+	// The value is a comma or "-" separated list of certificate hashes which may be whitespace paadded for readability.
+	// Valid values are sha256 hashes in hex format, e.g "7D86C6654C8229364ECFE4D4964C69410090AE09E9B4D0C9B2AD7854175AD51D" or "7D:86:C6:65:4C:82:29:36:4E:CF:E4:D4:96:4C:69:41:00:90:AE:09:E9:B4:D0:C9:B2:AD:78:54:17:5A:D5:1D".
 	VerifyCertificateHash gwv1.AnnotationKey = "kgateway.dev/verify-certificate-hash"
 )
