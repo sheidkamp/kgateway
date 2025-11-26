@@ -657,6 +657,6 @@ tool (
 	sigs.k8s.io/kind
 )
 
-replace github.com/agentgateway/agentgateway => /home/john/solo/agentgateway
+//replace github.com/agentgateway/agentgateway => /home/john/solo/agentgateway
 
 replace istio.io/istio => ../../../istio.io/istio
