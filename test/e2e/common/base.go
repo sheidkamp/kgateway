@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
@@ -51,13 +50,10 @@ func (g *Gateway) Send(t *testing.T, match *testmatchers.HttpResponse, opts ...c
 	fullOpts := append([]curl.Option{curl.WithHost(g.Address)}, opts...)
 	var resp *http.Response
 	retry.UntilSuccessOrFail(t, func() error {
-		t0 := time.Now()
-		log.Errorf("howardjohn: start req")
 		r, err := curl.ExecuteRequest(fullOpts...)
 		if err != nil {
 			return err
 		}
-		log.Errorf("howardjohn: start end req %v", time.Since(t0))
 		resp = r
 		mm := matchers.HaveHttpResponse(match)
 		success, err := mm.Match(resp)
@@ -67,7 +63,6 @@ func (g *Gateway) Send(t *testing.T, match *testmatchers.HttpResponse, opts ...c
 		if !success {
 			return fmt.Errorf("match failed: %v", mm.FailureMessage(resp))
 		}
-		log.Errorf("howardjohn: success")
 		return nil
 	})
 }

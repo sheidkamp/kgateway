@@ -39,7 +39,7 @@ require (
 	helm.sh/helm/v3 v3.19.2
 	istio.io/api v1.28.0-alpha.0.0.20251120193503-cb15a6cf0002
 	istio.io/client-go v1.28.0-alpha.0.0.20251120193902-c79fe2483377
-	istio.io/istio v0.0.0-20251119184502-ea018f0048ef
+	istio.io/istio v0.0.0-20251126175509-4c126b0cdb22
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
 	k8s.io/apimachinery v0.34.1
@@ -658,5 +658,3 @@ tool (
 )
 
 replace github.com/agentgateway/agentgateway => /home/john/solo/agentgateway
-
-replace istio.io/istio => ../../../istio.io/istio

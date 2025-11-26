@@ -15,7 +15,6 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"istio.io/istio/pkg/log"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -401,7 +400,6 @@ func (s *BaseTestingSuite) GetKubectlOutput(command ...string) string {
 // ApplyManifests applies the manifests and waits until the resources are created and ready.
 func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 	// apply the manifests
-	log.Errorf("howardjohn: APPLY manifests")
 	//for _, manifest := range testCase.Manifests {
 	//	log.Errorf("howardjohn: apply..")
 		err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLFiles("", testCase.Manifests...)
