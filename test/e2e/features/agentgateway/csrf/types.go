@@ -11,21 +11,20 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
 )
 
+const (
+	// test namespace for proxy resources
+	namespace = "agentgateway-base"
+)
+
 var (
 	// manifests
-	commonManifest        = getTestFile("common.yaml")
+	routesManifest      = getTestFile("routes.yaml")
 	csrfAgwPolicyManifest = getTestFile("csrf-gw.yaml")
-
-	// objects
-	proxyObjectMeta = metav1.ObjectMeta{
-		Name:      "gw",
-		Namespace: "default",
-	}
 
 	agwPolicy = &kgatewayv1alpha1.AgentgatewayPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "csrf-gw-policy",
-			Namespace: "default",
+			Namespace: namespace,
 		},
 	}
 )
