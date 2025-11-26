@@ -3,10 +3,10 @@
 package cluster
 
 import (
+	kubelib "istio.io/istio/pkg/kube"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-kubelib "istio.io/istio/pkg/kube"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
 )

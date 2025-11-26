@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 	"github.com/onsi/ginkgo/v2"
 
 	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
@@ -22,6 +21,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/threadsafe"
 	kgatewayAdminCli "github.com/kgateway-dev/kgateway/v2/test/controllerutils/admincli"
 	"github.com/kgateway-dev/kgateway/v2/test/envoyutils/admincli"
+	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
 
 // StandardKgatewayDumpOnFail creates a dump of the kubernetes state and certain envoy data from

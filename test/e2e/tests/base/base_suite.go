@@ -402,12 +402,12 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 	// apply the manifests
 	//for _, manifest := range testCase.Manifests {
 	//	log.Errorf("howardjohn: apply..")
-		err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLFiles("", testCase.Manifests...)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		//gomega.Eventually(func() error {
-		//	err := s.TestInstallation.Actions.Kubectl().ApplyFile(s.Ctx, manifest)
-		//	return err
-		//}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "can apply "+manifest)
+	err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLFiles("", testCase.Manifests...)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	//gomega.Eventually(func() error {
+	//	err := s.TestInstallation.Actions.Kubectl().ApplyFile(s.Ctx, manifest)
+	//	return err
+	//}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "can apply "+manifest)
 	//}
 
 	for manifest, transform := range testCase.ManifestsWithTransform {
@@ -457,8 +457,8 @@ func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
 	// delete(foo); add(foo) we end up in the right state.
 	// We also need to make sure we finish the deletion before exiting the process
 	//go func() {
-		err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", testCase.Manifests...)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", testCase.Manifests...)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	//}()
 	return
 	// parse the expected resources and dynamic resources from the manifests (this normally would already
@@ -469,10 +469,10 @@ func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
 	s.loadDynamicResources(testCase)
 
 	//for _, manifest := range testCase.Manifests {
-		//gomega.Eventually(func() error {
-		//	err := s.TestInstallation.Actions.Kubectl().DeleteFileSafe(s.Ctx, manifest)
-		//	return err
-		//}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "can delete "+manifest)
+	//gomega.Eventually(func() error {
+	//	err := s.TestInstallation.Actions.Kubectl().DeleteFileSafe(s.Ctx, manifest)
+	//	return err
+	//}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "can delete "+manifest)
 	//}
 	for manifest := range testCase.ManifestsWithTransform {
 		// we don't need to transform the manifest here, as we are just deleting by filename

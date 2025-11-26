@@ -6,23 +6,24 @@ import (
 	"net/http"
 	"testing"
 
+	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/retry"
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
 	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
 	testmatchers "github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
-	"istio.io/istio/pkg/test/util/assert"
-	"istio.io/istio/pkg/test/util/retry"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, manifests ...string) {
 	//for _, s := range log.Scopes() {
 	//	s.SetOutputLevel(log.DebugLevel)
 	//}
-		err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifests...)
-		assert.NoError(t, err)
+	err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifests...)
+	assert.NoError(t, err)
 	//for _, manifest := range manifests {
-		//err := installation.Actions.Kubectl().ApplyFile(ctx, manifest)
+	//err := installation.Actions.Kubectl().ApplyFile(ctx, manifest)
 	//}
 }
 
@@ -45,7 +46,7 @@ type Gateway struct {
 
 var BaseGateway Gateway
 
-func (g *Gateway) Send(t *testing.T, match *testmatchers.HttpResponse, opts ...curl.Option) {
+func (g *Gateway) Send(t *testing.T, match *testmatchers.HttpResponse, opts ...curl.Option) *http.Response {
 	fullOpts := append([]curl.Option{curl.WithHost(g.Address)}, opts...)
 	var resp *http.Response
 	retry.UntilSuccessOrFail(t, func() error {
@@ -64,4 +65,5 @@ func (g *Gateway) Send(t *testing.T, match *testmatchers.HttpResponse, opts ...c
 		}
 		return nil
 	})
+	return resp
 }

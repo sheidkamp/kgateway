@@ -11,6 +11,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/helmutils"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/actions"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/assertions"
@@ -20,9 +24,6 @@ import (
 	testruntime "github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/runtime"
 	"github.com/kgateway-dev/kgateway/v2/test/helpers"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // CreateTestInstallation is the simplest way to construct a TestInstallation in kgateway.
@@ -319,7 +320,7 @@ func (i *TestInstallation) releaseExists(ctx context.Context, releaseName, names
 		Namespace: namespace,
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			"owner": "helm",
-			"name": releaseName,
+			"name":  releaseName,
 		}),
 	}); err != nil {
 		return false

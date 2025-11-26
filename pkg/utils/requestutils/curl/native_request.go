@@ -17,8 +17,9 @@ import (
 // If multiple Option modify the same parameter, the last defined one will win
 //
 // Example:
-//     resp, err := ExecuteRequest(WithMethod("GET"), WithMethod("POST"))
-//     will executeNative a POST request
+//
+//	resp, err := ExecuteRequest(WithMethod("GET"), WithMethod("POST"))
+//	will executeNative a POST request
 //
 // A notable exception is the WithHeader option, which accumulates headers
 func ExecuteRequest(options ...Option) (*http.Response, error) {

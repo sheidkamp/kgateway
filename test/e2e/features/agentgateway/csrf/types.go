@@ -18,7 +18,7 @@ const (
 
 var (
 	// manifests
-	routesManifest      = getTestFile("routes.yaml")
+	routesManifest        = getTestFile("routes.yaml")
 	csrfAgwPolicyManifest = getTestFile("csrf-gw.yaml")
 
 	agwPolicy = &kgatewayv1alpha1.AgentgatewayPolicy{
