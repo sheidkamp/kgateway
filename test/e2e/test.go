@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/helmutils"
@@ -78,7 +77,9 @@ func CreateTestInstallationForCluster(
 		// between TestInstallation outputs per CI run
 		GeneratedFiles: MustGeneratedFiles(installContext.InstallNamespace, clusterContext.Name),
 	}
-	runtime.SetFinalizer(installation, func(i *TestInstallation) { i.finalize() })
+	t.Cleanup(func() {
+		installation.finalize()
+	})
 	return installation
 }
 

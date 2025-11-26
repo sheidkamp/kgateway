@@ -15,6 +15,7 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"istio.io/istio/pkg/log"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -400,11 +401,15 @@ func (s *BaseTestingSuite) GetKubectlOutput(command ...string) string {
 // ApplyManifests applies the manifests and waits until the resources are created and ready.
 func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 	// apply the manifests
+	log.Errorf("howardjohn: APPLY manifests")
 	for _, manifest := range testCase.Manifests {
-		gomega.Eventually(func() error {
-			err := s.TestInstallation.Actions.Kubectl().ApplyFile(s.Ctx, manifest)
-			return err
-		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "can apply "+manifest)
+		log.Errorf("howardjohn: apply..")
+		err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		//gomega.Eventually(func() error {
+		//	err := s.TestInstallation.Actions.Kubectl().ApplyFile(s.Ctx, manifest)
+		//	return err
+		//}, 10*time.Second, 1*time.Second).Should(gomega.Succeed(), "can apply "+manifest)
 	}
 
 	for manifest, transform := range testCase.ManifestsWithTransform {
@@ -443,7 +448,7 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 		s.TestInstallation.Assertions.EventuallyPodsRunning(s.Ctx, ns, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("%s=%s", defaults.WellKnownAppLabel, name),
 			// Provide a longer timeout as the pod needs to be pulled and pass HCs
-		}, time.Second*60, time.Second*2)
+		}, time.Second*60, time.Second)
 	}
 }
 

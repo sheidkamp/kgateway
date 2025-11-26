@@ -6,7 +6,7 @@ import (
 )
 
 // BuildArgs accepts a set of curl.Option and generates the list of arguments
-// that can be used to execute a curl request
+// that can be used to executeNative a curl request
 // If multiple Option modify the same argument, the last defined one will win:
 //
 //	Example:

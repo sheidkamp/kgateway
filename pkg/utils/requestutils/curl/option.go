@@ -171,7 +171,7 @@ func WithoutRetries() Option {
 	}
 }
 
-// WithPostBody returns the Option to configure a curl request to execute a post request with the provided json body
+// WithPostBody returns the Option to configure a curl request to executeNative a post request with the provided json body
 func WithPostBody(body string) Option {
 	return func(config *requestConfig) {
 		WithMethod(http.MethodPost)(config)

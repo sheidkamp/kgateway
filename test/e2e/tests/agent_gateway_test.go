@@ -5,13 +5,16 @@ package tests_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/envutils"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
+	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
 	. "github.com/kgateway-dev/kgateway/v2/test/e2e/tests"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/install"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func TestAgentgatewayIntegration(t *testing.T) {
@@ -47,5 +50,10 @@ func TestAgentgatewayIntegration(t *testing.T) {
 	// Install kgateway
 	testInstallation.InstallKgatewayFromLocalChart(ctx)
 
+	common.SetupBaseConfig(ctx, t, testInstallation, filepath.Join("manifests", "agent-gateway-base.yaml"))
+	common.SetupBaseGateway(ctx, testInstallation, types.NamespacedName{
+		Namespace: "agentgateway-base",
+		Name:      "gateway",
+	})
 	AgentgatewaySuiteRunner().Run(ctx, t, testInstallation)
 }

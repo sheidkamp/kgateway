@@ -6,6 +6,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+kubelib "istio.io/istio/pkg/kube"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
 )
@@ -28,6 +29,9 @@ type Context struct {
 
 	// A client to perform CRUD operations on the Kubernetes Cluster
 	Client client.Client
+
+	// A client to perform CRUD operations on the Kubernetes Cluster
+	IstioClient kubelib.CLIClient
 
 	// A set of clients for interacting with the Kubernetes Cluster
 	Clientset *kubernetes.Clientset
