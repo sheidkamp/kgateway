@@ -180,9 +180,11 @@ test: ## Run all tests with ginkgo, or only run the test package at {TEST_PKG} i
 # will still have e2e tests run by Github Actions once they publish a pull
 # request.
 .PHONY: e2e-test
+e2e-test: go-test
+e2e-test: TEST_TAG = e2e
+e2e-test: GO_TEST_ARGS = $(E2E_GO_TEST_ARGS)
 e2e-test: dummy-idp-docker kind-load-dummy-idp
-e2e-test: ## Run only e2e tests, and only run the test package at {TEST_PKG} if it is specified
-	@$(MAKE) --no-print-directory go-test TEST_TAG=e2e TEST_PKG=$(TEST_PKG)
+	@:
 
 
 # https://go.dev/blog/cover#heat-maps
@@ -217,10 +219,12 @@ ifeq ($(GOARCH), arm64)
 endif
 endif
 
+# Skip -race on e2e. This requires building the codebase twice, and provides no value as the only code executed is test code.
+E2E_GO_TEST_ARGS ?= -timeout=25m -cpu=4 -outputdir=$(OUTPUT_DIR)
 # Testing flags: https://pkg.go.dev/cmd/go#hdr-Testing_flags
 # The default timeout for a suite is 10 minutes, but this can be overridden by setting the -timeout flag. Currently set
 # to 25 minutes based on the time it takes to run the longest test setup (kgateway_test).
-GO_TEST_ARGS ?= -timeout=25m -cpu=4 -race -outputdir=$(OUTPUT_DIR)
+GO_TEST_ARGS ?= $(E2E_GO_TEST_ARGS) -race
 GO_TEST_COVERAGE_ARGS ?= --cover --covermode=atomic --coverprofile=cover.out
 GO_TEST_COVERAGE ?= go tool github.com/vladopajic/go-test-coverage/v2
 
