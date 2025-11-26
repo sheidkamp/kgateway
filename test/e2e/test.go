@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/helmutils"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/actions"
@@ -20,6 +21,7 @@ import (
 	testruntime "github.com/kgateway-dev/kgateway/v2/test/e2e/testutils/runtime"
 	"github.com/kgateway-dev/kgateway/v2/test/helpers"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
+	"istio.io/istio/pkg/log"
 )
 
 // CreateTestInstallation is the simplest way to construct a TestInstallation in kgateway.
@@ -160,7 +162,9 @@ func (i *TestInstallation) InstallKgatewayCRDsFromLocalChart(ctx context.Context
 
 	// Check if we should skip installation if the release already exists (PERSIST_INSTALL or FAIL_FAST_AND_PERSIST mode)
 	if testutils.ShouldPersistInstall() || testutils.ShouldFailFastAndPersist() {
+		t0 := time.Now()
 		if i.Actions.Helm().ReleaseExists(ctx, helmutils.CRDChartName, i.Metadata.InstallNamespace) {
+			log.Errorf("howardjohn: CHECK CRD %v", time.Since(t0))
 			return
 		}
 	}
@@ -186,7 +190,9 @@ func (i *TestInstallation) InstallKgatewayCoreFromLocalChart(ctx context.Context
 
 	// Check if we should skip installation if the release already exists (PERSIST_INSTALL or FAIL_FAST_AND_PERSIST mode)
 	if testutils.ShouldPersistInstall() || testutils.ShouldFailFastAndPersist() {
+		t0 := time.Now()
 		if i.Actions.Helm().ReleaseExists(ctx, helmutils.ChartName, i.Metadata.InstallNamespace) {
+			log.Errorf("howardjohn: CHECK CRD %v", time.Since(t0))
 			return
 		}
 	}

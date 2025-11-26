@@ -6,9 +6,12 @@ import (
 	"context"
 	"net/http"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
 	"github.com/stretchr/testify/suite"
+	"istio.io/istio/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -78,13 +81,17 @@ func (s *testingSuite) TestRoutePolicy() {
 		gwv1.RouteConditionAccepted,
 		metav1.ConditionTrue,
 	)
+	t0 := time.Now()
+	g := sync.WaitGroup{}
 	// verify key without metadata works
-	s.assertResponse("secureroute.com", "k-1230", http.StatusOK)
+	g.Go(func() { s.assertResponse("secureroute.com", "k-1230", http.StatusOK) })
 	// verify key with metadata works
-	s.assertResponse("secureroute.com", "k-4560", http.StatusOK)
+	g.Go(func() { s.assertResponse("secureroute.com", "k-4560", http.StatusOK) })
 	// verify invalid keys are rejected
-	s.assertResponse("secureroute.com", "nosuchkey", http.StatusUnauthorized)
-	s.assertResponseWithoutAuth("secureroute.com", http.StatusUnauthorized)
+	g.Go(func() { s.assertResponse("secureroute.com", "nosuchkey", http.StatusUnauthorized) })
+	g.Go(func() { s.assertResponseWithoutAuth("secureroute.com", http.StatusUnauthorized) })
+	g.Wait()
+	log.Errorf("howardjohn: requests done %v", time.Since(t0))
 }
 
 func (s *testingSuite) TestGatewayPolicy() {
@@ -95,13 +102,18 @@ func (s *testingSuite) TestGatewayPolicy() {
 		gwv1.RouteConditionAccepted,
 		metav1.ConditionTrue,
 	)
+	g := sync.WaitGroup{}
+
+	t0 := time.Now()
 	// verify key without metadata works
-	s.assertResponse("securegateways.com", "k-123", http.StatusOK)
+	g.Go(func() { s.assertResponse("securegateways.com", "k-123", http.StatusOK) })
 	// verify key with metadata works
-	s.assertResponse("securegateways.com", "k-456", http.StatusOK)
+	g.Go(func() { s.assertResponse("securegateways.com", "k-456", http.StatusOK) })
 	// verify invalid keys are rejected
-	s.assertResponse("securegateways.com", "nosuchkey", http.StatusUnauthorized)
-	s.assertResponseWithoutAuth("securegateways.com", http.StatusUnauthorized)
+	g.Go(func() { s.assertResponse("securegateways.com", "nosuchkey", http.StatusUnauthorized) })
+	g.Go(func() { s.assertResponseWithoutAuth("securegateways.com", http.StatusUnauthorized) })
+	g.Wait()
+	log.Errorf("howardjohn: requests done %v", time.Since(t0))
 }
 
 func (s *testingSuite) assertResponse(hostHeader, authHeader string, expectedStatus int) {
