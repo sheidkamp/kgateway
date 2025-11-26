@@ -5,6 +5,7 @@ package tests
 import (
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/agentgateway/apikeyauth"
+	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/agentgateway/backendtls"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/agentgateway/basicauth"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/agentgateway/csrf"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/features/agentgateway/jwtauth"
@@ -21,9 +22,9 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	//agentgatewaySuiteRunner.Register("MCP", mcp.NewTestingSuite)
 	//agentgatewaySuiteRunner.Register("RBAC", rbac.NewTestingSuite)
 	//agentgatewaySuiteRunner.Register("Transformation", transformation.NewTestingSuite)
-	//agentgatewaySuiteRunner.Register("BackendTLSPolicy", backendtls.NewAgentgatewayTestingSuite)
+	agentgatewaySuiteRunner.Register("BackendTLSPolicy", backendtls.NewTestingSuite)
 	//agentgatewaySuiteRunner.Register("AIBackend", aibackend.NewTestingSuite)
-	//agentgatewaySuiteRunner.Register("ConfigMap", configmap.NewTestingSuite)
+	//agentgatewaySuiteRunner.Register("ConfigMap", configmap.NewTestingSuite) // redeploys by need
 	agentgatewaySuiteRunner.Register("BasicAuth", basicauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("ApiKeyAuth", apikeyauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("JwtAuth", jwtauth.NewTestingSuite)

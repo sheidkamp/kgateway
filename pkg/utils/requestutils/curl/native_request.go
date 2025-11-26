@@ -1,6 +1,5 @@
 package curl
 
-
 import (
 	"bytes"
 	"context"
@@ -73,94 +72,59 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 		defer cancel()
 	}
 
-	// Execute request with retry logic
-	var lastErr error
-	maxAttempts := c.retry + 1
-	retryStartTime := time.Now()
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if attempt > 0 {
-			// Check if we've exceeded retry max time
-			if c.retryMaxTime > 0 && time.Since(retryStartTime) > time.Duration(c.retryMaxTime)*time.Second {
-				break
-			}
-
-			// Apply retry delay
-			if c.retryDelay > 0 {
-				time.Sleep(time.Duration(c.retryDelay) * time.Second)
-			}
-
-			if c.verbose {
-				fmt.Printf("Retrying request (attempt %d/%d)\n", attempt+1, maxAttempts)
-			}
-
-			// Reset body reader for retry
-			if c.body != "" {
-				bodyReader = bytes.NewBufferString(c.body)
-			}
-		}
-
-		// Create request
-		req, err := http.NewRequestWithContext(ctx, c.method, fullURL, bodyReader)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		// Add headers
-		for key, values := range c.headers {
-			for _, value := range values {
-				// Host header must be set on req.Host, not in req.Header
-				if strings.EqualFold(key, "Host") {
-					req.Host = value
-				} else {
-					req.Header.Add(key, value)
-				}
-			}
-		}
-
-		// Add cookies
-		if c.cookie != "" {
-			req.Header.Add("Cookie", c.cookie)
-		}
-
-		// Handle HEAD-only requests
-		if c.headersOnly {
-			req.Method = "HEAD"
-		}
-
-		// Execute request
-		if c.verbose {
-			fmt.Printf("> %s %s\n", req.Method, req.URL.String())
-			fmt.Printf("> Host: %s\n", req.Host)
-			for k, v := range req.Header {
-				fmt.Printf("> %s: %s\n", k, strings.Join(v, ", "))
-			}
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = err
-			if c.verbose {
-				fmt.Printf("Request failed: %v\n", err)
-			}
-			continue
-		}
-
-		if c.verbose {
-			fmt.Printf("< HTTP %s\n", resp.Status)
-			for k, v := range resp.Header {
-				fmt.Printf("< %s: %s\n", k, strings.Join(v, ", "))
-			}
-		}
-
-		return resp, nil
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, c.method, fullURL, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	if lastErr != nil {
-		return nil, fmt.Errorf("request failed after %d attempts: %w", maxAttempts, lastErr)
+	// Add headers
+	for key, values := range c.headers {
+		for _, value := range values {
+			// Host header must be set on req.Host, not in req.Header
+			if strings.EqualFold(key, "Host") {
+				req.Host = value
+			} else {
+				req.Header.Add(key, value)
+			}
+		}
 	}
 
-	return nil, fmt.Errorf("request failed after %d attempts", maxAttempts)
+	// Add cookies
+	if c.cookie != "" {
+		req.Header.Add("Cookie", c.cookie)
+	}
+
+	// Handle HEAD-only requests
+	if c.headersOnly {
+		req.Method = "HEAD"
+	}
+
+	// Execute request
+	if c.verbose {
+		fmt.Printf("> %s %s\n", req.Method, req.URL.String())
+		fmt.Printf("> Host: %s\n", req.Host)
+		for k, v := range req.Header {
+			fmt.Printf("> %s: %s\n", k, strings.Join(v, ", "))
+		}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if c.verbose {
+			fmt.Printf("Request failed: %v\n", err)
+		}
+		return nil, err
+	}
+
+	if c.verbose {
+		fmt.Printf("< HTTP %s\n", resp.Status)
+		for k, v := range resp.Header {
+			fmt.Printf("< %s: %s\n", k, strings.Join(v, ", "))
+		}
+	}
+
+	return resp, nil
 }
 
 func (c *requestConfig) buildURL() string {
@@ -239,6 +203,10 @@ func (c *requestConfig) buildHTTPClient() *http.Client {
 		client.Timeout = time.Duration(c.connectionTimeout) * time.Second
 	}
 
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		// Disable redirects
+		return http.ErrUseLastResponse
+	}
 	return client
 }
 
@@ -264,11 +232,9 @@ func (c *requestConfig) buildDialer() func(context.Context, string, string) (net
 	}
 
 	// Handle SNI with custom host resolution
+	// TODO
 	if c.sni != "" {
-		targetAddr := fmt.Sprintf("%s:%d", c.host, c.port)
-		return func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return dialer.DialContext(ctx, network, targetAddr)
-		}
+		panic("sni is not implemented")
 	}
 
 	return dialer.DialContext
