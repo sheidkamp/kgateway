@@ -659,4 +659,4 @@ tool (
 
 //replace github.com/agentgateway/agentgateway => /home/john/solo/agentgateway
 
-replace istio.io/istio => ../../../istio.io/istio
+//replace istio.io/istio => ../../../istio.io/istio
