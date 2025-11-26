@@ -47,7 +47,8 @@ spec:
             name: test-tls
         options:
           # SHA256 fingerprint of client-invalid.crt - see CLIENT_CERTS_README.md for generation
-          kgateway.dev/verify-certificate-hash: "FC:1B:6F:22:5E:D0:65:10:D2:68:A4:7E:33:63:C1:99:48:DD:19:BB:B8:A9:2C:21:16:05:F4:60:47:57:AB:B9"
+          kgateway.dev/verify-certificate-hash: "- FC1B6F225ED06510D268A47E3363C19948DD19BBB8A92C211605F4604757ABB9
+           - FC1B6F225ED06510D268A47E3363C19948DD19BBB8A92C211605F4604757ABAA"
       allowedRoutes:
         namespaces:
           from: All

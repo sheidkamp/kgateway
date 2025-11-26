@@ -4,7 +4,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+	"unicode"
+
+	"encoding/hex"
 
 	envoytlsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -165,14 +169,72 @@ func ApplyVerifySubjectAltNames(in string, out *ir.TLSConfig) error {
 }
 
 func ApplyVerifyCertificateHash(in string, out *ir.TLSConfig) error {
-	// Todo - allow multiline yaml style definition of array?
-	// Todo add validation
-	hashes := []string{}
-	for _, hash := range strings.Split(in, ",") {
-		hashes = append(hashes, strings.TrimSpace(hash))
+	hashes := splitFakeYamlArray(in)
+
+	var errs error
+	for _, hash := range hashes {
+		if err := validateCertificateHash(hash); err != nil {
+			errs = errors.Join(errs, err)
+		}
 	}
+
+	if errs != nil {
+		return errs
+	}
+
 	out.VerifyCertificateHash = hashes
 	return nil
+}
+
+// Regex to match a SHA256 hash that is split into 32 pairs of hex characters by colons
+var sha256HashRegexHexPairs = regexp.MustCompile(
+	"^[[:xdigit:]]{2}(:[[:xdigit:]]{2}){31}$",
+)
+
+// Validate that a certificate has is a valid SHA256 hash
+// - it has 64 hex characters
+// - it may be split into pairs by colons
+func validateCertificateHash(hash string) error {
+	switch {
+	case len(hash) == 64: // 64 hex characters is a valid SHA256 hash
+		_, err := hex.DecodeString(hash)
+		if err != nil {
+			return fmt.Errorf("invalid certificate hash: %s", hash)
+		}
+		return nil
+	case sha256HashRegexHexPairs.MatchString(hash): // 32 pairs of hex characters is a valid SHA256 hash
+		return nil
+	default:
+		return fmt.Errorf("invalid certificate hash: %s", hash)
+	}
+}
+
+// This function is used to support "fake yaml" array syntax in the annotations.
+// This function is used to split a strings that are comma or "-" separated and whitespace padded.
+// This supports input that look like:
+// "string1, string2, string3"
+// or
+// " - string1
+//   - string2
+//   - string3"
+//
+// as well as (not recommended) hybrids like:
+// "------ string1, string2
+// , string3       -string4"
+// This function does not use any actual YAML parsing and the strings may not contain - or , characters, regardless of how they are quoted.
+func splitFakeYamlArray(in string) []string {
+	hashes := []string{}
+	for _, commaSeparatedHash := range strings.Split(in, ",") {
+		for _, hash := range strings.Split(commaSeparatedHash, "-") {
+			trimmedHash := strings.TrimFunc(hash, func(r rune) bool {
+				return unicode.IsSpace(r)
+			})
+			if trimmedHash != "" {
+				hashes = append(hashes, trimmedHash)
+			}
+		}
+	}
+	return hashes
 }
 
 var TLSExtensionOptionFuncs = map[gwv1.AnnotationKey]TLSExtensionOptionFunc{
