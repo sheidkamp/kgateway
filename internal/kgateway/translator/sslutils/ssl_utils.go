@@ -2,13 +2,12 @@ package sslutils
 
 import (
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
-
-	"encoding/hex"
 
 	envoytlsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	corev1 "k8s.io/api/core/v1"
