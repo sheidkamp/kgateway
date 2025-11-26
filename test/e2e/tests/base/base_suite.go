@@ -455,10 +455,13 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 // DeleteManifests deletes the manifests and waits until the resources are deleted.
 func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
 
-	go func() {
+	// TODO: this is a bottleneck. Doing it async is great but we need barriers to make sure if we do
+	// delete(foo); add(foo) we end up in the right state.
+	// We also need to make sure we finish the deletion before exiting the process
+	//go func() {
 		err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", testCase.Manifests...)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	}()
+	//}()
 	return
 	// parse the expected resources and dynamic resources from the manifests (this normally would already
 	// have been done via ApplyManifests, but we check again here just in case ApplyManifests was not called).
