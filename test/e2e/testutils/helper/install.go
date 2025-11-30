@@ -9,7 +9,6 @@ import (
 	"helm.sh/helm/v3/pkg/repo"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
 
@@ -30,16 +29,7 @@ func GetLocalChartPath(chartName string, assetDir string) (string, error) {
 		dir = defaultTestAssetDir
 	}
 	rootDir := testutils.GitRootDirectory()
-	testAssetDir := filepath.Join(rootDir, dir)
-	if !fsutils.IsDirectory(testAssetDir) {
-		return "", fmt.Errorf("%s does not exist or is not a directory", testAssetDir)
-	}
-
-	version, err := getChartVersion(testAssetDir, chartName)
-	if err != nil {
-		return "", fmt.Errorf("getting Helm chart version: %w", err)
-	}
-	return filepath.Join(testAssetDir, fmt.Sprintf("%s-%s.tgz", chartName, version)), nil
+	return filepath.Join(rootDir, "install/helm", chartName), nil
 }
 
 // Parses the Helm index file and returns the version of the chart.

@@ -56,9 +56,22 @@ function create_kind_cluster_or_skip() {
   fi
 }
 
+function create_and_setup() {
+  create_kind_cluster_or_skip
+
+  # 5. Apply the Kubernetes Gateway API CRDs
+  kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$CONFORMANCE_VERSION/$CONFORMANCE_CHANNEL-install.yaml"
+
+  # 6. Apply the Kubernetes Gateway API Inference Extension CRDs
+  kubectl apply --kustomize "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=$GIE_CRD_VERSION"
+
+  . $SCRIPT_DIR/setup-metalllb-on-kind.sh
+}
+
 # 1. Create a kind cluster (or skip creation if a cluster with name=CLUSTER_NAME already exists)
 # This config is roughly based on: https://kind.sigs.k8s.io/docs/user/ingress/
-create_kind_cluster_or_skip
+create_and_setup &
+KIND_PID=$!
 
 if [[ $SKIP_DOCKER == 'true' ]]; then
   # TODO(tim): refactor the Makefile & CI scripts so we're loading local
@@ -73,19 +86,9 @@ else
 
 fi
 
-# 5. Apply the Kubernetes Gateway API CRDs
-kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$CONFORMANCE_VERSION/$CONFORMANCE_CHANNEL-install.yaml"
+wait "$KIND_PID"
 
-# 6. Apply the Kubernetes Gateway API Inference Extension CRDs
-kubectl apply --kustomize "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=$GIE_CRD_VERSION"
-
-# 7. Conformance test setup
-if [[ $CONFORMANCE == "true" ]]; then
-  echo "Running conformance test setup"
-  . $SCRIPT_DIR/setup-metalllb-on-kind.sh
-fi
-
-# 9. Setup localstack
+# 7. Setup localstack
 if [[ $LOCALSTACK == "true" ]]; then
   echo "Setting up localstack"
   . $SCRIPT_DIR/setup-localstack.sh

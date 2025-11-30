@@ -704,8 +704,8 @@ kind-reload-%: kind-build-and-load-% kind-set-image-% ; ## Use to build specifie
 
 .PHONY: kind-build-and-load ## Use to build all images and load them into kind
 kind-build-and-load: kind-build-and-load-kgateway
-kind-build-and-load: kind-build-and-load-envoy-wrapper
-kind-build-and-load: kind-build-and-load-sds
+#kind-build-and-load: kind-build-and-load-envoy-wrapper
+#kind-build-and-load: kind-build-and-load-sds
 
 .PHONY: kind-load ## Use to load all images into kind
 kind-load: kind-load-kgateway
