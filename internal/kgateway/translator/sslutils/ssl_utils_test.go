@@ -221,12 +221,10 @@ func TestSplitFakeYamlArray(t *testing.T) {
 		{name: "mixed_separated", input: "str1,str2-str3", expected: []string{"str1", "str2", "str3"}},
 		{name: "whitespace_separated", input: "str1, str2, str3", expected: []string{"str1", "str2", "str3"}},
 		{name: "mixed_whitespace_separated", input: "str1, str2- str3", expected: []string{"str1", "str2", "str3"}},
-		{name: "mixed_whitespace_dash_separated", input: "str1, str2- str3", expected: []string{"str1", "str2", "str3"}},
 		{name: "mixed_whitespace_comma_separated", input: "str1, str2, str3", expected: []string{"str1", "str2", "str3"}},
-		{name: "mixed_whitespace_mixed_separated", input: "str1, str2- str3", expected: []string{"str1", "str2", "str3"}},
-		{name: "newlines and commas with whitespace", input: "str1,\n   str2,\n   str3", expected: []string{"str1", "str2", "str3"}},
-		{name: "newlines and dashes with whitespace", input: "- str1\n   - str2\n   - str3", expected: []string{"str1", "str2", "str3"}},
-		{name: "all types of whitespace_mixed_separated", input: "str1, \r\n   str2- \n \t str3", expected: []string{"str1", "str2", "str3"}},
+		{name: "newlines_and_commas_with_whitespace", input: "str1,\n   str2,\n   str3", expected: []string{"str1", "str2", "str3"}},
+		{name: "newlines_and_dashes_with_whitespace", input: "- str1\n   - str2\n   - str3", expected: []string{"str1", "str2", "str3"}},
+		{name: "all_types_of_whitespace_mixed_separated", input: "str1, \r\n   str2- \n \t str3", expected: []string{"str1", "str2", "str3"}},
 	}
 
 	for _, tc := range testCases {

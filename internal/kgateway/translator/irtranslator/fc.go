@@ -484,6 +484,8 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 		common.TlsParams.EcdhCurves = tlsConfig.EcdhCurves
 	}
 
+	// Note: This is the only place currently setting ValidationContextType. If other fields are addded, this logic will need to be updated
+	// to handle the possibility of different validation contexts alraedy being set.
 	if len(tlsConfig.VerifyCertificateHash) > 0 {
 		common.ValidationContextType = &envoytlsv3.CommonTlsContext_ValidationContext{
 			ValidationContext: &envoytlsv3.CertificateValidationContext{
