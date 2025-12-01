@@ -190,7 +190,7 @@ var sha256HashRegexHexPairs = regexp.MustCompile(
 	"^[[:xdigit:]]{2}(:[[:xdigit:]]{2}){31}$",
 )
 
-// Validate that a certificate has is a valid SHA256 hash
+// Validate that a certificate hash is a valid SHA256 hash
 // - it has 64 hex characters
 // - it may be split into pairs by colons
 func validateCertificateHash(hash string) error {
@@ -209,7 +209,7 @@ func validateCertificateHash(hash string) error {
 }
 
 // This function is used to support "fake yaml" array syntax in the annotations.
-// This function is used to split a strings that are comma or "-" separated and whitespace padded.
+// This function is used to split strings that are comma or "-" separated and whitespace padded.
 // This supports input that look like:
 // "string1, string2, string3"
 // or
@@ -222,7 +222,7 @@ func validateCertificateHash(hash string) error {
 // , string3       -string4"
 // This function does not use any actual YAML parsing and the strings may not contain - or , characters, regardless of how they are quoted.
 // This is used to parse the VerifyCertificateHash annotation value, which is expected to contain hex characters and colons. This function is safe
-// for valid values this data, and is unexported to discourage its use unless the data being parsed is well understood.
+// for valid values of this data, and is unexported to discourage its use unless the data being parsed is well understood.
 func splitFakeYamlArray(in string) []string {
 	hashes := []string{}
 	for _, commaSeparatedHash := range strings.Split(in, ",") {
