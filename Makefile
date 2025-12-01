@@ -220,7 +220,7 @@ endif
 endif
 
 # Skip -race on e2e. This requires building the codebase twice, and provides no value as the only code executed is test code.
-E2E_GO_TEST_ARGS ?= -timeout=25m -cpu=4 -outputdir=$(OUTPUT_DIR)
+E2E_GO_TEST_ARGS ?= -timeout=25m -cpu=4 -outputdir=$(OUTPUT_DIR) -debug-actiongraph=./_test/timings/$(CLUSTER_NAME)/actiongraph-test -debug-trace=./_test/timings/$(CLUSTER_NAME)/trace-test
 # Testing flags: https://pkg.go.dev/cmd/go#hdr-Testing_flags
 # The default timeout for a suite is 10 minutes, but this can be overridden by setting the -timeout flag. Currently set
 # to 25 minutes based on the time it takes to run the longest test setup (kgateway_test).
@@ -422,7 +422,7 @@ export CONTROLLER_IMAGE_REPO ?= kgateway
 # We include the files in K8S_GATEWAY_SOURCES as dependencies to the kgateway build
 # so changes in those directories cause the make target to rebuild
 $(CONTROLLER_OUTPUT_DIR)/kgateway-linux-$(GOARCH): $(K8S_GATEWAY_SOURCES)
-	$(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $@ ./cmd/kgateway/...
+	$(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $@ -debug-actiongraph=./_test/timings/$(CLUSTER_NAME)/actiongraph-build -debug-trace=./_test/timings/$(CLUSTER_NAME)/trace-build ./cmd/kgateway/...
 
 .PHONY: kgateway
 kgateway: $(CONTROLLER_OUTPUT_DIR)/kgateway-linux-$(GOARCH)

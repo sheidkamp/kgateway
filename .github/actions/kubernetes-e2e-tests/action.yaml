@@ -38,3 +38,8 @@ runs:
     with:
       name: bug-report-${{ inputs.cluster-name }}-${{ inputs.matrix-label }}
       path: ./_test/bug_report/${{ inputs.cluster-name }}
+  - name: Upload build timings
+    uses: ./.github/actions/upload-artifact
+    with:
+      name: bug-report-${{ inputs.cluster-name }}-${{ inputs.matrix-label }}
+      path: ./_test/timings/${{ inputs.cluster-name }}/test
