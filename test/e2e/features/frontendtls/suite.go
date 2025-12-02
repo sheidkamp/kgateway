@@ -258,7 +258,7 @@ func (s *testingSuite) assertEventualCurlResponse(opts ...curl.Option) {
 			StatusCode: http.StatusOK,
 			Body:       gstruct.Ignore(),
 		},
-		20*time.Second,
+		10*time.Second,
 	)
 }
 
@@ -285,7 +285,7 @@ func (s *testingSuite) assertEventualCurlResponseForMTLS(hostname string, port i
 			StatusCode: http.StatusOK,
 			Body:       gstruct.Ignore(),
 		},
-		20*time.Second,
+		10*time.Second,
 	)
 }
 
@@ -296,7 +296,7 @@ func (s *testingSuite) assertEventualCurlErrorForMTLS(hostname string, port int,
 		s.Ctx,
 		testdefaults.CurlPodExecOpt,
 		curlOpts,
-		0, // any error code
+		16, // CURLE_SSL_CACERT_BADFILE
 		10*time.Second,
 	)
 }
