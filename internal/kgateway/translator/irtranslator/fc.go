@@ -495,8 +495,31 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 	}
 	// TODO: add verify subject alt names (validation context) https://github.com/kgateway-dev/kgateway/issues/12955
 
+	// Handle client certificate validation (mTLS)
+	if tlsConfig.ClientCertificateValidation != nil {
+		if len(tlsConfig.ClientCertificateValidation.CACertificates) > 0 {
+			// Combine all CA certificates into a single trusted CA
+			var combinedCA []byte
+			for i, caCert := range tlsConfig.ClientCertificateValidation.CACertificates {
+				if i > 0 {
+					combinedCA = append(combinedCA, '\n')
+				}
+				combinedCA = append(combinedCA, caCert...)
+			}
+			common.ValidationContextType = &envoytlsv3.CommonTlsContext_ValidationContext{
+				ValidationContext: &envoytlsv3.CertificateValidationContext{
+					TrustedCa: bytesDataSource(combinedCA),
+				},
+			}
+		}
+	}
+
 	out := &envoytlsv3.DownstreamTlsContext{
 		CommonTlsContext: common,
+	}
+	// Set require_client_certificate if client certificates are required
+	if tlsConfig.ClientCertificateValidation != nil && tlsConfig.ClientCertificateValidation.RequireClientCertificate {
+		out.RequireClientCertificate = &wrapperspb.BoolValue{Value: true}
 	}
 	typedConfig, _ := utils.MessageToAny(out)
 

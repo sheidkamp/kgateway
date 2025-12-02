@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -100,6 +102,7 @@ func (f FromObject) Namespace() string {
 
 type GatewayQueries interface {
 	GetSecretForRef(kctx krt.HandlerContext, ctx context.Context, fromGk schema.GroupKind, fromns string, secretRef gwv1.SecretObjectReference) (*ir.Secret, error)
+	GetConfigMapForRef(kctx krt.HandlerContext, ctx context.Context, fromGk schema.GroupKind, fromns string, configMapRef gwv1.ObjectReference) (*corev1.ConfigMap, error)
 
 	// GetRoutesForGateway finds the top level xRoutes attached to the provided Gateway
 	GetRoutesForGateway(kctx krt.HandlerContext, ctx context.Context, gw *ir.Gateway) (*RoutesForGwResult, error)
@@ -278,6 +281,39 @@ func (r *gatewayQueries) GetSecretForRef(kctx krt.HandlerContext, ctx context.Co
 		Namespace: fromns,
 	}
 	return r.collections.Secrets.GetSecret(kctx, f, secretRef)
+}
+
+func (r *gatewayQueries) GetConfigMapForRef(kctx krt.HandlerContext, ctx context.Context, fromGk schema.GroupKind, fromns string, configMapRef gwv1.ObjectReference) (*corev1.ConfigMap, error) {
+	// Resolve namespace - if not specified, use the source namespace
+	ns := fromns
+	if configMapRef.Namespace != nil {
+		ns = string(*configMapRef.Namespace)
+	}
+
+	// Validate reference grant if cross-namespace
+	if ns != fromns {
+		to := ir.ObjectSource{
+			Group:     coreIfEmpty(string(configMapRef.Group)),
+			Kind:      string(configMapRef.Kind),
+			Namespace: ns,
+			Name:      string(configMapRef.Name),
+		}
+		if !r.collections.RefGrants.ReferenceAllowed(kctx, fromGk, fromns, to) {
+			return nil, fmt.Errorf("ConfigMap %s/%s not accessible from namespace %s (missing ReferenceGrant?)", ns, configMapRef.Name, fromns)
+		}
+	}
+
+	// Fetch ConfigMap from collection
+	nn := types.NamespacedName{
+		Namespace: ns,
+		Name:      string(configMapRef.Name),
+	}
+	cmPtr := krt.FetchOne(kctx, r.collections.ConfigMaps, krt.FilterObjectName(nn))
+	if cmPtr == nil {
+		return nil, fmt.Errorf("ConfigMap %s/%s not found", nn.Namespace, nn.Name)
+	}
+
+	return *cmPtr, nil
 }
 
 func ReferenceAllowed(ctx context.Context, fromgk metav1.GroupKind, fromns string, togk metav1.GroupKind, toname string, grantsInToNs []gwv1b1.ReferenceGrant) bool {

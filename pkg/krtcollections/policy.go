@@ -491,6 +491,11 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 			},
 		}
 
+		// Extract FrontendTLSConfig from Gateway spec
+		if gw.Spec.TLS != nil && gw.Spec.TLS.Frontend != nil {
+			gwIR.FrontendTLSConfig = extractFrontendTLSConfig(gw.Spec.TLS.Frontend)
+		}
+
 		if gw.Annotations[string(apiannotations.PerConnectionBufferLimit)] != "" {
 			limit, err := resource.ParseQuantity(gw.Annotations[string(apiannotations.PerConnectionBufferLimit)])
 			if err != nil {
@@ -1705,4 +1710,36 @@ func getInheritedPolicyPriority(annotations map[string]string) apiannotations.In
 		logger.Error("invalid value for annotation", "annotation", apiannotations.InheritedPolicyPriority, "value", v)
 		return def
 	}
+}
+
+// extractFrontendTLSConfig extracts FrontendTLSConfig from Gateway spec and converts it to IR format.
+// CA certificate fetching is deferred to the listener translation phase where queries are available.
+func extractFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) *ir.FrontendTLSConfigIR {
+	if frontendTLS == nil {
+		return nil
+	}
+
+	result := &ir.FrontendTLSConfigIR{
+		PerPortValidation: make(map[gwv1.PortNumber]*ir.ClientCertificateValidationIR),
+	}
+
+	// Extract default validation configuration
+	if frontendTLS.Default.Validation != nil {
+		result.DefaultValidation = &ir.ClientCertificateValidationIR{
+			RequireClientCertificate: frontendTLS.Default.Validation.Mode == gwv1.AllowValidOnly || frontendTLS.Default.Validation.Mode == "",
+			CACertificateRefs:        frontendTLS.Default.Validation.CACertificateRefs,
+		}
+	}
+
+	// Extract per-port validation configurations
+	for _, portConfig := range frontendTLS.PerPort {
+		if portConfig.TLS.Validation != nil {
+			result.PerPortValidation[portConfig.Port] = &ir.ClientCertificateValidationIR{
+				RequireClientCertificate: portConfig.TLS.Validation.Mode == gwv1.AllowValidOnly || portConfig.TLS.Validation.Mode == "",
+				CACertificateRefs:        portConfig.TLS.Validation.CACertificateRefs,
+			}
+		}
+	}
+
+	return result
 }

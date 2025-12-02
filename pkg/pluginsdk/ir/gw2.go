@@ -91,6 +91,16 @@ type TLSConfig struct {
 	MaxTLSVersion         *envoytlsv3.TlsParameters_TlsProtocol
 	VerifySubjectAltNames []string
 	VerifyCertificateHash []string
+	// ClientCertificateValidation holds configuration for validating client certificates (mTLS)
+	ClientCertificateValidation *ClientCertificateValidation
+}
+
+// ClientCertificateValidation holds configuration for validating client certificates in mTLS scenarios
+type ClientCertificateValidation struct {
+	// CACertificates contains the CA certificates used to validate client certificates
+	CACertificates [][]byte
+	// RequireClientCertificate indicates whether client certificates are required
+	RequireClientCertificate bool
 }
 
 type TLSCertificate struct {

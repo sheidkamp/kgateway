@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
@@ -72,9 +73,10 @@ func mergeGWListeners(
 	settings ListenerTranslatorConfig,
 ) *MergedListeners {
 	ml := &MergedListeners{
-		parentGw: parentGw,
-		Queries:  queries,
-		settings: settings,
+		parentGw:          parentGw,
+		Queries:           queries,
+		settings:          settings,
+		frontendTLSConfig: parentGw.FrontendTLSConfig,
 	}
 	for _, listener := range listeners {
 		result := routesForGw.GetListenerResult(listener.Parent, string(listener.Name))
@@ -95,10 +97,11 @@ func mergeGWListeners(
 }
 
 type MergedListeners struct {
-	parentGw  ir.Gateway
-	Listeners []*MergedListener
-	Queries   query.GatewayQueries
-	settings  ListenerTranslatorConfig
+	parentGw          ir.Gateway
+	Listeners         []*MergedListener
+	Queries           query.GatewayQueries
+	settings          ListenerTranslatorConfig
+	frontendTLSConfig *ir.FrontendTLSConfigIR
 }
 
 func (ml *MergedListeners) AppendListener(
@@ -331,6 +334,7 @@ func (ml *MergedListener) TranslateListener(
 			ctx,
 			queries,
 			reporter,
+			ml.gateway.FrontendTLSConfig,
 		)
 		if err != nil {
 			// Log and skip invalid HTTPS filter chains
@@ -344,7 +348,7 @@ func (ml *MergedListener) TranslateListener(
 	// Translate TCP listeners (if any exist)
 	var matchedTcpListeners []ir.TcpIR
 	for _, tfc := range ml.TcpFilterChains {
-		if tcpListener := tfc.translateTcpFilterChain(kctx, ctx, queries, ml.name, reporter); tcpListener != nil {
+		if tcpListener := tfc.translateTcpFilterChain(kctx, ctx, queries, ml.name, reporter, ml.gateway.FrontendTLSConfig); tcpListener != nil {
 			matchedTcpListeners = append(matchedTcpListeners, *tcpListener)
 		}
 	}
@@ -404,6 +408,7 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 	queries query.GatewayQueries,
 	parentName string,
 	reporter reports.Reporter,
+	frontendTLSConfig *ir.FrontendTLSConfigIR,
 ) *ir.TcpIR {
 	parent := tc.parents
 	if len(parent.routesWithHosts) == 0 {
@@ -476,7 +481,7 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 			return nil
 		}
 
-		tlsConfig, err := translateTLSConfig(kctx, ctx, tc.parents.listener, tc.tls, queries)
+		tlsConfig, err := translateTLSConfig(kctx, ctx, tc.parents.listener, tc.tls, queries, tc.parents.listener.Parent, frontendTLSConfig)
 		if err != nil {
 			reportTLSConfigError(err, tc.listenerReporter)
 			return nil
@@ -687,6 +692,7 @@ func (hfc *httpsFilterChain) translateHttpsFilterChain(
 	ctx context.Context,
 	queries query.GatewayQueries,
 	reporter reports.Reporter,
+	frontendTLSConfig *ir.FrontendTLSConfigIR,
 ) (*ir.HttpFilterChainIR, error) {
 	// process routes first, so any route related errors are reported on the httproute.
 	routesByHost := map[string]routeutils.SortableRoutes{}
@@ -726,6 +732,8 @@ func (hfc *httpsFilterChain) translateHttpsFilterChain(
 		hfc.listener,
 		hfc.tls,
 		queries,
+		hfc.listener.Parent,
+		frontendTLSConfig,
 	)
 	if err != nil {
 		reportTLSConfigError(err, hfc.listenerReporter)
@@ -781,6 +789,8 @@ func translateTLSConfig(
 	listener ir.Listener,
 	tls *gwv1.ListenerTLSConfig,
 	queries query.GatewayQueries,
+	parentGateway client.Object,
+	frontendTLSConfig *ir.FrontendTLSConfigIR,
 ) (*ir.TLSConfig, error) {
 	if tls == nil {
 		return nil, nil
@@ -843,7 +853,82 @@ func translateTLSConfig(
 	if err := sslutils.ApplyTLSExtensionOptions(tls.Options, tlsConfig); err != nil {
 		return nil, err
 	}
+
+	// Merge FrontendTLSConfig if present
+	if frontendTLSConfig != nil {
+		if err := mergeFrontendTLSConfig(kctx, ctx, queries, listener, parentGateway, frontendTLSConfig, tlsConfig); err != nil {
+			return nil, err
+		}
+	}
+
 	return tlsConfig, nil
+}
+
+// mergeFrontendTLSConfig merges Gateway-level FrontendTLSConfig with listener TLS config.
+// Per-port configuration takes precedence over default configuration.
+func mergeFrontendTLSConfig(
+	kctx krt.HandlerContext,
+	ctx context.Context,
+	queries query.GatewayQueries,
+	listener ir.Listener,
+	parentGateway client.Object,
+	frontendTLSConfig *ir.FrontendTLSConfigIR,
+	tlsConfig *ir.TLSConfig,
+) error {
+	// Determine which validation config to use (per-port or default)
+	var validationConfig *ir.ClientCertificateValidationIR
+	listenerPort := gwv1.PortNumber(listener.Port)
+	if perPortConfig, ok := frontendTLSConfig.PerPortValidation[listenerPort]; ok {
+		validationConfig = perPortConfig
+	} else if frontendTLSConfig.DefaultValidation != nil {
+		validationConfig = frontendTLSConfig.DefaultValidation
+	}
+
+	if validationConfig == nil {
+		return nil
+	}
+
+	// Fetch CA certificates from ConfigMaps
+	var caCertificates [][]byte
+	parentGVK := parentGateway.GetObjectKind().GroupVersionKind()
+	if parentGVK.Empty() {
+		switch parentGateway.(type) {
+		case *gwv1.Gateway:
+			parentGVK = wellknown.GatewayGVK
+		case *gwxv1a1.XListenerSet:
+			parentGVK = wellknown.XListenerSetGVK
+		}
+	}
+
+	for _, caCertRef := range validationConfig.CACertificateRefs {
+		// For ConfigMaps, we need to fetch them directly
+		// Gateway API spec says ConfigMaps are supported for CA certificates
+		configMap, err := queries.GetConfigMapForRef(
+			kctx,
+			ctx,
+			parentGVK.GroupKind(),
+			parentGateway.GetNamespace(),
+			caCertRef,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to fetch CA certificate ConfigMap %s/%s: %w", caCertRef.Name, parentGateway.GetNamespace(), err)
+		}
+
+		// Extract CA certificate from ConfigMap using sslutils for proper validation and cleaning
+		caCertData, err := sslutils.GetCACertFromConfigMap(configMap)
+		if err != nil {
+			return fmt.Errorf("failed to extract CA certificate from ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+		}
+		caCertificates = append(caCertificates, []byte(caCertData))
+	}
+
+	// Set client certificate validation in TLS config
+	tlsConfig.ClientCertificateValidation = &ir.ClientCertificateValidation{
+		CACertificates:           caCertificates,
+		RequireClientCertificate: validationConfig.RequireClientCertificate,
+	}
+
+	return nil
 }
 
 // reportTLSConfigError reports TLS configuration errors by setting appropriate listener conditions.
