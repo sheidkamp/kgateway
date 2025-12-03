@@ -867,8 +867,23 @@ func translateTLSConfig(
 	}
 
 	// Apply client certificate validation if present
-	if resolvedValidation != nil {
+	// Skip if CA cert refs are empty (no validation possible)
+	if resolvedValidation != nil && len(resolvedValidation.CACertificateRefs) > 0 {
+		// For AllowInsecureFallback mode, if CA cert fetching fails, skip validation rather than failing the listener
+		// This allows the listener to work without client certs even if the CA cert ConfigMap is missing
 		if err := applyClientCertificateValidation(kctx, ctx, queries, listener, resolvedValidation, tlsConfig); err != nil {
+			// If client certs are not required (AllowInsecureFallback), log the error but don't fail the listener
+			// The listener will still work for connections without client certs
+			if !resolvedValidation.RequireClientCertificate {
+				logger.Warn("failed to fetch CA certificate for client validation, skipping validation",
+					"listener", listener.Name,
+					"port", listener.Port,
+					"error", err,
+					"mode", "AllowInsecureFallback")
+				// Don't set ClientCertificateValidation - listener will work without client cert validation
+				return tlsConfig, nil
+			}
+			// If client certs are required (AllowValidOnly), fail the listener
 			return nil, err
 		}
 	}
@@ -899,6 +914,8 @@ func applyClientCertificateValidation(
 			parentGVK = wellknown.GatewayGVK
 		case *gwxv1a1.XListenerSet:
 			parentGVK = wellknown.XListenerSetGVK
+		default:
+			return fmt.Errorf("unsupported parent type: %T", listener.Parent)
 		}
 	}
 
@@ -922,6 +939,11 @@ func applyClientCertificateValidation(
 			return fmt.Errorf("failed to extract CA certificate from ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
 		}
 		caCertificates = append(caCertificates, []byte(caCertData))
+	}
+
+	// Only set ClientCertificateValidation if we successfully fetched at least one CA cert
+	if len(caCertificates) == 0 {
+		return fmt.Errorf("no CA certificates were successfully fetched")
 	}
 
 	// Set client certificate validation in TLS config

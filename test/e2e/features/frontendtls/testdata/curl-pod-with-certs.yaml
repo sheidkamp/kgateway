@@ -23,6 +23,13 @@ spec:
         - "tail"
         - "-f"
         - "/dev/null"
+      volumeMounts:
+        - name: client-certs-hash
+          mountPath: /etc/client-certs
+          readOnly: true
+        - name: client-cert-frontend
+          mountPath: /etc/client-certs-frontend
+          readOnly: true
       resources:
         requests:
           cpu: "100m"
@@ -30,13 +37,12 @@ spec:
         limits:
           cpu: "200m"
           memory: "128Mi"
-      volumeMounts:
-        - name: client-certs
-          mountPath: /etc/client-certs
-          readOnly: true
   volumes:
-    - name: client-certs
+    - name: client-certs-hash
       secret:
         secretName: client-certs
         defaultMode: 0444
-
+    - name: client-cert-frontend
+      secret:
+        secretName: client-cert
+        defaultMode: 0444

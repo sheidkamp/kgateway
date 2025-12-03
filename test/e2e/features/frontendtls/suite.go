@@ -24,17 +24,22 @@ import (
 var _ e2e.NewSuiteFunc = NewTestingSuite
 
 var (
-	// manifests
+	// manifests for verify-certificate-hash tests (TestVerifyCertificateHash)
 	gatewayManifest   = filepath.Join(fsutils.MustGetThisDir(), "testdata", "gw.yaml")
 	tlsSecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "tls-secret.yaml")
 	clientCertsSecret = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-certs-secret.yaml")
 	curlPodWithCerts  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "curl-pod-with-certs.yaml")
 
-	// client certificates paths inside the curl pod (mounted from secret)
+	// client certificate paths inside the curl pod (for verify-certificate-hash tests)
 	clientCertPath8443 = "/etc/client-certs/client-8443.crt"
 	clientKeyPath8443  = "/etc/client-certs/client-8443.key"
 	clientCertPath9443 = "/etc/client-certs/client-9443.crt"
 	clientKeyPath9443  = "/etc/client-certs/client-9443.key"
+
+	// manifests for FrontendTLSConfig tests (TestFrontendTLSConfig)
+	// Note: gatewayManifest and curlPodWithCerts are shared with verify-certificate-hash tests
+	caCertConfigMapManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "ca-cert-configmap.yaml")
+	clientCertSecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-cert-secret.yaml")
 
 	// objects
 	proxyObjectMeta = metav1.ObjectMeta{
@@ -49,6 +54,8 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 			curlPodWithCerts,
 			testdefaults.HttpbinManifest,
 			clientCertsSecret,
+			clientCertSecretManifest, // Include client-cert secret so pod can start
+			caCertConfigMapManifest,  // Required for FrontendTLSConfig per-port configs
 			tlsSecretManifest,
 			gatewayManifest,
 		},
@@ -61,6 +68,7 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 		"TestMinTLSVersion":         {},
 		"TestMaxTLSVersion":         {},
 		"TestVerifyCertificateHash": {},
+		"TestFrontendTLSConfig":     {}, // All required resources are already in setup
 	}
 	return &testingSuite{
 		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
@@ -299,4 +307,43 @@ func (s *testingSuite) assertEventualCurlErrorForMTLS(hostname string, port int,
 		16, // CURLE_SSL_CACERT_BADFILE
 		10*time.Second,
 	)
+}
+
+func (s *testingSuite) TestFrontendTLSConfig() {
+	s.Run("AllowValidOnly requires client cert", func() {
+		// Should fail without client cert on port 8445 (per-port config with AllowValidOnly)
+		// Use error code 16 (CURLE_SSL_CACERT_BADFILE) which is what we get when client cert is required
+		curlOpts := append(commonCurlOpts(), curl.WithPort(8445))
+		s.TestInstallation.Assertions.AssertEventualCurlError(
+			s.Ctx,
+			testdefaults.CurlPodExecOpt,
+			curlOpts,
+			16, // CURLE_SSL_CACERT_BADFILE
+			10*time.Second,
+		)
+	})
+
+	s.Run("AllowValidOnly with valid client cert", func() {
+		// Should succeed with client cert on port 8445
+		s.assertEventualCurlResponse(
+			curl.WithPort(8445),
+			curl.WithClientCert("/etc/client-certs-frontend/tls.crt", "/etc/client-certs-frontend/tls.key"),
+		)
+	})
+
+	s.Run("AllowInsecureFallback without client cert", func() {
+		// Should succeed without client cert on port 8444 (per-port config with AllowInsecureFallback)
+		s.assertEventualCurlResponse(
+			curl.WithPort(8444),
+			// No client cert provided
+		)
+	})
+
+	s.Run("AllowInsecureFallback with client cert", func() {
+		// Should succeed with client cert on port 8444
+		s.assertEventualCurlResponse(
+			curl.WithPort(8444),
+			curl.WithClientCert("/etc/client-certs-frontend/tls.crt", "/etc/client-certs-frontend/tls.key"),
+		)
+	})
 }

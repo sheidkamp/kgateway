@@ -5,6 +5,32 @@ metadata:
   name: gw
 spec:
   gatewayClassName: kgateway
+  tls:
+    frontend:
+      default:
+        validation:
+          mode: AllowInsecureFallback
+          caCertificateRefs:
+            - name: ca-cert
+              kind: ConfigMap
+              group: ""
+      perPort:
+        - port: 8444
+          tls:
+            validation:
+              mode: AllowInsecureFallback
+              caCertificateRefs:
+                - name: ca-cert
+                  kind: ConfigMap
+                  group: ""
+        - port: 8445
+          tls:
+            validation:
+              mode: AllowValidOnly
+              caCertificateRefs:
+                - name: ca-cert
+                  kind: ConfigMap
+                  group: ""
   listeners:
     - name: https
       protocol: HTTPS
@@ -33,7 +59,7 @@ spec:
             name: test-tls
         options:
           # SHA256 fingerprint of client-8443.crt - see CLIENT_CERTS_README.md for generation
-          kgateway.dev/verify-certificate-hash: "E9:A5:B5:3C:8D:EA:57:2F:1A:35:D5:79:49:60:74:FD:F4:1D:7D:5E:98:BA:EB:05:CD:88:72:F6:73:BB:BF:AA"
+          kgateway.dev/verify-certificate-hash: "59:CF:81:16:72:71:C7:17:23:4E:CE:4F:F9:B9:68:B5:B0:40:2A:00:BB:14:64:E0:42:B9:AD:DA:61:C7:03:F0"
       allowedRoutes:
         namespaces:
           from: All
@@ -47,8 +73,30 @@ spec:
             name: test-tls
         options:
           # SHA256 fingerprint of client-9443.crt - see CLIENT_CERTS_README.md for generation
-          kgateway.dev/verify-certificate-hash: "- FC1B6F225ED06510D268A47E3363C19948DD19BBB8A92C211605F4604757ABB9
-           - FC1B6F225ED06510D268A47E3363C19948DD19BBB8A92C211605F4604757ABAA"
+          kgateway.dev/verify-certificate-hash: "E8:44:3B:AA:87:7C:DD:71:31:59:02:77:A4:2F:20:C6:B6:F5:7B:02:29:07:E0:F7:8C:21:DE:41:5B:28:CF:BB,
+                                                 FC1B6F225ED06510D268A47E3363C19948DD19BBB8A92C211605F4604757ABAA"
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-frontend-tls-fallback
+      protocol: HTTPS
+      port: 8444
+      tls:
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: test-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-frontend-tls-required
+      protocol: HTTPS
+      port: 8445
+      tls:
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: test-tls
       allowedRoutes:
         namespaces:
           from: All
@@ -108,4 +156,41 @@ spec:
       backendRefs:
       - name: httpbin
         port: 8000
-
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend-tls-fallback-route
+spec:
+  parentRefs:
+    - name: gw
+      sectionName: https-frontend-tls-fallback
+  hostnames:
+    - "example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+      - name: httpbin
+        port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend-tls-required-route
+spec:
+  parentRefs:
+    - name: gw
+      sectionName: https-frontend-tls-required
+  hostnames:
+    - "example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+      - name: httpbin
+        port: 8000

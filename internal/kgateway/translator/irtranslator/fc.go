@@ -484,18 +484,16 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 		common.TlsParams.EcdhCurves = tlsConfig.EcdhCurves
 	}
 
-	// Note: This is the only place currently setting ValidationContextType. If other fields are addded, this logic will need to be updated
-	// to handle the possibility of different validation contexts alraedy being set.
+	// Build ValidationContext, merging verify-certificate-hash and FrontendTLSConfig validation
+	var validationContext *envoytlsv3.CertificateValidationContext
 	if len(tlsConfig.VerifyCertificateHash) > 0 {
-		common.ValidationContextType = &envoytlsv3.CommonTlsContext_ValidationContext{
-			ValidationContext: &envoytlsv3.CertificateValidationContext{
-				VerifyCertificateHash: tlsConfig.VerifyCertificateHash,
-			},
+		validationContext = &envoytlsv3.CertificateValidationContext{
+			VerifyCertificateHash: tlsConfig.VerifyCertificateHash,
 		}
 	}
 	// TODO: add verify subject alt names (validation context) https://github.com/kgateway-dev/kgateway/issues/12955
 
-	// Handle client certificate validation (mTLS)
+	// Handle client certificate validation (mTLS) - merge with existing ValidationContext if present
 	if tlsConfig.ClientCertificateValidation != nil {
 		if len(tlsConfig.ClientCertificateValidation.CACertificates) > 0 {
 			// Combine all CA certificates into a single trusted CA
@@ -506,11 +504,17 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 				}
 				combinedCA = append(combinedCA, caCert...)
 			}
-			common.ValidationContextType = &envoytlsv3.CommonTlsContext_ValidationContext{
-				ValidationContext: &envoytlsv3.CertificateValidationContext{
-					TrustedCa: bytesDataSource(combinedCA),
-				},
+			if validationContext == nil {
+				validationContext = &envoytlsv3.CertificateValidationContext{}
 			}
+			validationContext.TrustedCa = bytesDataSource(combinedCA)
+		}
+	}
+
+	// Set ValidationContextType if we have any validation context configured
+	if validationContext != nil {
+		common.ValidationContextType = &envoytlsv3.CommonTlsContext_ValidationContext{
+			ValidationContext: validationContext,
 		}
 	}
 
