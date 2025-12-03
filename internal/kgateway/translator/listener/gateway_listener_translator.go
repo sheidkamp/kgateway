@@ -11,7 +11,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
@@ -481,7 +480,8 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 			return nil
 		}
 
-		tlsConfig, err := translateTLSConfig(kctx, ctx, tc.parents.listener, tc.tls, queries, tc.parents.listener.Parent, frontendTLSConfig)
+		resolvedValidation := resolveFrontendTLSConfig(tc.parents.listener.Port, frontendTLSConfig)
+		tlsConfig, err := translateTLSConfig(kctx, ctx, tc.parents.listener, tc.tls, queries, resolvedValidation)
 		if err != nil {
 			reportTLSConfigError(err, tc.listenerReporter)
 			return nil
@@ -726,14 +726,14 @@ func (hfc *httpsFilterChain) translateHttpsFilterChain(
 		matcher.SniDomains = []string{string(*hfc.sniDomain)}
 	}
 
+	resolvedValidation := resolveFrontendTLSConfig(hfc.listener.Port, frontendTLSConfig)
 	tlsConfig, err := translateTLSConfig(
 		kctx,
 		ctx,
 		hfc.listener,
 		hfc.tls,
 		queries,
-		hfc.listener.Parent,
-		frontendTLSConfig,
+		resolvedValidation,
 	)
 	if err != nil {
 		reportTLSConfigError(err, hfc.listenerReporter)
@@ -783,14 +783,26 @@ func buildRoutesPerHost(
 	}
 }
 
+// resolveFrontendTLSConfig resolves the FrontendTLSConfig for a specific port.
+// Per-port configuration takes precedence over default configuration.
+// Returns nil if no FrontendTLSConfig is present or no validation is configured.
+func resolveFrontendTLSConfig(port gwv1.PortNumber, frontendTLSConfig *ir.FrontendTLSConfigIR) *ir.ClientCertificateValidationIR {
+	if frontendTLSConfig == nil {
+		return nil
+	}
+	if perPortConfig, ok := frontendTLSConfig.PerPortValidation[port]; ok {
+		return perPortConfig
+	}
+	return frontendTLSConfig.DefaultValidation
+}
+
 func translateTLSConfig(
 	kctx krt.HandlerContext,
 	ctx context.Context,
 	listener ir.Listener,
 	tls *gwv1.ListenerTLSConfig,
 	queries query.GatewayQueries,
-	parentGateway client.Object,
-	frontendTLSConfig *ir.FrontendTLSConfigIR,
+	resolvedValidation *ir.ClientCertificateValidationIR,
 ) (*ir.TLSConfig, error) {
 	if tls == nil {
 		return nil, nil
@@ -854,9 +866,9 @@ func translateTLSConfig(
 		return nil, err
 	}
 
-	// Merge FrontendTLSConfig if present
-	if frontendTLSConfig != nil {
-		if err := mergeFrontendTLSConfig(kctx, ctx, queries, listener, parentGateway, frontendTLSConfig, tlsConfig); err != nil {
+	// Apply client certificate validation if present
+	if resolvedValidation != nil {
+		if err := applyClientCertificateValidation(kctx, ctx, queries, listener, resolvedValidation, tlsConfig); err != nil {
 			return nil, err
 		}
 	}
@@ -864,35 +876,25 @@ func translateTLSConfig(
 	return tlsConfig, nil
 }
 
-// mergeFrontendTLSConfig merges Gateway-level FrontendTLSConfig with listener TLS config.
-// Per-port configuration takes precedence over default configuration.
-func mergeFrontendTLSConfig(
+// applyClientCertificateValidation applies the resolved client certificate validation configuration
+// to the TLS config by fetching CA certificates and setting validation parameters.
+func applyClientCertificateValidation(
 	kctx krt.HandlerContext,
 	ctx context.Context,
 	queries query.GatewayQueries,
 	listener ir.Listener,
-	parentGateway client.Object,
-	frontendTLSConfig *ir.FrontendTLSConfigIR,
+	validationConfig *ir.ClientCertificateValidationIR,
 	tlsConfig *ir.TLSConfig,
 ) error {
-	// Determine which validation config to use (per-port or default)
-	var validationConfig *ir.ClientCertificateValidationIR
-	listenerPort := gwv1.PortNumber(listener.Port)
-	if perPortConfig, ok := frontendTLSConfig.PerPortValidation[listenerPort]; ok {
-		validationConfig = perPortConfig
-	} else if frontendTLSConfig.DefaultValidation != nil {
-		validationConfig = frontendTLSConfig.DefaultValidation
-	}
-
 	if validationConfig == nil {
 		return nil
 	}
 
 	// Fetch CA certificates from ConfigMaps
 	var caCertificates [][]byte
-	parentGVK := parentGateway.GetObjectKind().GroupVersionKind()
+	parentGVK := listener.Parent.GetObjectKind().GroupVersionKind()
 	if parentGVK.Empty() {
-		switch parentGateway.(type) {
+		switch listener.Parent.(type) {
 		case *gwv1.Gateway:
 			parentGVK = wellknown.GatewayGVK
 		case *gwxv1a1.XListenerSet:
@@ -907,11 +909,11 @@ func mergeFrontendTLSConfig(
 			kctx,
 			ctx,
 			parentGVK.GroupKind(),
-			parentGateway.GetNamespace(),
+			listener.Parent.GetNamespace(),
 			caCertRef,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to fetch CA certificate ConfigMap %s/%s: %w", caCertRef.Name, parentGateway.GetNamespace(), err)
+			return fmt.Errorf("failed to fetch CA certificate ConfigMap %s/%s: %w", caCertRef.Name, listener.Parent.GetNamespace(), err)
 		}
 
 		// Extract CA certificate from ConfigMap using sslutils for proper validation and cleaning
