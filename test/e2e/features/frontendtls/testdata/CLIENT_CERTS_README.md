@@ -2,7 +2,28 @@
 
 This directory contains client certificates used for mutual TLS (mTLS) testing with the `verify-certificate-hash` annotation and `FrontendTLSConfig`.
 
-These certificates are signed by the CA certificate in `ca-cert-configmap.yaml`, allowing them to work with both validation mechanisms:
+## Directory Structure
+
+Certificates are organized into subdirectories:
+
+- **`certs/ca1/`** - CA certificate 1 and its related client certificates:
+  - `ca-cert-configmap.yaml` - CA certificate 1 (ConfigMap)
+  - `client-cert-secret.yaml` - Client certificate for FrontendTLSConfig tests (signed by CA 1)
+  - `client-certs-8443-9443-secret.yaml` - Client certificates for ports 8443 and 9443 (signed by CA 1)
+  - `client-8443.crt`, `client-8443.key`, `client-9443.crt`, `client-9443.key` - Raw certificate files (optional, used during generation, not required for tests)
+
+- **`certs/ca2/`** - CA certificate 2 and its related client certificates:
+  - `ca-cert-2-configmap.yaml` - CA certificate 2 (ConfigMap)
+  - `client-cert-2-secret.yaml` - Client certificate for multiple CA tests (signed by CA 2)
+  - `ca2-cert.pem`, `ca2-key.pem`, `client2-cert.pem`, `client2-key.pem` - Raw certificate files (optional, used during generation, not required for tests)
+
+**Note**: The raw certificate files (`.crt`, `.key`, `.pem`) are artifacts from certificate generation and are **not used by tests**. Tests only use the Kubernetes secrets (YAML manifests) which contain base64-encoded certificates. These raw files are kept for reference and regeneration purposes but can be safely deleted if not needed.
+
+**Note**: During certificate generation, intermediate files like `.csr` (Certificate Signing Request) and `.srl` (serial number) files may be created. These are temporary artifacts and are not needed for tests - only the final certificates in the YAML manifests are required.
+
+**Note**: The server TLS certificate (`tls-secret.yaml`) is located at the testdata root level alongside other Kubernetes manifests like `gw.yaml` and `curl-pod-with-certs.yaml`.
+
+These certificates are signed by the CA certificates in `certs/ca1/ca-cert-configmap.yaml` and `certs/ca2/ca-cert-2-configmap.yaml`, allowing them to work with both validation mechanisms:
 - `verify-certificate-hash`: Validates the specific certificate hash (certificate pinning)
 - `FrontendTLSConfig`: Validates the certificate chain against the CA
 
@@ -40,7 +61,7 @@ openssl req -new -key client-frontend.key -out client-frontend.csr \
   -subj "/CN=client.example.com/O=Test Org"
 openssl x509 -req -days 3650 -in client-frontend.csr -CA ca-cert.pem -CAkey ca-key.pem \
   -CAcreateserial -out client-frontend.crt
-# Base64 encode and update client-cert-secret.yaml:
+# Base64 encode and update certs/ca1/client-cert-secret.yaml:
 base64 -i client-frontend.crt | tr -d '\n'
 base64 -i client-frontend.key | tr -d '\n'
 ```
@@ -51,7 +72,7 @@ base64 -i client-frontend.key | tr -d '\n'
 openssl genrsa -out ca2-key.pem 2048
 openssl req -new -x509 -days 365 -key ca2-key.pem -out ca2-cert.pem \
   -subj "/CN=Test CA 2/O=Test Org"
-# Base64 encode and update ca-cert-2-configmap.yaml:
+# Base64 encode and update certs/ca2/ca-cert-2-configmap.yaml:
 base64 -i ca2-cert.pem | tr -d '\n'
 ```
 
@@ -63,7 +84,7 @@ openssl req -new -key client2-key.pem -out client2.csr \
   -subj "/CN=client2.example.com/O=Test Org"
 openssl x509 -req -days 3650 -in client2.csr -CA ca2-cert.pem -CAkey ca2-key.pem \
   -CAcreateserial -out client2-cert.pem
-# Base64 encode and update client-cert-2-secret.yaml:
+# Base64 encode and update certs/ca2/client-cert-2-secret.yaml:
 base64 -i client2-cert.pem | tr -d '\n'
 base64 -i client2-key.pem | tr -d '\n'
 ```
@@ -90,10 +111,10 @@ openssl x509 -in client-9443.crt -noout -fingerprint -sha256 | cut -d= -f2 | \
 
 ### Test File Mapping
 In the tests, these certificates are mounted into the curl pod from Kubernetes secrets at:
-- `/etc/client-certs/client-8443.crt` / `/etc/client-certs/client-8443.key` - Certificate valid for port 8443 listener (from `client-certs` secret)
-- `/etc/client-certs/client-9443.crt` / `/etc/client-certs/client-9443.key` - Certificate valid for port 9443 listener (from `client-certs` secret)
-- `/etc/client-certs-frontend/tls.crt` / `/etc/client-certs-frontend/tls.key` - Certificate valid for FrontendTLSConfig tests on ports 8444/8445 (from `client-cert` secret, signed by CA 1)
-- `/etc/client-certs-2-frontend/tls.crt` / `/etc/client-certs-2-frontend/tls.key` - Certificate valid for multiple CA tests on port 8446 (from `client-cert-2` secret, signed by CA 2)
+- `/etc/client-certs/client-8443.crt` / `/etc/client-certs/client-8443.key` - Certificate valid for port 8443 listener (from `client-certs` secret, source: `certs/ca1/client-certs-8443-9443-secret.yaml`)
+- `/etc/client-certs/client-9443.crt` / `/etc/client-certs/client-9443.key` - Certificate valid for port 9443 listener (from `client-certs` secret, source: `certs/ca1/client-certs-8443-9443-secret.yaml`)
+- `/etc/client-certs-frontend/tls.crt` / `/etc/client-certs-frontend/tls.key` - Certificate valid for FrontendTLSConfig tests on ports 8444/8445 (from `client-cert` secret, source: `certs/ca1/client-cert-secret.yaml`, signed by CA 1)
+- `/etc/client-certs-2-frontend/tls.crt` / `/etc/client-certs-2-frontend/tls.key` - Certificate valid for multiple CA tests on port 8446 (from `client-cert-2` secret, source: `certs/ca2/client-cert-2-secret.yaml`, signed by CA 2)
 
 ### Gateway Configuration
 - **Port 8443** (mtls.example.com): `verify-certificate-hash` = SHA256 of the port 8443 certificate + default FrontendTLSConfig (AllowInsecureFallback)

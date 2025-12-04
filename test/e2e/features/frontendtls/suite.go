@@ -27,7 +27,7 @@ var (
 	// manifests for verify-certificate-hash tests (TestVerifyCertificateHash)
 	gatewayManifest   = filepath.Join(fsutils.MustGetThisDir(), "testdata", "gw.yaml")
 	tlsSecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "tls-secret.yaml")
-	clientCertsSecret = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-certs-secret.yaml")
+	clientCertsSecret = filepath.Join(fsutils.MustGetThisDir(), "testdata", "certs", "ca1", "client-certs-8443-9443-secret.yaml")
 	curlPodWithCerts  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "curl-pod-with-certs.yaml")
 
 	// client certificate paths inside the curl pod (for verify-certificate-hash tests)
@@ -38,12 +38,12 @@ var (
 
 	// manifests for FrontendTLSConfig tests (TestFrontendTLSConfig)
 	// Note: gatewayManifest and curlPodWithCerts are shared with verify-certificate-hash tests
-	caCertConfigMapManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "ca-cert-configmap.yaml")
-	clientCertSecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-cert-secret.yaml")
+	caCertConfigMapManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "certs", "ca1", "ca-cert-configmap.yaml")
+	clientCertSecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "certs", "ca1", "client-cert-secret.yaml")
 
 	// manifests for multiple CA certificates test (TestMultipleCACertificates)
-	caCert2ConfigMapManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "ca-cert-2-configmap.yaml")
-	clientCert2SecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-cert-2-secret.yaml")
+	caCert2ConfigMapManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "certs", "ca2", "ca-cert-2-configmap.yaml")
+	clientCert2SecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "certs", "ca2", "client-cert-2-secret.yaml")
 
 	// objects
 	proxyObjectMeta = metav1.ObjectMeta{
