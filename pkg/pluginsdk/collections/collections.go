@@ -28,7 +28,6 @@ type CommonCollections struct {
 	KrtOpts           krtutil.KrtOptions
 	Secrets           *krtcollections.SecretIndex
 	ConfigMaps        *krtcollections.ConfigMapIndex
-	ConfigMapsRaw     krt.Collection[*corev1.ConfigMap] // Raw collection for direct access (deprecated, use ConfigMaps.Collection())
 	BackendIndex      *krtcollections.BackendIndex
 	Routes            *krtcollections.RoutesIndex
 	Namespaces        krt.Collection[krtcollections.NamespaceMetadata]
@@ -154,13 +153,11 @@ func NewCommonCollections(
 
 	localityPods, wrappedPods := krtcollections.NewPodsCollection(client, krtOptions)
 
-	configMapIndex := krtcollections.NewConfigMapIndex(cfgmaps, refgrants)
 	return &CommonCollections{
 		Client:            client,
 		KrtOpts:           krtOptions,
 		Secrets:           krtcollections.NewSecretIndex(secrets, refgrants),
-		ConfigMaps:        configMapIndex,
-		ConfigMapsRaw:     cfgmaps,
+		ConfigMaps:        krtcollections.NewConfigMapIndex(cfgmaps, refgrants),
 		LocalityPods:      localityPods,
 		WrappedPods:       wrappedPods,
 		RefGrants:         refgrants,
