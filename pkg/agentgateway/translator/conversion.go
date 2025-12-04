@@ -1709,15 +1709,3 @@ func GvkFromObject(obj any) schema.GroupVersionKind {
 		panic("Uknown GVK")
 	}
 }
-
-// We can use istio's once they bump to v1 GW API
-func GvkFromObject(obj any) schema.GroupVersionKind {
-	switch obj.(type) {
-	case *gwv1.Gateway:
-		return wellknown.GatewayGVK
-	case *gatewayx.XListenerSet:
-		return wellknown.XListenerSetGVK
-	default:
-		panic("Uknown GVK")
-	}
-}
