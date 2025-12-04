@@ -33,6 +33,10 @@ var (
 		return fmt.Errorf("invalid ca.crt in ConfigMap %s/%s: %v", ns, n, err)
 	}
 
+	ErrInvalidCACertificateSecret = func(n, ns string, err error) error {
+		return fmt.Errorf("invalid ca.crt in Secret %s/%s: %v", ns, n, err)
+	}
+
 	// tlsProtocolMap maps TLS version strings to Envoy TLS protocol values
 	tlsProtocolMap = map[string]envoytlsv3.TlsParameters_TlsProtocol{
 		"1.0": envoytlsv3.TlsParameters_TLSv1_0,
@@ -103,6 +107,31 @@ func GetCACertFromConfigMap(cm *corev1.ConfigMap) (string, error) {
 	cleanedChainBytes, err := cert.EncodeCertificates(candidateCert...)
 	if err != nil {
 		return "", ErrInvalidCACertificate(cm.Name, cm.Namespace, err)
+	}
+
+	cleanedChain := string(cleanedChainBytes)
+	return cleanedChain, nil
+}
+
+// GetCACertFromSecret validates and extracts the ca.crt string from an ir.Secret
+func GetCACertFromSecret(secret *ir.Secret) (string, error) {
+	caCrtBytes, ok := secret.Data["ca.crt"]
+	if !ok {
+		return "", ErrMissingCACertKey
+	}
+
+	caCrt := string(caCrtBytes)
+
+	// Validate CA certificate by trying to parse it
+	candidateCert, err := cert.ParseCertsPEM([]byte(caCrt))
+	if err != nil {
+		return "", ErrInvalidCACertificateSecret(secret.Name, secret.Namespace, err)
+	}
+
+	// Clean and encode the certificate to ensure proper formatting
+	cleanedChainBytes, err := cert.EncodeCertificates(candidateCert...)
+	if err != nil {
+		return "", ErrInvalidCACertificateSecret(secret.Name, secret.Namespace, err)
 	}
 
 	cleanedChain := string(cleanedChainBytes)

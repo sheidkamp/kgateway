@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
@@ -891,6 +892,115 @@ func translateTLSConfig(
 	return tlsConfig, nil
 }
 
+// normalizeCAReferenceType normalizes and validates an ObjectReference to determine if it's a ConfigMap or Secret.
+// Returns the normalized GroupVersionKind and an error if the reference type is unsupported.
+// This validation should have already been done in extractFrontendTLSConfig, but we validate again here
+// for safety and to provide a clear error message during listener translation.
+func normalizeCAReferenceType(ref gwv1.ObjectReference) (schema.GroupVersionKind, error) {
+	// Normalize group - empty group means "core" API group
+	group := string(ref.Group)
+	if group == "" {
+		group = ""
+	}
+
+	// Normalize kind
+	kind := string(ref.Kind)
+	if kind == "" {
+		return schema.GroupVersionKind{}, fmt.Errorf("CA certificate reference must specify a kind")
+	}
+
+	gvk := schema.GroupVersionKind{
+		Group:   group,
+		Version: "", // Version is not used for comparison
+		Kind:    kind,
+	}
+
+	// Check if it's a ConfigMap or Secret
+	if gvk.Group == wellknown.ConfigMapGVK.Group && gvk.Kind == wellknown.ConfigMapGVK.Kind {
+		return wellknown.ConfigMapGVK, nil
+	}
+	if gvk.Group == wellknown.SecretGVK.Group && gvk.Kind == wellknown.SecretGVK.Kind {
+		return wellknown.SecretGVK, nil
+	}
+
+	return schema.GroupVersionKind{}, fmt.Errorf("CA certificate reference must be a ConfigMap or Secret, got %s/%s", group, kind)
+}
+
+// buildCaCertificateReference fetches and extracts a CA certificate from either a ConfigMap or Secret
+// referenced by the given ObjectReference. Returns the CA certificate data as a string.
+func buildCaCertificateReference(
+	kctx krt.HandlerContext,
+	ctx context.Context,
+	queries query.GatewayQueries,
+	caCertRef gwv1.ObjectReference,
+	parentGVK schema.GroupVersionKind,
+	parentNamespace string,
+) (string, error) {
+	// Validate and determine the reference type
+	refGVK, err := normalizeCAReferenceType(caCertRef)
+	if err != nil {
+		return "", fmt.Errorf("invalid CA certificate reference %s/%s: %w", caCertRef.Name, parentNamespace, err)
+	}
+
+	switch refGVK {
+	case wellknown.ConfigMapGVK:
+		// Fetch ConfigMap
+		configMap, err := queries.GetConfigMapForRef(
+			kctx,
+			ctx,
+			parentGVK.GroupKind(),
+			parentNamespace,
+			caCertRef,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch CA certificate ConfigMap %s/%s: %w", caCertRef.Name, parentNamespace, err)
+		}
+
+		// Extract CA certificate from ConfigMap
+		caCertData, err := sslutils.GetCACertFromConfigMap(configMap)
+		if err != nil {
+			return "", fmt.Errorf("failed to extract CA certificate from ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+		}
+		return caCertData, nil
+
+	case wellknown.SecretGVK:
+		// Convert ObjectReference to SecretObjectReference
+		secretObjRef := gwv1.SecretObjectReference{
+			Name:      caCertRef.Name,
+			Namespace: caCertRef.Namespace,
+		}
+		if caCertRef.Group != "" {
+			group := gwv1.Group(caCertRef.Group)
+			secretObjRef.Group = &group
+		}
+		if caCertRef.Kind != "" {
+			kind := gwv1.Kind(caCertRef.Kind)
+			secretObjRef.Kind = &kind
+		}
+
+		secret, err := queries.GetSecretForRef(
+			kctx,
+			ctx,
+			parentGVK.GroupKind(),
+			parentNamespace,
+			secretObjRef,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch CA certificate Secret %s/%s: %w", caCertRef.Name, parentNamespace, err)
+		}
+
+		// Extract CA certificate from Secret
+		caCertData, err := sslutils.GetCACertFromSecret(secret)
+		if err != nil {
+			return "", fmt.Errorf("failed to extract CA certificate from Secret %s/%s: %w", secret.Namespace, secret.Name, err)
+		}
+		return caCertData, nil
+
+	default:
+		return "", fmt.Errorf("unsupported CA certificate reference type: %s/%s", refGVK.Group, refGVK.Kind)
+	}
+}
+
 // applyClientCertificateValidation applies the resolved client certificate validation configuration
 // to the TLS config by fetching CA certificates and setting validation parameters.
 func applyClientCertificateValidation(
@@ -905,7 +1015,7 @@ func applyClientCertificateValidation(
 		return nil
 	}
 
-	// Fetch CA certificates from ConfigMaps
+	// Fetch CA certificates from ConfigMaps or Secrets
 	var caCertificates [][]byte
 	parentGVK := listener.Parent.GetObjectKind().GroupVersionKind()
 	if parentGVK.Empty() {
@@ -920,24 +1030,18 @@ func applyClientCertificateValidation(
 	}
 
 	for _, caCertRef := range validationConfig.CACertificateRefs {
-		// For ConfigMaps, we need to fetch them directly
-		// Gateway API spec says ConfigMaps are supported for CA certificates
-		configMap, err := queries.GetConfigMapForRef(
+		caCertData, err := buildCaCertificateReference(
 			kctx,
 			ctx,
-			parentGVK.GroupKind(),
-			listener.Parent.GetNamespace(),
+			queries,
 			caCertRef,
+			parentGVK,
+			listener.Parent.GetNamespace(),
 		)
 		if err != nil {
-			return fmt.Errorf("failed to fetch CA certificate ConfigMap %s/%s: %w", caCertRef.Name, listener.Parent.GetNamespace(), err)
+			return err
 		}
 
-		// Extract CA certificate from ConfigMap using sslutils for proper validation and cleaning
-		caCertData, err := sslutils.GetCACertFromConfigMap(configMap)
-		if err != nil {
-			return fmt.Errorf("failed to extract CA certificate from ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
-		}
 		caCertificates = append(caCertificates, []byte(caCertData))
 	}
 

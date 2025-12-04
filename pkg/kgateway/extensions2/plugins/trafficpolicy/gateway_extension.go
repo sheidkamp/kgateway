@@ -190,7 +190,7 @@ func TranslateGatewayExtensionBuilder(commoncol *collections.CommonCollections) 
 		case gExt.JWT != nil:
 			jwtConfig, err := resolveJwtProviders(
 				krtctx,
-				commoncol.ConfigMaps,
+				commoncol.ConfigMapsRaw,
 				commoncol.BackendIndex,
 				gExt.ObjectSource,
 				gExt.Name,
