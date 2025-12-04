@@ -31,6 +31,17 @@ spec:
                 - name: ca-cert
                   kind: ConfigMap
                   group: ""
+        - port: 8446
+          tls:
+            validation:
+              mode: AllowValidOnly
+              caCertificateRefs:
+                - name: ca-cert
+                  kind: ConfigMap
+                  group: ""
+                - name: ca-cert-2
+                  kind: ConfigMap
+                  group: ""
   listeners:
     - name: https
       protocol: HTTPS
@@ -92,6 +103,17 @@ spec:
     - name: https-frontend-tls-required
       protocol: HTTPS
       port: 8445
+      tls:
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: test-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-frontend-tls-multiple-ca
+      protocol: HTTPS
+      port: 8446
       tls:
         certificateRefs:
           - group: ""
@@ -186,6 +208,25 @@ spec:
       sectionName: https-frontend-tls-required
   hostnames:
     - "example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+      - name: httpbin
+        port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend-tls-multiple-ca-route
+spec:
+  parentRefs:
+    - name: gw
+      sectionName: https-frontend-tls-multiple-ca
+  hostnames:
+    - "*.example.com"
   rules:
     - matches:
         - path:

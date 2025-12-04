@@ -41,6 +41,10 @@ var (
 	caCertConfigMapManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "ca-cert-configmap.yaml")
 	clientCertSecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-cert-secret.yaml")
 
+	// manifests for multiple CA certificates test (TestMultipleCACertificates)
+	caCert2ConfigMapManifest  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "ca-cert-2-configmap.yaml")
+	clientCert2SecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "client-cert-2-secret.yaml")
+
 	// objects
 	proxyObjectMeta = metav1.ObjectMeta{
 		Name:      "gw",
@@ -54,21 +58,24 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 			curlPodWithCerts,
 			testdefaults.HttpbinManifest,
 			clientCertsSecret,
-			clientCertSecretManifest, // Include client-cert secret so pod can start
-			caCertConfigMapManifest,  // Required for FrontendTLSConfig per-port configs
+			clientCertSecretManifest,  // Include client-cert secret so pod can start
+			caCertConfigMapManifest,   // Required for FrontendTLSConfig per-port configs
+			caCert2ConfigMapManifest,  // Required for multiple CA certificates test
+			clientCert2SecretManifest, // Required for multiple CA certificates test
 			tlsSecretManifest,
 			gatewayManifest,
 		},
 	}
 
 	testCases := map[string]*base.TestCase{
-		"TestALPNProtocol":          {},
-		"TestCipherSuites":          {},
-		"TestECDHCurves":            {},
-		"TestMinTLSVersion":         {},
-		"TestMaxTLSVersion":         {},
-		"TestVerifyCertificateHash": {},
-		"TestFrontendTLSConfig":     {}, // All required resources are already in setup
+		"TestALPNProtocol":           {},
+		"TestCipherSuites":           {},
+		"TestECDHCurves":             {},
+		"TestMinTLSVersion":          {},
+		"TestMaxTLSVersion":          {},
+		"TestVerifyCertificateHash":  {},
+		"TestFrontendTLSConfig":      {}, // All required resources are already in setup
+		"TestMultipleCACertificates": {}, // All required resources are already in setup
 	}
 	return &testingSuite{
 		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
@@ -344,6 +351,59 @@ func (s *testingSuite) TestFrontendTLSConfig() {
 		s.assertEventualCurlResponse(
 			curl.WithPort(8444),
 			curl.WithClientCert("/etc/client-certs-frontend/tls.crt", "/etc/client-certs-frontend/tls.key"),
+		)
+	})
+}
+
+func (s *testingSuite) TestMultipleCACertificates() {
+	// Port 8446 uses wildcard domain *.example.com with multiple CA cert refs
+	// This tests the scenario from issue #12938: multiple rootCA certs for the same wildcard domains
+	wildcardHostname := "test.example.com" // Matches *.example.com wildcard
+
+	s.Run("client cert signed by first CA succeeds on wildcard domain", func() {
+		// Port 8446 has multiple CA cert refs (ca-cert and ca-cert-2) for wildcard domain *.example.com
+		// Client cert signed by ca-cert should be accepted
+		curlOpts := append(commonCurlOptsForMTLS(wildcardHostname, 8446),
+			curl.WithClientCert("/etc/client-certs-frontend/tls.crt", "/etc/client-certs-frontend/tls.key"))
+		s.TestInstallation.Assertions.AssertEventualCurlResponse(
+			s.Ctx,
+			testdefaults.CurlPodExecOpt,
+			curlOpts,
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusOK,
+				Body:       gstruct.Ignore(),
+			},
+			10*time.Second,
+		)
+	})
+
+	s.Run("client cert signed by second CA succeeds on wildcard domain", func() {
+		// Port 8446 has multiple CA cert refs (ca-cert and ca-cert-2) for wildcard domain *.example.com
+		// Client cert signed by ca-cert-2 should be accepted
+		curlOpts := append(commonCurlOptsForMTLS(wildcardHostname, 8446),
+			curl.WithClientCert("/etc/client-certs-2-frontend/tls.crt", "/etc/client-certs-2-frontend/tls.key"))
+		s.TestInstallation.Assertions.AssertEventualCurlResponse(
+			s.Ctx,
+			testdefaults.CurlPodExecOpt,
+			curlOpts,
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusOK,
+				Body:       gstruct.Ignore(),
+			},
+			10*time.Second,
+		)
+	})
+
+	s.Run("no client cert fails on wildcard domain", func() {
+		// Port 8446 requires client cert (AllowValidOnly mode) for wildcard domain *.example.com
+		// Connection without client cert should fail
+		curlOpts := append(commonCurlOptsForMTLS(wildcardHostname, 8446))
+		s.TestInstallation.Assertions.AssertEventualCurlError(
+			s.Ctx,
+			testdefaults.CurlPodExecOpt,
+			curlOpts,
+			16, // CURLE_SSL_CACERT_BADFILE
+			10*time.Second,
 		)
 	})
 }

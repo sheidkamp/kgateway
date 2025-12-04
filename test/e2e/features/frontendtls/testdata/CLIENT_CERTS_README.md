@@ -45,6 +45,29 @@ base64 -i client-frontend.crt | tr -d '\n'
 base64 -i client-frontend.key | tr -d '\n'
 ```
 
+### Step 5: Generate Second CA Certificate for Multiple CA Tests
+```bash
+# Generate second CA certificate and key
+openssl genrsa -out ca2-key.pem 2048
+openssl req -new -x509 -days 365 -key ca2-key.pem -out ca2-cert.pem \
+  -subj "/CN=Test CA 2/O=Test Org"
+# Base64 encode and update ca-cert-2-configmap.yaml:
+base64 -i ca2-cert.pem | tr -d '\n'
+```
+
+### Step 6: Generate Client Certificate Signed by Second CA (Port 8446)
+```bash
+# Generate client certificate signed by CA 2
+openssl genrsa -out client2-key.pem 2048
+openssl req -new -key client2-key.pem -out client2.csr \
+  -subj "/CN=client2.example.com/O=Test Org"
+openssl x509 -req -days 3650 -in client2.csr -CA ca2-cert.pem -CAkey ca2-key.pem \
+  -CAcreateserial -out client2-cert.pem
+# Base64 encode and update client-cert-2-secret.yaml:
+base64 -i client2-cert.pem | tr -d '\n'
+base64 -i client2-key.pem | tr -d '\n'
+```
+
 ### SHA256 Fingerprints
 To calculate the SHA256 fingerprint (used in `verify-certificate-hash` annotation):
 ```bash
@@ -69,13 +92,15 @@ openssl x509 -in client-9443.crt -noout -fingerprint -sha256 | cut -d= -f2 | \
 In the tests, these certificates are mounted into the curl pod from Kubernetes secrets at:
 - `/etc/client-certs/client-8443.crt` / `/etc/client-certs/client-8443.key` - Certificate valid for port 8443 listener (from `client-certs` secret)
 - `/etc/client-certs/client-9443.crt` / `/etc/client-certs/client-9443.key` - Certificate valid for port 9443 listener (from `client-certs` secret)
-- `/etc/client-certs-frontend/tls.crt` / `/etc/client-certs-frontend/tls.key` - Certificate valid for FrontendTLSConfig tests on ports 8444/8445 (from `client-cert` secret)
+- `/etc/client-certs-frontend/tls.crt` / `/etc/client-certs-frontend/tls.key` - Certificate valid for FrontendTLSConfig tests on ports 8444/8445 (from `client-cert` secret, signed by CA 1)
+- `/etc/client-certs-2-frontend/tls.crt` / `/etc/client-certs-2-frontend/tls.key` - Certificate valid for multiple CA tests on port 8446 (from `client-cert-2` secret, signed by CA 2)
 
 ### Gateway Configuration
 - **Port 8443** (mtls.example.com): `verify-certificate-hash` = SHA256 of the port 8443 certificate + default FrontendTLSConfig (AllowInsecureFallback)
 - **Port 9443** (mtls-alt.example.com): `verify-certificate-hash` = SHA256 of the port 9443 certificate + default FrontendTLSConfig (AllowInsecureFallback)
 - **Port 8444** (example.com): FrontendTLSConfig per-port (AllowInsecureFallback) - client cert optional
 - **Port 8445** (example.com): FrontendTLSConfig per-port (AllowValidOnly) - client cert required
+- **Port 8446** (*.example.com): FrontendTLSConfig per-port (AllowValidOnly) with **multiple CA cert refs** (ca-cert and ca-cert-2) for wildcard domain - client cert required, accepts certs signed by either CA
 
 ### Test Validation
 
@@ -93,5 +118,13 @@ The test suite validates FrontendTLSConfig behavior:
 3. Port 8444 (AllowInsecureFallback): Connections succeed without client cert
 4. Port 8444 (AllowInsecureFallback): Connections succeed with valid client cert signed by CA
 
+#### Multiple CA Certificates Tests (TestMultipleCACertificates)
+The test suite validates that FrontendTLSConfig supports multiple CA certificate references for wildcard domains (as specified in issue #12938):
+1. Port 8446 (AllowValidOnly with multiple CA refs, wildcard domain *.example.com): Connections succeed with client cert signed by first CA (ca-cert) when accessing test.example.com
+2. Port 8446 (AllowValidOnly with multiple CA refs, wildcard domain *.example.com): Connections succeed with client cert signed by second CA (ca-cert-2) when accessing test.example.com
+3. Port 8446 (AllowValidOnly with multiple CA refs, wildcard domain *.example.com): Connections fail without client cert (exit code 16 - SSL error)
+
 **Note**: Both `verify-certificate-hash` and `FrontendTLSConfig` can be used together on the same listener. The `verify-certificate-hash` validates the specific certificate hash (certificate pinning), while `FrontendTLSConfig` validates the certificate chain against the CA.
+
+**Multiple CA Support**: FrontendTLSConfig supports multiple CA certificate references in the `caCertificateRefs` array. When multiple CAs are configured, client certificates signed by any of the configured CAs will be accepted. This is useful for scenarios where you need to support clients with certificates from different certificate authorities (e.g., during CA migration or supporting multiple client organizations). This feature works with wildcard domains, allowing multiple root CA certs for the same wildcard domain pattern (e.g., `*.example.com`).
 

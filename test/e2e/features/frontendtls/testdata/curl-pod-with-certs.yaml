@@ -30,6 +30,9 @@ spec:
         - name: client-cert-frontend
           mountPath: /etc/client-certs-frontend
           readOnly: true
+        - name: client-cert-2-frontend
+          mountPath: /etc/client-certs-2-frontend
+          readOnly: true
       resources:
         requests:
           cpu: "100m"
@@ -45,4 +48,8 @@ spec:
     - name: client-cert-frontend
       secret:
         secretName: client-cert
+        defaultMode: 0444
+    - name: client-cert-2-frontend
+      secret:
+        secretName: client-cert-2
         defaultMode: 0444
