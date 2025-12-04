@@ -24,10 +24,10 @@ import (
 	apiannotations "github.com/kgateway-dev/kgateway/v2/api/annotations"
 	apilabels "github.com/kgateway-dev/kgateway/v2/api/labels"
 	apisettings "github.com/kgateway-dev/kgateway/v2/api/settings"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/backendref"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/translator/utils"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/utils/delegation"
-	"github.com/kgateway-dev/kgateway/v2/internal/kgateway/wellknown"
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/translator/backendref"
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/translator/utils"
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/utils/delegation"
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/krtcollections/metrics"
 	sdk "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/ir"
@@ -491,13 +491,11 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 			},
 		}
 
-		// Extract FrontendTLSConfig from Gateway spec
-		if gw.Spec.TLS != nil && gw.Spec.TLS.Frontend != nil {
-			gwIR.FrontendTLSConfig = extractFrontendTLSConfig(gw.Spec.TLS.Frontend)
-		}
-
-		if gw.Annotations[string(apiannotations.PerConnectionBufferLimit)] != "" {
-			limit, err := resource.ParseQuantity(gw.Annotations[string(apiannotations.PerConnectionBufferLimit)])
+		if gw.Annotations[string(apiannotations.PerConnectionBufferLimit)] != "" { //nolint:staticcheck // deprecated annotation
+			logger.Warn("per-connection-buffer-limit annotation is deprecated, use ListenerPolicy with perConnectionBufferLimitBytes instead",
+				"gateway", fmt.Sprintf("%s/%s", gw.Namespace, gw.Name),
+				"annotation", apiannotations.PerConnectionBufferLimit) //nolint:staticcheck // deprecated annotation
+			limit, err := resource.ParseQuantity(gw.Annotations[string(apiannotations.PerConnectionBufferLimit)]) //nolint:staticcheck // deprecated annotation
 			if err != nil {
 				logger.Error("failed to parse per connection buffer limit", "error", err)
 			} else {

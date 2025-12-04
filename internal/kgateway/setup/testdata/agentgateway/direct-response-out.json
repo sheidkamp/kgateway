@@ -1,238 +1,237 @@
 {
   "addresses": [
     {
-      "Type": {
-        "Service": {
-          "name": "http-direct-response",
-          "namespace": "gwtest",
-          "hostname": "http-direct-response.gwtest.svc.cluster.local",
-          "addresses": [
-            {
-              "address": "CgAAYw=="
-            }
-          ],
-          "ports": [
-            {
-              "service_port": 8080,
-              "target_port": 8080
-            }
-          ],
-          "ip_families": 1
+      "service": {
+        "name": "http-direct-response",
+        "namespace": "gwtest",
+        "hostname": "http-direct-response.gwtest.svc.cluster.local",
+        "addresses": [
+          {
+            "address": "CgAA5g=="
+          }
+        ],
+        "ports": [
+          {
+            "servicePort": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "ipFamilies": "IPV4_ONLY"
+      }
+    },
+    {
+      "service": {
+        "name": "kubernetes",
+        "namespace": "default",
+        "hostname": "kubernetes.default.svc.cluster.local",
+        "addresses": [
+          {
+            "address": "CgAAAQ=="
+          }
+        ],
+        "ports": [
+          {
+            "servicePort": 443,
+            "targetPort": 44755
+          }
+        ],
+        "ipFamilies": "IPV4_ONLY"
+      }
+    },
+    {
+      "workload": {
+        "uid": "/discovery.k8s.io/EndpointSlice/default/kubernetes/10.0.0.25",
+        "name": "kubernetes",
+        "namespace": "default",
+        "addresses": [
+          "CgAAGQ=="
+        ],
+        "services": {
+          "default/kubernetes.default.svc.cluster.local": {
+            "ports": [
+              {
+                "servicePort": 443,
+                "targetPort": 44755
+              }
+            ]
+          }
+        },
+        "networkMode": "HOST_NETWORK"
+      }
+    },
+    {
+      "workload": {
+        "uid": "//Pod/gwtest/reviews-1",
+        "name": "reviews-1",
+        "namespace": "gwtest",
+        "addresses": [
+          "CvQBCw=="
+        ],
+        "serviceAccount": "default",
+        "node": "worker",
+        "canonicalName": "reviews",
+        "canonicalRevision": "v1",
+        "workloadType": "POD",
+        "workloadName": "reviews-1",
+        "status": "UNHEALTHY",
+        "locality": {
+          "region": "r1",
+          "zone": "r1z2",
+          "subzone": "r1z2s3"
         }
       }
     },
     {
-      "Type": {
-        "Service": {
-          "name": "kubernetes",
-          "namespace": "default",
-          "hostname": "kubernetes.default.svc.cluster.local",
-          "addresses": [
-            {
-              "address": "CgAAAQ=="
-            }
-          ],
-          "ports": [
-            {
-              "service_port": 443,
-              "target_port": 37023
-            }
-          ],
-          "ip_families": 1
+      "workload": {
+        "uid": "//Pod/gwtest/reviews-2",
+        "name": "reviews-2",
+        "namespace": "gwtest",
+        "addresses": [
+          "CvQCDg=="
+        ],
+        "serviceAccount": "default",
+        "node": "worker2",
+        "canonicalName": "reviews",
+        "canonicalRevision": "v2",
+        "workloadType": "POD",
+        "workloadName": "reviews-2",
+        "status": "UNHEALTHY",
+        "locality": {
+          "region": "r1",
+          "zone": "r1z2",
+          "subzone": "r1z2s4"
         }
       }
     },
     {
-      "Type": {
-        "Workload": {
-          "uid": "/discovery.k8s.io/EndpointSlice/default/kubernetes/192.168.4.24",
-          "name": "kubernetes",
-          "namespace": "default",
-          "addresses": [
-            "wKgEGA=="
-          ],
-          "services": {
-            "default/kubernetes.default.svc.cluster.local": {
-              "ports": [
-                {
-                  "service_port": 443,
-                  "target_port": 37023
-                }
-              ]
-            }
-          },
-          "network_mode": 1
+      "workload": {
+        "uid": "//Pod/gwtest/reviews-3",
+        "name": "reviews-3",
+        "namespace": "gwtest",
+        "addresses": [
+          "CvQDAw=="
+        ],
+        "serviceAccount": "default",
+        "node": "worker3",
+        "canonicalName": "reviews",
+        "canonicalRevision": "latest",
+        "workloadType": "POD",
+        "workloadName": "reviews-3",
+        "status": "UNHEALTHY",
+        "locality": {
+          "region": "r1",
+          "zone": "r1z3",
+          "subzone": "r1z3s4"
         }
       }
     },
     {
-      "Type": {
-        "Workload": {
-          "uid": "//Pod/gwtest/reviews-1",
-          "name": "reviews-1",
-          "namespace": "gwtest",
-          "addresses": [
-            "CvQBCw=="
-          ],
-          "service_account": "default",
-          "node": "worker",
-          "canonical_name": "reviews",
-          "canonical_revision": "v1",
-          "workload_type": 2,
-          "workload_name": "reviews-1",
-          "status": 1
-        }
-      }
-    },
-    {
-      "Type": {
-        "Workload": {
-          "uid": "//Pod/gwtest/reviews-2",
-          "name": "reviews-2",
-          "namespace": "gwtest",
-          "addresses": [
-            "CvQCDg=="
-          ],
-          "service_account": "default",
-          "node": "worker2",
-          "canonical_name": "reviews",
-          "canonical_revision": "v2",
-          "workload_type": 2,
-          "workload_name": "reviews-2",
-          "status": 1
-        }
-      }
-    },
-    {
-      "Type": {
-        "Workload": {
-          "uid": "//Pod/gwtest/reviews-3",
-          "name": "reviews-3",
-          "namespace": "gwtest",
-          "addresses": [
-            "CvQDAw=="
-          ],
-          "service_account": "default",
-          "node": "worker3",
-          "canonical_name": "reviews",
-          "canonical_revision": "latest",
-          "workload_type": 2,
-          "workload_name": "reviews-3",
-          "status": 1
-        }
-      }
-    },
-    {
-      "Type": {
-        "Workload": {
-          "uid": "//Pod/gwtest/reviews-4",
-          "name": "reviews-4",
-          "namespace": "gwtest",
-          "addresses": [
-            "CvQEBA=="
-          ],
-          "service_account": "default",
-          "node": "worker4",
-          "canonical_name": "reviews",
-          "canonical_revision": "v1",
-          "workload_type": 2,
-          "workload_name": "reviews-4",
-          "status": 1
+      "workload": {
+        "uid": "//Pod/gwtest/reviews-4",
+        "name": "reviews-4",
+        "namespace": "gwtest",
+        "addresses": [
+          "CvQEBA=="
+        ],
+        "serviceAccount": "default",
+        "node": "worker4",
+        "canonicalName": "reviews",
+        "canonicalRevision": "v1",
+        "workloadType": "POD",
+        "workloadName": "reviews-4",
+        "status": "UNHEALTHY",
+        "locality": {
+          "region": "r2",
+          "zone": "r2z1",
+          "subzone": "r2z1s1"
         }
       }
     }
   ],
   "resources": [
     {
-      "Kind": {
-        "Bind": {
-          "key": "8080/gwtest/http-direct-response",
-          "port": 8080
-        }
+      "bind": {
+        "key": "8080/gwtest/http-direct-response",
+        "port": 8080
       }
     },
     {
-      "Kind": {
-        "Listener": {
-          "key": "gwtest/http-direct-response.http",
-          "name": "http",
-          "bind_key": "8080/gwtest/http-direct-response",
-          "gateway_name": "gwtest/http-direct-response",
-          "protocol": 1
-        }
+      "listener": {
+        "key": "gwtest/http-direct-response.http",
+        "bindKey": "8080/gwtest/http-direct-response",
+        "name": {
+          "gatewayName": "http-direct-response",
+          "gatewayNamespace": "gwtest",
+          "listenerName": "http"
+        },
+        "protocol": "HTTP"
       }
     },
     {
-      "Kind": {
-        "Route": {
-          "key": "gwtest/httpbin.0.0.http",
-          "listener_key": "gwtest/http-direct-response.http",
-          "route_name": "gwtest/httpbin",
-          "hostnames": [
-            "www.example.com"
-          ],
-          "matches": [
-            {
-              "path": {
-                "Kind": {
-                  "PathPrefix": "/"
-                }
-              }
+      "route": {
+        "key": "gwtest/httpbin.0.0.http",
+        "listenerKey": "gwtest/http-direct-response.http",
+        "name": {
+          "kind": "HTTPRoute",
+          "name": "httpbin",
+          "namespace": "gwtest"
+        },
+        "hostnames": [
+          "www.example.com"
+        ],
+        "matches": [
+          {
+            "path": {
+              "pathPrefix": "/"
             }
-          ],
-          "filters": [
-            {
-              "Kind": {
-                "DirectResponse": {
-                  "status": 500,
-                  "body": "QmFja2VuZCBzZXJ2aWNlIHVuYXZhaWxhYmxl"
-                }
-              }
+          }
+        ],
+        "backends": [
+          {
+            "backend": {
+              "service": "gwtest/httpbin.gwtest.svc.cluster.local",
+              "port": 8000
+            },
+            "weight": 1
+          }
+        ],
+        "trafficPolicies": [
+          {
+            "directResponse": {
+              "status": 500,
+              "body": "QmFja2VuZCBzZXJ2aWNlIHVuYXZhaWxhYmxl"
             }
-          ],
-          "backends": [
-            {
-              "backend": {
-                "Kind": {
-                  "Service": "gwtest/httpbin.gwtest.svc.cluster.local"
-                },
-                "port": 8000
-              },
-              "weight": 1
-            }
-          ]
-        }
+          }
+        ]
       }
     },
     {
-      "Kind": {
-        "Route": {
-          "key": "gwtest/httpbin.1.0.http",
-          "listener_key": "gwtest/http-direct-response.http",
-          "route_name": "gwtest/httpbin",
-          "hostnames": [
-            "www.example.com"
-          ],
-          "matches": [
-            {
-              "path": {
-                "Kind": {
-                  "Exact": "/robots.txt"
-                }
-              }
+      "route": {
+        "key": "gwtest/httpbin.1.0.http",
+        "listenerKey": "gwtest/http-direct-response.http",
+        "name": {
+          "kind": "HTTPRoute",
+          "name": "httpbin",
+          "namespace": "gwtest"
+        },
+        "hostnames": [
+          "www.example.com"
+        ],
+        "matches": [
+          {
+            "path": {
+              "exact": "/robots.txt"
             }
-          ],
-          "filters": [
-            {
-              "Kind": {
-                "DirectResponse": {
-                  "status": 200,
-                  "body": "VXNlci1hZ2VudDogKgpEaXNhbGxvdzogL2N1c3RvbQo="
-                }
-              }
+          }
+        ],
+        "trafficPolicies": [
+          {
+            "directResponse": {
+              "status": 200,
+              "body": "VXNlci1hZ2VudDogKgpEaXNhbGxvdzogL2N1c3RvbQo="
             }
-          ]
-        }
+          }
+        ]
       }
     }
   ]
