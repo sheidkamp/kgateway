@@ -599,7 +599,7 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 			}
 
 			if gw.Spec.AllowedListeners == nil {
-				lsIR.Err = errors.New("Unable to attach to parent, gateway has not enabled allowedListeners")
+				lsIR.Err = errors.New("unable to attach to parent, gateway has not enabled allowedListeners")
 				gwIR.DeniedListenerSets[wellknown.XListenerSetGVK] = append(gwIR.DeniedListenerSets[wellknown.XListenerSetGVK], lsIR)
 				continue
 			}
@@ -607,13 +607,24 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 			// Check if the namespace of the listenerSet is allowed by the gateway
 			// We return the denied list of ls to have their status set to rejected during validation
 			if !allowedNs(kctx, ls.GetNamespace()) {
-				lsIR.Err = errors.New("Attachment not allowed")
+				lsIR.Err = errors.New("attachment not allowed")
 				gwIR.DeniedListenerSets[wellknown.XListenerSetGVK] = append(gwIR.DeniedListenerSets[wellknown.XListenerSetGVK], lsIR)
 				continue
 			}
 
 			gwIR.AllowedListenerSets[wellknown.XListenerSetGVK] = append(gwIR.AllowedListenerSets[wellknown.XListenerSetGVK], lsIR)
 			gwIR.Listeners = append(gwIR.Listeners, lsIR.Listeners...)
+		}
+
+		// Extract FrontendTLSConfig from Gateway spec
+		frontendTLSConfig, err := extractFrontendTLSConfig(gw.Spec.TLS.Frontend)
+		if err != nil {
+			logger.Error("invalid FrontendTLSConfig in Gateway",
+				"gateway", fmt.Sprintf("%s/%s", gw.Namespace, gw.Name),
+				"error", err)
+			// Continue processing - error will be caught during listener translation and reported via status conditions
+		} else {
+			gwIR.FrontendTLSConfig = frontendTLSConfig
 		}
 
 		return gwIR
@@ -1710,11 +1721,45 @@ func getInheritedPolicyPriority(annotations map[string]string) apiannotations.In
 	}
 }
 
-// extractFrontendTLSConfig extracts FrontendTLSConfig from Gateway spec and converts it to IR format.
-// CA certificate fetching is deferred to the listener translation phase where queries are available.
-func extractFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) *ir.FrontendTLSConfigIR {
-	if frontendTLS == nil {
+// validateCAReferenceType validates that a CA certificate reference is a ConfigMap or Secret.
+// Returns an error if the reference type is unsupported.
+func validateCAReferenceType(ref gwv1.ObjectReference) error {
+	// Normalize group - empty group means "core" API group
+	group := string(ref.Group)
+	if group == "" {
+		group = ""
+	}
+
+	// Normalize kind
+	kind := string(ref.Kind)
+	if kind == "" {
+		return fmt.Errorf("CA certificate reference must specify a kind")
+	}
+
+	gvk := schema.GroupVersionKind{
+		Group:   group,
+		Version: "", // Version is not used for comparison
+		Kind:    kind,
+	}
+
+	// Check if it's a ConfigMap or Secret
+	if gvk.Group == wellknown.ConfigMapGVK.Group && gvk.Kind == wellknown.ConfigMapGVK.Kind {
 		return nil
+	}
+	if gvk.Group == wellknown.SecretGVK.Group && gvk.Kind == wellknown.SecretGVK.Kind {
+		return nil
+	}
+
+	return fmt.Errorf("CA certificate reference must be a ConfigMap or Secret, got %s/%s", group, kind)
+}
+
+// extractFrontendTLSConfig extracts FrontendTLSConfig from Gateway spec and converts it to IR format.
+// Validates that all CA certificate references are ConfigMap or Secret types.
+// Returns an error if any CA certificate reference is invalid.
+// CA certificate fetching is deferred to the listener translation phase where queries are available.
+func extractFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) (*ir.FrontendTLSConfigIR, error) {
+	if frontendTLS == nil {
+		return nil, nil
 	}
 
 	result := &ir.FrontendTLSConfigIR{
@@ -1723,6 +1768,12 @@ func extractFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) *ir.FrontendT
 
 	// Extract default validation configuration
 	if frontendTLS.Default.Validation != nil {
+		// Validate all CA certificate references
+		for _, ref := range frontendTLS.Default.Validation.CACertificateRefs {
+			if err := validateCAReferenceType(ref); err != nil {
+				return nil, fmt.Errorf("invalid CA certificate reference in FrontendTLSConfig.default.validation: %s/%s: %w", ref.Kind, ref.Name, err)
+			}
+		}
 		result.DefaultValidation = &ir.ClientCertificateValidationIR{
 			RequireClientCertificate: frontendTLS.Default.Validation.Mode == gwv1.AllowValidOnly || frontendTLS.Default.Validation.Mode == "",
 			CACertificateRefs:        frontendTLS.Default.Validation.CACertificateRefs,
@@ -1732,6 +1783,12 @@ func extractFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) *ir.FrontendT
 	// Extract per-port validation configurations
 	for _, portConfig := range frontendTLS.PerPort {
 		if portConfig.TLS.Validation != nil {
+			// Validate all CA certificate references
+			for _, ref := range portConfig.TLS.Validation.CACertificateRefs {
+				if err := validateCAReferenceType(ref); err != nil {
+					return nil, fmt.Errorf("invalid CA certificate reference in FrontendTLSConfig.perPort[%d].validation: %s/%s: %w", portConfig.Port, ref.Kind, ref.Name, err)
+				}
+			}
 			result.PerPortValidation[portConfig.Port] = &ir.ClientCertificateValidationIR{
 				RequireClientCertificate: portConfig.TLS.Validation.Mode == gwv1.AllowValidOnly || portConfig.TLS.Validation.Mode == "",
 				CACertificateRefs:        portConfig.TLS.Validation.CACertificateRefs,
@@ -1739,5 +1796,5 @@ func extractFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) *ir.FrontendT
 		}
 	}
 
-	return result
+	return result, nil
 }
