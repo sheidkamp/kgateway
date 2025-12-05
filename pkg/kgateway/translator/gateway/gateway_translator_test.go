@@ -81,7 +81,7 @@ func TestBasic(t *testing.T) {
 		})
 	})
 
-	t.Run("gateway with FrontendTLSConfig for client certificate validation", func(t *testing.T) {
+	t.Run("gateway with FrontendTLSConfig", func(t *testing.T) {
 		test(t, translatorTestCase{
 			inputFile:  "frontendtlsconfig/basic.yaml",
 			outputFile: "frontendtlsconfig/basic.yaml",

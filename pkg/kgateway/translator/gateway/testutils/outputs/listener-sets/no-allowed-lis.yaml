@@ -92,12 +92,12 @@ Statuses:
     default/foo-listenerset:
       conditions:
       - lastTransitionTime: null
-        message: Unable to attach to parent, gateway has not enabled allowedListeners
+        message: unable to attach to parent, gateway has not enabled allowedListeners
         reason: NotAllowed
         status: "False"
         type: Accepted
       - lastTransitionTime: null
-        message: Unable to attach to parent, gateway has not enabled allowedListeners
+        message: unable to attach to parent, gateway has not enabled allowedListeners
         reason: NotAllowed
         status: "False"
         type: Programmed
