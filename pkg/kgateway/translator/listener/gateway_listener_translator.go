@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
@@ -72,9 +73,10 @@ func mergeGWListeners(
 	settings ListenerTranslatorConfig,
 ) *MergedListeners {
 	ml := &MergedListeners{
-		parentGw: parentGw,
-		Queries:  queries,
-		settings: settings,
+		parentGw:          parentGw,
+		Queries:           queries,
+		settings:          settings,
+		frontendTLSConfig: parentGw.FrontendTLSConfig,
 	}
 	for _, listener := range listeners {
 		result := routesForGw.GetListenerResult(listener.Parent, string(listener.Name))
@@ -95,10 +97,11 @@ func mergeGWListeners(
 }
 
 type MergedListeners struct {
-	parentGw  ir.Gateway
-	Listeners []*MergedListener
-	Queries   query.GatewayQueries
-	settings  ListenerTranslatorConfig
+	parentGw          ir.Gateway
+	Listeners         []*MergedListener
+	Queries           query.GatewayQueries
+	settings          ListenerTranslatorConfig
+	frontendTLSConfig *ir.FrontendTLSConfigIR
 }
 
 func (ml *MergedListeners) AppendListener(
@@ -331,6 +334,7 @@ func (ml *MergedListener) TranslateListener(
 			ctx,
 			queries,
 			reporter,
+			ml.gateway.FrontendTLSConfig,
 		)
 		if err != nil {
 			// Log and skip invalid HTTPS filter chains
@@ -344,7 +348,7 @@ func (ml *MergedListener) TranslateListener(
 	// Translate TCP listeners (if any exist)
 	var matchedTcpListeners []ir.TcpIR
 	for _, tfc := range ml.TcpFilterChains {
-		if tcpListener := tfc.translateTcpFilterChain(kctx, ctx, queries, ml.name, reporter); tcpListener != nil {
+		if tcpListener := tfc.translateTcpFilterChain(kctx, ctx, queries, ml.name, reporter, ml.gateway.FrontendTLSConfig); tcpListener != nil {
 			matchedTcpListeners = append(matchedTcpListeners, *tcpListener)
 		}
 	}
@@ -404,6 +408,7 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 	queries query.GatewayQueries,
 	parentName string,
 	reporter reports.Reporter,
+	frontendTLSConfig *ir.FrontendTLSConfigIR,
 ) *ir.TcpIR {
 	parent := tc.parents
 	if len(parent.routesWithHosts) == 0 {
@@ -476,7 +481,12 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 			return nil
 		}
 
-		tlsConfig, err := translateTLSConfig(kctx, ctx, tc.parents.listener, tc.tls, queries)
+		resolvedValidation, err := resolveFrontendTLSConfig(tc.parents.listener.Port, frontendTLSConfig)
+		if err != nil {
+			reportTLSConfigError(err, tc.listenerReporter)
+			return nil
+		}
+		tlsConfig, err := translateTLSConfig(kctx, ctx, tc.parents.listener, tc.tls, queries, resolvedValidation)
 		if err != nil {
 			reportTLSConfigError(err, tc.listenerReporter)
 			return nil
@@ -687,6 +697,7 @@ func (hfc *httpsFilterChain) translateHttpsFilterChain(
 	ctx context.Context,
 	queries query.GatewayQueries,
 	reporter reports.Reporter,
+	frontendTLSConfig *ir.FrontendTLSConfigIR,
 ) (*ir.HttpFilterChainIR, error) {
 	// process routes first, so any route related errors are reported on the httproute.
 	routesByHost := map[string]routeutils.SortableRoutes{}
@@ -720,12 +731,18 @@ func (hfc *httpsFilterChain) translateHttpsFilterChain(
 		matcher.SniDomains = []string{string(*hfc.sniDomain)}
 	}
 
+	resolvedValidation, err := resolveFrontendTLSConfig(hfc.listener.Port, frontendTLSConfig)
+	if err != nil {
+		reportTLSConfigError(err, hfc.listenerReporter)
+		return nil, err
+	}
 	tlsConfig, err := translateTLSConfig(
 		kctx,
 		ctx,
 		hfc.listener,
 		hfc.tls,
 		queries,
+		resolvedValidation,
 	)
 	if err != nil {
 		reportTLSConfigError(err, hfc.listenerReporter)
@@ -775,12 +792,30 @@ func buildRoutesPerHost(
 	}
 }
 
+// resolveFrontendTLSConfig resolves the FrontendTLSConfig for a specific port.
+// Per-port configuration takes precedence over default configuration.
+// Returns nil if no FrontendTLSConfig is present or no validation is configured.
+// Returns an error if the FrontendTLSConfig contains an error from processing.
+func resolveFrontendTLSConfig(port gwv1.PortNumber, frontendTLSConfig *ir.FrontendTLSConfigIR) (*ir.ClientCertificateValidationIR, error) {
+	if frontendTLSConfig == nil {
+		return nil, nil
+	}
+	if frontendTLSConfig.Err != nil {
+		return nil, frontendTLSConfig.Err
+	}
+	if perPortConfig, ok := frontendTLSConfig.PerPortValidation[port]; ok {
+		return perPortConfig, nil
+	}
+	return frontendTLSConfig.DefaultValidation, nil
+}
+
 func translateTLSConfig(
 	kctx krt.HandlerContext,
 	ctx context.Context,
 	listener ir.Listener,
 	tls *gwv1.ListenerTLSConfig,
 	queries query.GatewayQueries,
+	resolvedValidation *ir.ClientCertificateValidationIR,
 ) (*ir.TLSConfig, error) {
 	if tls == nil {
 		return nil, nil
@@ -843,7 +878,197 @@ func translateTLSConfig(
 	if err := sslutils.ApplyTLSExtensionOptions(tls.Options, tlsConfig); err != nil {
 		return nil, err
 	}
+
+	// Apply client certificate validation if present
+	// Skip if CA cert refs are empty (no validation possible)
+	if resolvedValidation != nil && len(resolvedValidation.CACertificateRefs) > 0 {
+		// For AllowInsecureFallback mode, if CA cert fetching fails, skip validation rather than failing the listener
+		// This allows the listener to work without client certs even if the CA cert ConfigMap is missing
+		if err := applyClientCertificateValidation(kctx, ctx, queries, listener, resolvedValidation, tlsConfig); err != nil {
+			// If client certs are not required (AllowInsecureFallback), log the error but don't fail the listener
+			// The listener will still work for connections without client certs
+			if !resolvedValidation.RequireClientCertificate {
+				logger.Warn("failed to fetch CA certificate for client validation, skipping validation",
+					"listener", listener.Name,
+					"port", listener.Port,
+					"error", err,
+					"mode", "AllowInsecureFallback")
+				// Don't set ClientCertificateValidation - listener will work without client cert validation
+				return tlsConfig, nil
+			}
+			// If client certs are required (AllowValidOnly), fail the listener
+			return nil, err
+		}
+	}
+
 	return tlsConfig, nil
+}
+
+// normalizeCAReferenceType normalizes and validates an ObjectReference to determine if it's a ConfigMap or Secret.
+// Returns the normalized GroupVersionKind and an error if the reference type is unsupported.
+// This validation should have already been done in getFrontendTLSConfig, but we validate again here
+// for safety and to provide a clear error message during listener translation.
+func normalizeCAReferenceType(ref gwv1.ObjectReference) (schema.GroupVersionKind, error) {
+	// Normalize group - empty group means "core" API group
+	group := string(ref.Group)
+	if group == "" {
+		group = ""
+	}
+
+	// Normalize kind
+	kind := string(ref.Kind)
+	if kind == "" {
+		return schema.GroupVersionKind{}, fmt.Errorf("CA certificate reference must specify a kind")
+	}
+
+	gvk := schema.GroupVersionKind{
+		Group:   group,
+		Version: "", // Version is not used for comparison
+		Kind:    kind,
+	}
+
+	// Check if it's a ConfigMap or Secret
+	if gvk.Group == wellknown.ConfigMapGVK.Group && gvk.Kind == wellknown.ConfigMapGVK.Kind {
+		return wellknown.ConfigMapGVK, nil
+	}
+	if gvk.Group == wellknown.SecretGVK.Group && gvk.Kind == wellknown.SecretGVK.Kind {
+		return wellknown.SecretGVK, nil
+	}
+
+	return schema.GroupVersionKind{}, fmt.Errorf("CA certificate reference must be a ConfigMap or Secret, got %s/%s", group, kind)
+}
+
+// buildCaCertificateReference fetches and extracts a CA certificate from either a ConfigMap or Secret
+// referenced by the given ObjectReference. Returns the CA certificate data as a string.
+func buildCaCertificateReference(
+	kctx krt.HandlerContext,
+	ctx context.Context,
+	queries query.GatewayQueries,
+	caCertRef gwv1.ObjectReference,
+	parentGVK schema.GroupVersionKind,
+	parentNamespace string,
+) (string, error) {
+	// Validate and determine the reference type
+	refGVK, err := normalizeCAReferenceType(caCertRef)
+	if err != nil {
+		return "", fmt.Errorf("invalid CA certificate reference %s/%s: %w", caCertRef.Name, parentNamespace, err)
+	}
+
+	switch refGVK {
+	case wellknown.ConfigMapGVK:
+		// Fetch ConfigMap
+		configMap, err := queries.GetConfigMapForRef(
+			kctx,
+			ctx,
+			parentGVK.GroupKind(),
+			parentNamespace,
+			caCertRef,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch CA certificate ConfigMap %s/%s: %w", caCertRef.Name, parentNamespace, err)
+		}
+
+		// Extract CA certificate from ConfigMap
+		caCertData, err := sslutils.GetCACertFromConfigMap(configMap)
+		if err != nil {
+			return "", fmt.Errorf("failed to extract CA certificate from ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+		}
+		return caCertData, nil
+
+	case wellknown.SecretGVK:
+		// Convert ObjectReference to SecretObjectReference
+		secretObjRef := gwv1.SecretObjectReference{
+			Name:      caCertRef.Name,
+			Namespace: caCertRef.Namespace,
+		}
+		if caCertRef.Group != "" {
+			group := gwv1.Group(caCertRef.Group)
+			secretObjRef.Group = &group
+		}
+		if caCertRef.Kind != "" {
+			kind := gwv1.Kind(caCertRef.Kind)
+			secretObjRef.Kind = &kind
+		}
+
+		secret, err := queries.GetSecretForRef(
+			kctx,
+			ctx,
+			parentGVK.GroupKind(),
+			parentNamespace,
+			secretObjRef,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch CA certificate Secret %s/%s: %w", caCertRef.Name, parentNamespace, err)
+		}
+
+		// Extract CA certificate from Secret
+		caCertData, err := sslutils.GetCACertFromSecret(secret)
+		if err != nil {
+			return "", fmt.Errorf("failed to extract CA certificate from Secret %s/%s: %w", secret.Namespace, secret.Name, err)
+		}
+		return caCertData, nil
+
+	default:
+		return "", fmt.Errorf("unsupported CA certificate reference type: %s/%s", refGVK.Group, refGVK.Kind)
+	}
+}
+
+// applyClientCertificateValidation applies the resolved client certificate validation configuration
+// to the TLS config by fetching CA certificates and setting validation parameters.
+func applyClientCertificateValidation(
+	kctx krt.HandlerContext,
+	ctx context.Context,
+	queries query.GatewayQueries,
+	listener ir.Listener,
+	validationConfig *ir.ClientCertificateValidationIR,
+	tlsConfig *ir.TLSConfig,
+) error {
+	if validationConfig == nil {
+		return nil
+	}
+
+	// Fetch CA certificates from ConfigMaps or Secrets
+	var caCertificates [][]byte
+	parentGVK := listener.Parent.GetObjectKind().GroupVersionKind()
+	if parentGVK.Empty() {
+		switch listener.Parent.(type) {
+		case *gwv1.Gateway:
+			parentGVK = wellknown.GatewayGVK
+		case *gwxv1a1.XListenerSet:
+			parentGVK = wellknown.XListenerSetGVK
+		default:
+			return fmt.Errorf("unsupported parent type: %T", listener.Parent)
+		}
+	}
+
+	for _, caCertRef := range validationConfig.CACertificateRefs {
+		caCertData, err := buildCaCertificateReference(
+			kctx,
+			ctx,
+			queries,
+			caCertRef,
+			parentGVK,
+			listener.Parent.GetNamespace(),
+		)
+		if err != nil {
+			return err
+		}
+
+		caCertificates = append(caCertificates, []byte(caCertData))
+	}
+
+	// Only set ClientCertificateValidation if we successfully fetched at least one CA cert
+	if len(caCertificates) == 0 {
+		return fmt.Errorf("no CA certificates were successfully fetched")
+	}
+
+	// Set client certificate validation in TLS config
+	tlsConfig.ClientCertificateValidation = &ir.ClientCertificateValidation{
+		CACertificates:           caCertificates,
+		RequireClientCertificate: validationConfig.RequireClientCertificate,
+	}
+
+	return nil
 }
 
 // reportTLSConfigError reports TLS configuration errors by setting appropriate listener conditions.
