@@ -309,11 +309,6 @@ kubectl logs -n test-mtls -l app.kubernetes.io/name=mtls-gateway-per-port --tail
 - Check that `caCertificateRefs` is properly configured
 - Verify the Gateway resource was applied correctly
 
-### Issue: Multiple CA certs not working
-
-- Verify all ConfigMaps exist and contain valid CA certificates
-- Check that client certificate is signed by one of the CAs
-- Verify all `caCertificateRefs` are listed in the Gateway spec
 
 ## Cleanup
 

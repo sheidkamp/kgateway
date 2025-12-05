@@ -10,16 +10,14 @@ Certificates are organized into subdirectories:
   - `ca-cert-configmap.yaml` - CA certificate 1 (ConfigMap)
   - `client-cert-secret.yaml` - Client certificate for FrontendTLSConfig tests (signed by CA 1)
   - `client-certs-8443-9443-secret.yaml` - Client certificates for ports 8443 and 9443 (signed by CA 1)
-  - `client-8443.crt`, `client-8443.key`, `client-9443.crt`, `client-9443.key` - Raw certificate files (optional, used during generation, not required for tests)
 
 - **`certs/ca2/`** - CA certificate 2 and its related client certificates:
   - `ca-cert-2-configmap.yaml` - CA certificate 2 (ConfigMap)
   - `client-cert-2-secret.yaml` - Client certificate for multiple CA tests (signed by CA 2)
-  - `ca2-cert.pem`, `ca2-key.pem`, `client2-cert.pem`, `client2-key.pem` - Raw certificate files (optional, used during generation, not required for tests)
 
-**Note**: The raw certificate files (`.crt`, `.key`, `.pem`) are artifacts from certificate generation and are **not used by tests**. Tests only use the Kubernetes secrets (YAML manifests) which contain base64-encoded certificates. These raw files are kept for reference and regeneration purposes but can be safely deleted if not needed.
+**Note**: Tests only use the Kubernetes secrets (YAML manifests) which contain base64-encoded certificates. Raw certificate files (`.crt`, `.key`, `.pem`) are not present in this repository - they are artifacts from certificate generation that can be regenerated using the commands in the Certificate Generation section below.
 
-**Note**: During certificate generation, intermediate files like `.csr` (Certificate Signing Request) and `.srl` (serial number) files may be created. These are temporary artifacts and are not needed for tests - only the final certificates in the YAML manifests are required.
+**Note**: During certificate generation, intermediate files like `.csr` (Certificate Signing Request) and `.srl` (serial number) files may be created. These are temporary artifacts and are not committed to the repository - only the final certificates in the YAML manifests are required.
 
 **Note**: The server TLS certificate (`tls-secret.yaml`) is located at the testdata root level alongside other Kubernetes manifests like `gw.yaml` and `curl-pod-with-certs.yaml`.
 
