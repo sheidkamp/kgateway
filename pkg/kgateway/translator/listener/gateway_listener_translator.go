@@ -894,7 +894,7 @@ func translateTLSConfig(
 
 // normalizeCAReferenceType normalizes and validates an ObjectReference to determine if it's a ConfigMap or Secret.
 // Returns the normalized GroupVersionKind and an error if the reference type is unsupported.
-// This validation should have already been done in extractFrontendTLSConfig, but we validate again here
+// This validation should have already been done in getFrontendTLSConfig, but we validate again here
 // for safety and to provide a clear error message during listener translation.
 func normalizeCAReferenceType(ref gwv1.ObjectReference) (schema.GroupVersionKind, error) {
 	// Normalize group - empty group means "core" API group

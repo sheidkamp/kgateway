@@ -618,7 +618,7 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 
 		// Extract FrontendTLSConfig from Gateway spec
 		if gw.Spec.TLS != nil && gw.Spec.TLS.Frontend != nil {
-			frontendTLSConfig, err := extractFrontendTLSConfig(gw.Spec.TLS.Frontend)
+			frontendTLSConfig, err := getFrontendTLSConfig(gw.Spec.TLS.Frontend)
 			if err != nil {
 				logger.Error("invalid FrontendTLSConfig in Gateway",
 					"gateway", fmt.Sprintf("%s/%s", gw.Namespace, gw.Name),
@@ -1755,11 +1755,11 @@ func validateCAReferenceType(ref gwv1.ObjectReference) error {
 	return fmt.Errorf("CA certificate reference must be a ConfigMap or Secret, got %s/%s", group, kind)
 }
 
-// extractFrontendTLSConfig extracts FrontendTLSConfig from Gateway spec and converts it to IR format.
+// getFrontendTLSConfig extracts FrontendTLSConfig from Gateway spec and converts it to IR format.
 // Validates that all CA certificate references are ConfigMap or Secret types.
 // Returns an error if any CA certificate reference is invalid.
 // CA certificate fetching is deferred to the listener translation phase where queries are available.
-func extractFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) (*ir.FrontendTLSConfigIR, error) {
+func getFrontendTLSConfig(frontendTLS *gwv1.FrontendTLSConfig) (*ir.FrontendTLSConfigIR, error) {
 	if frontendTLS == nil {
 		return nil, nil
 	}

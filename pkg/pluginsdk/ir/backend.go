@@ -329,8 +329,7 @@ type Gateway struct {
 	AttachedHttpPolicies     AttachedPolicies
 
 	PerConnectionBufferLimitBytes *uint32
-	// FrontendTLSConfig holds the Gateway-level TLS configuration for frontend (client) connections
-	FrontendTLSConfig *FrontendTLSConfigIR
+	FrontendTLSConfig             *FrontendTLSConfigIR
 }
 
 // FrontendTLSConfigIR represents the Gateway-level frontend TLS configuration
