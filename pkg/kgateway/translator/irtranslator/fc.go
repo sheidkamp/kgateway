@@ -521,9 +521,10 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 	out := &envoytlsv3.DownstreamTlsContext{
 		CommonTlsContext: common,
 	}
-	// Set require_client_certificate if client certificates are required
-	if tlsConfig.ClientCertificateValidation != nil && tlsConfig.ClientCertificateValidation.RequireClientCertificate {
-		out.RequireClientCertificate = &wrapperspb.BoolValue{Value: true}
+	// Set require_client_certificate explicitly to avoid Envoy deprecation warnings
+	// TODO: (sheidkamp) - what is the default value if undefined? Envoy default is to AllowInsecureFallback, but that is deprecated.
+	if tlsConfig.ClientCertificateValidation != nil {
+		out.RequireClientCertificate = &wrapperspb.BoolValue{Value: tlsConfig.ClientCertificateValidation.RequireClientCertificate}
 	}
 	typedConfig, _ := utils.MessageToAny(out)
 
