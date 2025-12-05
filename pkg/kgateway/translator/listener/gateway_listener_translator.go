@@ -33,7 +33,7 @@ var logger = logging.New("translator/listener")
 
 const (
 	TcpTlsListenerNoBackendsMessage = "TCP/TLS listener has no valid backends or routes"
-	SecretNotFoundMessageTemplate   = "Secret %s/%s not found." //nolint:gosec // G101: This is a template string, not hardcoded credentials
+	ResourceNotFoundMessageTemplate = "%s %s/%s not found." //nolint:gosec // G101: This is a template string, not hardcoded credentials
 )
 
 type ListenerTranslatorConfig struct {
@@ -1084,7 +1084,11 @@ func reportTLSConfigError(err error, listenerReporter reports.ListenerReporter) 
 	}
 	var notFoundErr *krtcollections.NotFoundError
 	if errors.As(err, &notFoundErr) {
-		message = fmt.Sprintf(SecretNotFoundMessageTemplate, notFoundErr.NotFoundObj.Namespace, notFoundErr.NotFoundObj.Name)
+		resourceType := notFoundErr.NotFoundObj.Kind
+		if resourceType == "" {
+			resourceType = "Resource"
+		}
+		message = fmt.Sprintf(ResourceNotFoundMessageTemplate, resourceType, notFoundErr.NotFoundObj.Namespace, notFoundErr.NotFoundObj.Name)
 	}
 	listenerReporter.SetCondition(reports.ListenerCondition{
 		Type:    gwv1.ListenerConditionResolvedRefs,
