@@ -617,14 +617,16 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 		}
 
 		// Extract FrontendTLSConfig from Gateway spec
-		frontendTLSConfig, err := extractFrontendTLSConfig(gw.Spec.TLS.Frontend)
-		if err != nil {
-			logger.Error("invalid FrontendTLSConfig in Gateway",
-				"gateway", fmt.Sprintf("%s/%s", gw.Namespace, gw.Name),
-				"error", err)
-			// Continue processing - error will be caught during listener translation and reported via status conditions
-		} else {
-			gwIR.FrontendTLSConfig = frontendTLSConfig
+		if gw.Spec.TLS != nil && gw.Spec.TLS.Frontend != nil {
+			frontendTLSConfig, err := extractFrontendTLSConfig(gw.Spec.TLS.Frontend)
+			if err != nil {
+				logger.Error("invalid FrontendTLSConfig in Gateway",
+					"gateway", fmt.Sprintf("%s/%s", gw.Namespace, gw.Name),
+					"error", err)
+				// Continue processing - error will be caught during listener translation and reported via status conditions
+			} else {
+				gwIR.FrontendTLSConfig = frontendTLSConfig
+			}
 		}
 
 		return gwIR
