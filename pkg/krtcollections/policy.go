@@ -599,7 +599,7 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 			}
 
 			if gw.Spec.AllowedListeners == nil {
-				lsIR.Err = errors.New("unable to attach to parent, gateway has not enabled allowedListeners")
+				lsIR.Err = errors.New("Unable to attach to parent, gateway has not enabled allowedListeners")
 				gwIR.DeniedListenerSets[wellknown.XListenerSetGVK] = append(gwIR.DeniedListenerSets[wellknown.XListenerSetGVK], lsIR)
 				continue
 			}
@@ -607,7 +607,7 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 			// Check if the namespace of the listenerSet is allowed by the gateway
 			// We return the denied list of ls to have their status set to rejected during validation
 			if !allowedNs(kctx, ls.GetNamespace()) {
-				lsIR.Err = errors.New("attachment not allowed")
+				lsIR.Err = errors.New("Attachment not allowed")
 				gwIR.DeniedListenerSets[wellknown.XListenerSetGVK] = append(gwIR.DeniedListenerSets[wellknown.XListenerSetGVK], lsIR)
 				continue
 			}
