@@ -522,9 +522,11 @@ func (info *FilterChainInfo) toTransportSocket() *envoycorev3.TransportSocket {
 		CommonTlsContext: common,
 	}
 	// Set require_client_certificate explicitly to avoid Envoy deprecation warnings
-	// TODO: (sheidkamp) - what is the default value if undefined? Envoy default is to AllowInsecureFallback, but that is deprecated.
 	if tlsConfig.ClientCertificateValidation != nil {
 		out.RequireClientCertificate = &wrapperspb.BoolValue{Value: tlsConfig.ClientCertificateValidation.RequireClientCertificate}
+	} else {
+		// https://gateway-api.sigs.k8s.io/reference/1.4/spec/#frontendtlsvalidation - Defaults to AllowValidOnly.
+		out.RequireClientCertificate = &wrapperspb.BoolValue{Value: true}
 	}
 	typedConfig, _ := utils.MessageToAny(out)
 
