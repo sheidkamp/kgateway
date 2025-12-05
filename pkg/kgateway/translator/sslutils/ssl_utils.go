@@ -254,8 +254,8 @@ func validateCertificateHash(hash string) error {
 // for valid values of this data, and is unexported to discourage its use unless the data being parsed is well understood.
 func splitFakeYamlArray(in string) []string {
 	hashes := []string{}
-	for _, commaSeparatedHash := range strings.Split(in, ",") {
-		for _, hash := range strings.Split(commaSeparatedHash, "-") {
+	for commaSeparatedHash := range strings.SplitSeq(in, ",") {
+		for hash := range strings.SplitSeq(commaSeparatedHash, "-") {
 			trimmedHash := strings.TrimFunc(hash, func(r rune) bool {
 				return unicode.IsSpace(r)
 			})

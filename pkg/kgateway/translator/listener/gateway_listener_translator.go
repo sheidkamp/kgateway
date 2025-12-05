@@ -481,7 +481,11 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 			return nil
 		}
 
-		resolvedValidation := resolveFrontendTLSConfig(tc.parents.listener.Port, frontendTLSConfig)
+		resolvedValidation, err := resolveFrontendTLSConfig(tc.parents.listener.Port, frontendTLSConfig)
+		if err != nil {
+			reportTLSConfigError(err, tc.listenerReporter)
+			return nil
+		}
 		tlsConfig, err := translateTLSConfig(kctx, ctx, tc.parents.listener, tc.tls, queries, resolvedValidation)
 		if err != nil {
 			reportTLSConfigError(err, tc.listenerReporter)
@@ -727,7 +731,11 @@ func (hfc *httpsFilterChain) translateHttpsFilterChain(
 		matcher.SniDomains = []string{string(*hfc.sniDomain)}
 	}
 
-	resolvedValidation := resolveFrontendTLSConfig(hfc.listener.Port, frontendTLSConfig)
+	resolvedValidation, err := resolveFrontendTLSConfig(hfc.listener.Port, frontendTLSConfig)
+	if err != nil {
+		reportTLSConfigError(err, hfc.listenerReporter)
+		return nil, err
+	}
 	tlsConfig, err := translateTLSConfig(
 		kctx,
 		ctx,
@@ -787,14 +795,18 @@ func buildRoutesPerHost(
 // resolveFrontendTLSConfig resolves the FrontendTLSConfig for a specific port.
 // Per-port configuration takes precedence over default configuration.
 // Returns nil if no FrontendTLSConfig is present or no validation is configured.
-func resolveFrontendTLSConfig(port gwv1.PortNumber, frontendTLSConfig *ir.FrontendTLSConfigIR) *ir.ClientCertificateValidationIR {
+// Returns an error if the FrontendTLSConfig contains an error from processing.
+func resolveFrontendTLSConfig(port gwv1.PortNumber, frontendTLSConfig *ir.FrontendTLSConfigIR) (*ir.ClientCertificateValidationIR, error) {
 	if frontendTLSConfig == nil {
-		return nil
+		return nil, nil
+	}
+	if frontendTLSConfig.Err != nil {
+		return nil, frontendTLSConfig.Err
 	}
 	if perPortConfig, ok := frontendTLSConfig.PerPortValidation[port]; ok {
-		return perPortConfig
+		return perPortConfig, nil
 	}
-	return frontendTLSConfig.DefaultValidation
+	return frontendTLSConfig.DefaultValidation, nil
 }
 
 func translateTLSConfig(

@@ -620,10 +620,9 @@ func GatewaysForEnvoyTransformationFunc(config *GatewayIndexConfig) func(kctx kr
 		if gw.Spec.TLS != nil && gw.Spec.TLS.Frontend != nil {
 			frontendTLSConfig, err := getFrontendTLSConfig(gw.Spec.TLS.Frontend)
 			if err != nil {
-				logger.Error("invalid FrontendTLSConfig in Gateway",
-					"gateway", fmt.Sprintf("%s/%s", gw.Namespace, gw.Name),
-					"error", err)
-				// Continue processing - error will be caught during listener translation and reported via status conditions
+				gwIR.FrontendTLSConfig = &ir.FrontendTLSConfigIR{
+					Err: err,
+				}
 			} else {
 				gwIR.FrontendTLSConfig = frontendTLSConfig
 			}

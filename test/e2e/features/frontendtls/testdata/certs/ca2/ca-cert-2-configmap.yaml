@@ -1,3 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ca-cert-2
+---
 # CA certificate 2 for validating client certificates in FrontendTLSConfig tests
 # This CA is used to sign the client certificates in client-cert-2-secret.yaml
 # Generated with:
@@ -9,7 +14,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ca-cert-2
-  namespace: default
+  namespace: ca-cert-2
 data:
   ca.crt: |
     -----BEGIN CERTIFICATE-----
@@ -32,4 +37,17 @@ data:
     O1MF6LkpGDKdkyoR4DxZNo/WF/AzGfHZ84JKaIj1SvpbUb4+HHOW3QOlyglk4Vev
     lnTZ
     -----END CERTIFICATE-----
-
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: ca-cert-2-refgrant
+  namespace: ca-cert-2
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: default
+  to:
+    - group: ""
+      kind: ConfigMap

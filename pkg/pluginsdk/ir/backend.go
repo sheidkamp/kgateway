@@ -338,6 +338,9 @@ type FrontendTLSConfigIR struct {
 	DefaultValidation *ClientCertificateValidationIR
 	// PerPort client certificate validation configuration, keyed by port number
 	PerPortValidation map[gwv1.PortNumber]*ClientCertificateValidationIR
+
+	// Err contains any error encountered during ListenerSet construction to be used for status reporting
+	Err error
 }
 
 // ClientCertificateValidationIR holds the client certificate validation configuration with references
@@ -414,18 +417,6 @@ func ptrEqual[T comparable](a, b *T) bool {
 		return a == b
 	}
 	return *a == *b
-}
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // Equals returns true if the two BackendRefIR instances are equal in cluster name, weight, backend object equality, and error.

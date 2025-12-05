@@ -9,7 +9,7 @@ spec:
     frontend:
       default:
         validation:
-          mode: AllowInsecureFallback
+          mode: AllowValidOnly
           caCertificateRefs:
             - name: dummy-ca-cert
               kind: ConfigMap
@@ -18,10 +18,11 @@ spec:
         - port: 8443
           tls:
             validation:
-              mode: AllowInsecureFallback
+              mode: AllowValidOnly
               caCertificateRefs:
                 - name: dummy-ca-cert
                   kind: ConfigMap
+                  namespace: dummy-ca-cert-namespace
                   group: ""
   listeners:
   - name: https
@@ -91,3 +92,21 @@ spec:
       backendRefs:
       - name: httpbin
         port: 8000
+---
+kind: Namespace
+metadata:
+  name: dummy-ca-cert-namespace
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: ca-cert-2-refgrant
+  namespace: dummy-ca-cert-namespace
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: default
+  to:
+    - group: ""
+      kind: ConfigMap

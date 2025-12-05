@@ -92,6 +92,17 @@ func TestBasic(t *testing.T) {
 		})
 	})
 
+	t.Run("gateway with FrontendTLSConfig and missing refgrant", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "frontendtlsconfig/missing-refgrant.yaml",
+			outputFile: "frontendtlsconfig/missing-refgrant.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
 	t.Run("http gateway with per connection buffer limit", func(t *testing.T) {
 		test(t, translatorTestCase{
 			inputFile:  "gateway-per-conn-buf-lim/gateway.yaml",
