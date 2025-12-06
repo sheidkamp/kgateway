@@ -904,40 +904,6 @@ func translateTLSConfig(
 	return tlsConfig, nil
 }
 
-// normalizeCAReferenceType normalizes and validates an ObjectReference to determine if it's a ConfigMap or Secret.
-// Returns the normalized GroupVersionKind and an error if the reference type is unsupported.
-// This validation should have already been done in getFrontendTLSConfig, but we validate again here
-// for safety and to provide a clear error message during listener translation.
-func normalizeCAReferenceType(ref gwv1.ObjectReference) (schema.GroupVersionKind, error) {
-	// Normalize group - empty group means "core" API group
-	group := string(ref.Group)
-	if group == "" {
-		group = ""
-	}
-
-	// Normalize kind
-	kind := string(ref.Kind)
-	if kind == "" {
-		return schema.GroupVersionKind{}, fmt.Errorf("CA certificate reference must specify a kind")
-	}
-
-	gvk := schema.GroupVersionKind{
-		Group:   group,
-		Version: "", // Version is not used for comparison
-		Kind:    kind,
-	}
-
-	// Check if it's a ConfigMap or Secret
-	if gvk.Group == wellknown.ConfigMapGVK.Group && gvk.Kind == wellknown.ConfigMapGVK.Kind {
-		return wellknown.ConfigMapGVK, nil
-	}
-	if gvk.Group == wellknown.SecretGVK.Group && gvk.Kind == wellknown.SecretGVK.Kind {
-		return wellknown.SecretGVK, nil
-	}
-
-	return schema.GroupVersionKind{}, fmt.Errorf("CA certificate reference must be a ConfigMap or Secret, got %s/%s", group, kind)
-}
-
 // buildCaCertificateReference fetches and extracts a CA certificate from either a ConfigMap or Secret
 // referenced by the given ObjectReference. Returns the CA certificate data as a string.
 func buildCaCertificateReference(
@@ -948,14 +914,9 @@ func buildCaCertificateReference(
 	parentGVK schema.GroupVersionKind,
 	parentNamespace string,
 ) (string, error) {
-	// Validate and determine the reference type
-	refGVK, err := normalizeCAReferenceType(caCertRef)
-	if err != nil {
-		return "", fmt.Errorf("invalid CA certificate reference %s/%s: %w", caCertRef.Name, parentNamespace, err)
-	}
 
-	switch refGVK {
-	case wellknown.ConfigMapGVK:
+	switch {
+	case string(caCertRef.Group) == wellknown.ConfigMapGVK.Group && string(caCertRef.Kind) == wellknown.ConfigMapGVK.Kind:
 		// Fetch ConfigMap
 		configMap, err := queries.GetConfigMapForRef(
 			kctx,
@@ -975,7 +936,7 @@ func buildCaCertificateReference(
 		}
 		return caCertData, nil
 
-	case wellknown.SecretGVK:
+	case string(caCertRef.Group) == wellknown.SecretGVK.Group && string(caCertRef.Kind) == wellknown.SecretGVK.Kind:
 		// Convert ObjectReference to SecretObjectReference
 		secretObjRef := gwv1.SecretObjectReference{
 			Name:      caCertRef.Name,
@@ -1008,8 +969,9 @@ func buildCaCertificateReference(
 		}
 		return caCertData, nil
 
+	// Should never happen as we validate the reference type in validateCAReferenceType
 	default:
-		return "", fmt.Errorf("unsupported CA certificate reference type: %s/%s", refGVK.Group, refGVK.Kind)
+		return "", fmt.Errorf("unsupported CA certificate reference type: %s/%s", caCertRef.Group, caCertRef.Kind)
 	}
 }
 

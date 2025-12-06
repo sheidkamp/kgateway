@@ -1727,9 +1727,6 @@ func getInheritedPolicyPriority(annotations map[string]string) apiannotations.In
 func validateCAReferenceType(ref gwv1.ObjectReference) error {
 	// Normalize group - empty group means "core" API group
 	group := string(ref.Group)
-	if group == "" {
-		group = ""
-	}
 
 	// Normalize kind
 	kind := string(ref.Kind)
@@ -1738,9 +1735,8 @@ func validateCAReferenceType(ref gwv1.ObjectReference) error {
 	}
 
 	gvk := schema.GroupVersionKind{
-		Group:   group,
-		Version: "", // Version is not used for comparison
-		Kind:    kind,
+		Group: group,
+		Kind:  kind,
 	}
 
 	// Check if it's a ConfigMap or Secret

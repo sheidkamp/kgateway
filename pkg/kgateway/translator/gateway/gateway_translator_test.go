@@ -61,8 +61,8 @@ func TestBasic(t *testing.T) {
 
 	t.Run("gateway with TLS listener with TLS options", func(t *testing.T) {
 		test(t, translatorTestCase{
-			inputFile:  "gateway-only/tls-alpn.yaml",
-			outputFile: "gateway-only/tls-alpn.yaml",
+			inputFile:  "gateway-only/tls-options.yaml",
+			outputFile: "gateway-only/tls-options.yaml",
 			gwNN: types.NamespacedName{
 				Namespace: "default",
 				Name:      "example-gateway",

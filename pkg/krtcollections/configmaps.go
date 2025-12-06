@@ -36,19 +36,11 @@ func (c *ConfigMapIndex) Collection() krt.Collection[*corev1.ConfigMap] {
 // the source object is allowed to reference the target ConfigMap. Returns an error if
 // reference grants are missing, or the ConfigMap is not found.
 func (c *ConfigMapIndex) GetConfigMap(kctx krt.HandlerContext, from From, configMapRef gwv1.ObjectReference) (*corev1.ConfigMap, error) {
-	configMapKind := "ConfigMap"
-	configMapGroup := ""
 	toNs := strOr(configMapRef.Namespace, from.Namespace)
-	if configMapRef.Group != "" {
-		configMapGroup = string(configMapRef.Group)
-	}
-	if configMapRef.Kind != "" {
-		configMapKind = string(configMapRef.Kind)
-	}
 
 	to := ir.ObjectSource{
-		Group:     configMapGroup,
-		Kind:      configMapKind,
+		Group:     "",
+		Kind:      "ConfigMap",
 		Namespace: toNs,
 		Name:      string(configMapRef.Name),
 	}

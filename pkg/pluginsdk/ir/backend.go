@@ -409,14 +409,7 @@ func objectRefEqual(a, b gwv1.ObjectReference) bool {
 	return a.Group == b.Group &&
 		a.Kind == b.Kind &&
 		a.Name == b.Name &&
-		ptrEqual(a.Namespace, b.Namespace)
-}
-
-func ptrEqual[T comparable](a, b *T) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
+		ptrEquals(a.Namespace, b.Namespace)
 }
 
 // Equals returns true if the two BackendRefIR instances are equal in cluster name, weight, backend object equality, and error.
