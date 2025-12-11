@@ -45,14 +45,14 @@ var logger = logging.New("plugin/listenerpolicy")
 
 type ListenerPolicyIR struct {
 	ct            time.Time
-	defaultPolicy listenerPolicy
-	perPortPolicy map[uint32]listenerPolicy
+	defaultPolicy ListenerPolicy
+	perPortPolicy map[uint32]ListenerPolicy
 
 	NoOrigin bool // +noKrtEquals reason: When set to true, suppress source reporting metadata from
 	// ListenerPolicy specific fields that are irrelevant to the (now deprecated) HTTPListenerPolicy. Remove when HTTPListenerPolicy is removed.
 }
 
-type listenerPolicy struct {
+type ListenerPolicy struct {
 	proxyProtocol                 *anypb.Any
 	perConnectionBufferLimitBytes *uint32
 	http                          *HttpListenerPolicyIr
@@ -60,9 +60,9 @@ type listenerPolicy struct {
 
 func newListenerPolicy(
 	krtctx krt.HandlerContext, commoncol *collections.CommonCollections,
-	objSrc ir.ObjectSource, i *kgateway.ListenerConfig) (listenerPolicy, []error) {
+	objSrc ir.ObjectSource, i *kgateway.ListenerConfig) (ListenerPolicy, []error) {
 	if i == nil {
-		return listenerPolicy{}, nil
+		return ListenerPolicy{}, nil
 	}
 	var perConnectionBufferLimitBytes *uint32
 	if i.PerConnectionBufferLimitBytes != nil {
@@ -70,7 +70,7 @@ func newListenerPolicy(
 	}
 	http, errs := NewHttpListenerPolicy(krtctx, commoncol, i.HTTPSettings, objSrc)
 
-	return listenerPolicy{
+	return ListenerPolicy{
 		proxyProtocol:                 convertProxyProtocolConfig(objSrc, i.ProxyProtocol),
 		perConnectionBufferLimitBytes: perConnectionBufferLimitBytes,
 		http:                          http,
@@ -93,7 +93,7 @@ func (d *ListenerPolicyIR) Equals(in any) bool {
 	if !d.defaultPolicy.Equals(d2.defaultPolicy) {
 		return false
 	}
-	if !maps.EqualFunc(d.perPortPolicy, d2.perPortPolicy, func(a, b listenerPolicy) bool {
+	if !maps.EqualFunc(d.perPortPolicy, d2.perPortPolicy, func(a, b ListenerPolicy) bool {
 		return a.Equals(b)
 	}) {
 		return false
@@ -101,7 +101,7 @@ func (d *ListenerPolicyIR) Equals(in any) bool {
 	return true
 }
 
-func (d listenerPolicy) Equals(d2 listenerPolicy) bool {
+func (d ListenerPolicy) Equals(d2 ListenerPolicy) bool {
 	if !proto.Equal(d.proxyProtocol, d2.proxyProtocol) {
 		return false
 	}
@@ -169,7 +169,7 @@ func NewListenerPolicyIR(
 		return nil, nil
 	}
 	errs := []error{}
-	perPort := map[uint32]listenerPolicy{}
+	perPort := map[uint32]ListenerPolicy{}
 	for _, portConfig := range spec.PerPort {
 		pol, errs2 := newListenerPolicy(krtctx, commoncol, objSrc, &portConfig.Listener)
 		perPort[uint32(portConfig.Port)] = pol //nolint:gosec // G115: we have CEL validation that this is at least 1.
@@ -193,6 +193,8 @@ func NewPlugin(ctx context.Context, commoncol *collections.CommonCollections) sd
 	col := krt.WrapClient(cli, commoncol.KrtOpts.ToOptions("ListenerPolicy")...)
 	gk := kgwwellknown.ListenerPolicyGVK.GroupKind()
 
+	constructor := NewListenerPolicyConstructor(ctx, commoncol)
+
 	policyStatusMarker, policyCol := krt.NewStatusCollection(col, func(krtctx krt.HandlerContext, i *kgateway.ListenerPolicy) (*krtcollections.StatusMarker, *ir.PolicyWrapper) {
 		objSrc := ir.ObjectSource{
 			Group:     gk.Group,
@@ -210,7 +212,7 @@ func NewPlugin(ctx context.Context, commoncol *collections.CommonCollections) sd
 			}
 		}
 
-		polIr, errs := NewListenerPolicyIR(krtctx, commoncol, i.CreationTimestamp.Time, &i.Spec, objSrc)
+		polIr, errs := constructor.ConstructIR(krtctx, i)
 		pol := &ir.PolicyWrapper{
 			ObjectSource: objSrc,
 			Policy:       i,
@@ -242,7 +244,9 @@ func NewPlugin(ctx context.Context, commoncol *collections.CommonCollections) sd
 		}
 	}
 	return sdk.Plugin{
-		ExtraHasSynced: col.HasSynced,
+		ExtraHasSynced: func() bool {
+			return col.HasSynced() && constructor.HasSynced()
+		},
 		ContributesPolicies: map[schema.GroupKind]sdk.PolicyPlugin{
 			kgwwellknown.ListenerPolicyGVK.GroupKind(): {
 				NewGatewayTranslationPass:       NewGatewayTranslationPass,
@@ -268,11 +272,11 @@ func NewGatewayTranslationPass(tctx ir.GwTranslationCtx, reporter reporter.Repor
 func (p *listenerPolicyPluginGwPass) Name() string {
 	return "listenerpolicy"
 }
-func (p *listenerPolicyPluginGwPass) getPolicy(policy ir.PolicyIR, port uint32) listenerPolicy {
+func (p *listenerPolicyPluginGwPass) getPolicy(policy ir.PolicyIR, port uint32) ListenerPolicy {
 	pol, ok := policy.(*ListenerPolicyIR)
 	if !ok || pol == nil {
 		logger.Warn("policy is not listenerPolicy type or is nil", "ok", ok, "pol", pol)
-		return listenerPolicy{}
+		return ListenerPolicy{}
 	}
 
 	if perPortCfg, found := pol.perPortPolicy[port]; found {

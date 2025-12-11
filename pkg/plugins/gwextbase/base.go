@@ -7,6 +7,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1/kgateway"
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/extensions2/plugins/listenerpolicy"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/extensions2/plugins/trafficpolicy"
 	"github.com/kgateway-dev/kgateway/v2/pkg/krtcollections"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/collections"
@@ -25,6 +26,11 @@ type (
 	ProviderNeededMap               = trafficpolicy.ProviderNeededMap
 	TrafficPolicyGatewayExtensionIR = trafficpolicy.TrafficPolicyGatewayExtensionIR
 	TrafficPolicyMergeOpts          = trafficpolicy.TrafficPolicyMergeOpts
+
+	ListenerPolicy                   = listenerpolicy.ListenerPolicy
+	ListenerPolicyConstructor        = listenerpolicy.ListenerPolicyConstructor
+	ListenerPolicyGatewayExtensionIR = listenerpolicy.ListenerPolicyGatewayExtensionIR
+	ListenerPolicyMergeOpts          = listenerpolicy.ListenerPolicyMergeOpts
 )
 
 var (
@@ -60,4 +66,11 @@ func NewGatewayTranslationPass(tctx ir.GwTranslationCtx, reporter reporter.Repor
 
 func ResolveExtGrpcService(krtctx krt.HandlerContext, backends *krtcollections.BackendIndex, disableExtensionRefValidation bool, objectSource ir.ObjectSource, grpcService *kgateway.ExtGrpcService) (*envoycorev3.GrpcService, error) {
 	return trafficpolicy.ResolveExtGrpcService(krtctx, backends, disableExtensionRefValidation, objectSource, grpcService)
+}
+
+func NewListenerPolicyConstructor(
+	ctx context.Context,
+	commoncol *collections.CommonCollections,
+) *listenerpolicy.ListenerPolicyConstructor {
+	return listenerpolicy.NewListenerPolicyConstructor(ctx, commoncol)
 }
