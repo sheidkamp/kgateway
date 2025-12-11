@@ -372,14 +372,14 @@ func (c Gateway) Equals(in Gateway) bool {
 		c.Listeners.Equals(in.Listeners) &&
 		c.AllowedListenerSets.Equals(in.AllowedListenerSets) &&
 		c.DeniedListenerSets.Equals(in.DeniedListenerSets) &&
-		equalsFrontendTLSConfig(c.FrontendTLSConfig, in.FrontendTLSConfig)
+		EqualsFrontendTLSConfig(c.FrontendTLSConfig, in.FrontendTLSConfig)
 }
 
-func equalsFrontendTLSConfig(a, b *FrontendTLSConfigIR) bool {
+func EqualsFrontendTLSConfig(a, b *FrontendTLSConfigIR) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	if !equalsClientCertValidationIR(a.DefaultValidation, b.DefaultValidation) {
+	if !EqualsClientCertValidationIR(a.DefaultValidation, b.DefaultValidation) {
 		return false
 	}
 	if len(a.PerPortValidation) != len(b.PerPortValidation) {
@@ -387,14 +387,14 @@ func equalsFrontendTLSConfig(a, b *FrontendTLSConfigIR) bool {
 	}
 	for port, valA := range a.PerPortValidation {
 		valB, ok := b.PerPortValidation[port]
-		if !ok || !equalsClientCertValidationIR(valA, valB) {
+		if !ok || !EqualsClientCertValidationIR(valA, valB) {
 			return false
 		}
 	}
 	return true
 }
 
-func equalsClientCertValidationIR(a, b *ClientCertificateValidationIR) bool {
+func EqualsClientCertValidationIR(a, b *ClientCertificateValidationIR) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
