@@ -14,7 +14,7 @@ import (
 
 // TestCRDValidation cel validation using the passed validator.
 // testDataDir is the directory containing the test data.
-// Each file in the directory is a yaml documents that are validated.
+// Each file in the directory is a yaml file containing documents to be validated.
 // The file name is the name of the test, and subtests are named after the object name.
 // The test data is split into multiple documents by the '---' delimiter.
 // If an error is expected, the error message should be in the _err field of the yaml document, for example:
