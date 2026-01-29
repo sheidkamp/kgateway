@@ -3,10 +3,10 @@ package tests
 import (
 	"testing"
 
-	"github.com/kgateway-dev/kgateway/v2/test/celvalidation"
+	"github.com/kgateway-dev/kgateway/v2/test/crvalidation"
 )
 
 func TestCRDs(t *testing.T) {
 	v := NewKgatewayValidator(t)
-	celvalidation.TestCRDValidation(t, v, "testdata")
+	crvalidation.TestCRValidation(t, v, "testdata")
 }

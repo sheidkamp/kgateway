@@ -1,4 +1,4 @@
-package celvalidation
+package crvalidation
 
 import (
 	"os"
@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// TestCRDValidation tests CEL validation using the passed validator.
+// TestCRValidation tests CEL validation using the passed validator.
 // testDataDir is the directory containing the test data.
 // Each file in the directory is a yaml file containing documents to be validated.
 // The file name is the name of the test, and subtests are named after the object name.
@@ -34,7 +34,7 @@ import (
 // ... more test cases
 // ```
 
-func TestCRDValidation(t *testing.T, v *crd.Validator, testDataDir string) {
+func TestCRValidation(t *testing.T, v *crd.Validator, testDataDir string) {
 	d, err := os.ReadDir(testDataDir)
 	if err != nil {
 		t.Fatal(err)
