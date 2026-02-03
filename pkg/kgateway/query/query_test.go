@@ -439,6 +439,15 @@ var _ = Describe("Query", func() {
 			It("should work with double catch all", func() {
 				expectHostnamesToMatch("", nil)
 			})
+			It("should work with wildcard listener and more specific wildcard route", func() {
+				expectHostnamesToMatch("*.com", []string{"*.example.com"}, "*.example.com")
+			})
+			It("should work with wildcard listener more specific than wildcard route", func() {
+				expectHostnamesToMatch("*.example.com", []string{"*.com"}, "*.example.com")
+			})
+			It("should work with exact listener and wildcard route", func() {
+				expectHostnamesToMatch("abc.example.com", []string{"*.example.com"}, "abc.example.com")
+			})
 		})
 
 		It("should match TCPRoutes for Listener", func() {
