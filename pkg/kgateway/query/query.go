@@ -248,11 +248,26 @@ func hostnameIntersect(l *gwv1.Listener, routeHostnames []string) (bool, []strin
 
 		for _, hostname := range routeHostnames {
 			hrHost := string(hostname)
+			// Check if route hostname matches the listener wildcard pattern
 			if strings.HasSuffix(hrHost, listenerHostname[1:]) {
 				hostnames = append(hostnames, hrHost)
+			} else if strings.HasPrefix(hrHost, "*.") {
+				// Both are wildcards - determine which is more specific
+				// e.g., listener: *.example.com vs route: *.com
+				// The more specific pattern should be the intersection
+				if strings.HasSuffix(listenerHostname[1:], hrHost[1:]) {
+					// Listener is more specific (e.g., *.example.com is more specific than *.com)
+					// Use listener hostname as intersection
+					hostnames = append(hostnames, listenerHostname)
+				} else if strings.HasSuffix(hrHost[1:], listenerHostname[1:]) {
+					// Route is more specific (e.g., *.example.com is more specific than *.com)
+					// Use route hostname as intersection
+					hostnames = append(hostnames, hrHost)
+				}
 			}
 		}
-		return len(hostnames) > 0, hostnames
+		ok := len(hostnames) > 0
+		return ok, hostnames
 	}
 	if len(routeHostnames) == 0 {
 		return true, []string{listenerHostname}
@@ -268,7 +283,6 @@ func hostnameIntersect(l *gwv1.Listener, routeHostnames []string) (bool, []strin
 				return true, []string{listenerHostname}
 			}
 		}
-		// also possible that listener hostname is more specific than the hr hostname
 	}
 
 	return false, nil

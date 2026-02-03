@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/translator/sslutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/translator/utils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/ir"
@@ -915,6 +916,62 @@ func TestInvalidRouteKindOnTCPListener(t *testing.T) {
 	}
 	assertExpectedListenerStatuses(t, g, report.Gateway(gateway), gateway.Spec.Listeners, expectedStatuses)
 	assertExpectedListenerStatuses(t, g, report.Gateway(gateway), utils.ToListenerSlice(listenerSet.Spec.Listeners), expectedStatuses)
+}
+
+func TestTLSTerminateWithTLSRouteRejected(t *testing.T) {
+	gateway := tlsTerminateWithTLSRouteGw()
+	report := reports.NewReportMap()
+	reporter := reports.NewReporter(&report)
+
+	validListeners := validateGateway(gwToIr(gateway, nil, nil), reporter, settings)
+	g := NewWithT(t)
+	// Listener should be rejected
+	g.Expect(validListeners).To(BeEmpty())
+
+	expectedStatuses := map[string]gwv1.ListenerStatus{
+		"tls-terminate": {
+			Name:           "tls-terminate",
+			SupportedKinds: []gwv1.RouteGroupKind{},
+			Conditions: []metav1.Condition{
+				{
+					Type:   string(gwv1.ListenerConditionAccepted),
+					Status: metav1.ConditionFalse,
+					Reason: string(sslutils.ListenerReasonUnsupportedValue),
+				},
+				{
+					Type:   string(gwv1.ListenerConditionProgrammed),
+					Status: metav1.ConditionFalse,
+					Reason: string(gwv1.ListenerReasonInvalid),
+				},
+			},
+		},
+	}
+	assertExpectedListenerStatuses(t, g, report.Gateway(gateway), gateway.Spec.Listeners, expectedStatuses)
+}
+
+func TestTLSTerminateWithTCPRouteAllowed(t *testing.T) {
+	gateway := tlsTerminateWithTCPRouteGw()
+	report := reports.NewReportMap()
+	reporter := reports.NewReporter(&report)
+
+	validListeners := validateGateway(gwToIr(gateway, nil, nil), reporter, settings)
+	g := NewWithT(t)
+	// Listener should be allowed since TCPRoute with Terminate is valid
+	g.Expect(validListeners).To(HaveLen(1))
+
+	expectedStatuses := map[string]gwv1.ListenerStatus{
+		"tls-terminate-tcp": {
+			Name: "tls-terminate-tcp",
+			SupportedKinds: []gwv1.RouteGroupKind{
+				{
+					Group: GroupNameHelper(),
+					Kind:  "TCPRoute",
+				},
+			},
+			Conditions: []metav1.Condition{},
+		},
+	}
+	assertExpectedListenerStatuses(t, g, report.Gateway(gateway), gateway.Spec.Listeners, expectedStatuses)
 }
 
 func TestTCPProtocolConflict(t *testing.T) {
@@ -2230,6 +2287,70 @@ func hboneProtocolGw() *gwv1.Gateway {
 					Name:     "hbone",
 					Port:     8080,
 					Protocol: gwv1.ProtocolType(istioprotocol.HBONE),
+				},
+			},
+		},
+	}
+}
+
+func tlsTerminateWithTLSRouteGw() *gwv1.Gateway {
+	hostname := gwv1.Hostname("terminate.example.com")
+	tlsTerminate := gwv1.TLSModeTerminate
+	return &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "tls-terminate-tlsroute-gateway",
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "kgateway",
+			Listeners: []gwv1.Listener{
+				{
+					Name:     "tls-terminate",
+					Hostname: &hostname,
+					Port:     8443,
+					Protocol: gwv1.TLSProtocolType,
+					TLS: &gwv1.ListenerTLSConfig{
+						Mode: &tlsTerminate,
+					},
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{
+								Kind: wellknown.TLSRouteKind,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func tlsTerminateWithTCPRouteGw() *gwv1.Gateway {
+	hostname := gwv1.Hostname("terminate.example.com")
+	tlsTerminate := gwv1.TLSModeTerminate
+	return &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "tls-terminate-tcproute-gateway",
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "kgateway",
+			Listeners: []gwv1.Listener{
+				{
+					Name:     "tls-terminate-tcp",
+					Hostname: &hostname,
+					Port:     8443,
+					Protocol: gwv1.TLSProtocolType,
+					TLS: &gwv1.ListenerTLSConfig{
+						Mode: &tlsTerminate,
+					},
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{
+								Kind: wellknown.TCPRouteKind,
+							},
+						},
+					},
 				},
 			},
 		},
