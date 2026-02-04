@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -421,14 +422,23 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 		return nil
 	}
 
-	// Each filter chain now contains exactly one route
-	// (changed from previous behavior where one filter chain could contain multiple routes)
-	if len(parent.routesWithHosts) != 1 {
-		// This should not happen with the new AppendTlsListener logic
-		logger.Error("tcpFilterChain expected exactly one route", "count", len(parent.routesWithHosts))
-		return nil
+	// TLSRoute: Each filter chain contains exactly one route (AppendTlsListener creates one filter chain per route)
+	// TCPRoute: Multiple routes may be attached (no SNI to distinguish them), select one deterministically
+	var r *query.RouteInfo
+	if len(parent.routesWithHosts) == 1 {
+		r = parent.routesWithHosts[0]
+	} else {
+		// Multiple routes attached - this is expected for TCPRoute (no SNI), unexpected for TLSRoute
+		// Select the oldest route by creation timestamp
+		r = slices.MinFunc(parent.routesWithHosts, func(a, b *query.RouteInfo) int {
+			return a.Object.GetSourceObject().GetCreationTimestamp().Time.Compare(b.Object.GetSourceObject().GetCreationTimestamp().Time)
+		})
+		if _, isTls := r.Object.(*ir.TlsRouteIR); isTls {
+			// This should not happen - TLSRoute should come from AppendTlsListener with one route per filter chain
+			logger.Error("tcpFilterChain received multiple TLSRoutes", "count", len(parent.routesWithHosts))
+		}
+		// For TCPRoute, selecting one route is expected behavior since there's no SNI to distinguish routes
 	}
-	r := parent.routesWithHosts[0]
 
 	switch r.Object.(type) {
 	case *ir.TcpRouteIR:

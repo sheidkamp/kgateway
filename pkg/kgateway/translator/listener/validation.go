@@ -89,6 +89,26 @@ func buildDefaultRouteKindsForProtocol(supportedRouteKindsForProtocol map[groupN
 	return rgks
 }
 
+// protocolSupportsRouteKind checks if the given protocol supports the specified route kind by default.
+// Returns true if the kind is in the default supported kinds for this protocol.
+func protocolSupportsRouteKind(protocol gwv1.ProtocolType, kind string) bool {
+	supportedProtocolToKinds := getSupportedProtocolsRoutes()
+	supportedRouteKinds, ok := supportedProtocolToKinds[string(protocol)]
+	if !ok {
+		return false
+	}
+
+	// Check all groups for this protocol
+	for _, kinds := range supportedRouteKinds {
+		for _, supportedKind := range kinds {
+			if supportedKind == kind {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // validateTLSConfiguration validates TLS-specific listener configurations.
 // It rejects TLS listeners with mode: Terminate that allow TLSRoute, since
 // TLSRoute requires TLS passthrough (SNI-based routing) which is incompatible
@@ -106,7 +126,7 @@ func validateTLSConfiguration(listeners []ir.Listener, reporter reports.Reporter
 		// Check if TLS mode is Terminate
 		if listener.TLS != nil && listener.TLS.Mode != nil && *listener.TLS.Mode == gwv1.TLSModeTerminate {
 			// Check if TLSRoute is allowed
-			if allowsRouteKind(listener.AllowedRoutes, wellknown.TLSRouteKind) {
+			if allowsRouteKind(listener.Protocol, listener.AllowedRoutes, wellknown.TLSRouteKind) {
 				// Reject this listener - Terminate mode is not supported for TLSRoute
 				parentReporter := listener.GetParentReporter(reporter)
 				// Clear supported kinds since this listener is invalid
@@ -135,11 +155,11 @@ func validateTLSConfiguration(listeners []ir.Listener, reporter reports.Reporter
 }
 
 // allowsRouteKind checks if the given AllowedRoutes configuration allows the specified route kind.
-func allowsRouteKind(allowedRoutes *gwv1.AllowedRoutes, kind string) bool {
+// If no specific kinds are configured, checks the default supported kinds for the protocol.
+func allowsRouteKind(protocol gwv1.ProtocolType, allowedRoutes *gwv1.AllowedRoutes, kind string) bool {
 	if allowedRoutes == nil || len(allowedRoutes.Kinds) == 0 {
-		// If no specific kinds are specified, check the default supported kinds for TLS protocol
-		// TLS protocol by default supports both TLSRoute and TCPRoute
-		return kind == wellknown.TLSRouteKind || kind == wellknown.TCPRouteKind
+		// If no specific kinds are specified, use the default supported kinds for this protocol
+		return protocolSupportsRouteKind(protocol, kind)
 	}
 
 	for _, rgk := range allowedRoutes.Kinds {
