@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"gorm.io/gorm/logger"
 	istioprotocol "istio.io/istio/pkg/config/protocol"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
