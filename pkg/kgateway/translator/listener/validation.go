@@ -10,6 +10,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/translator/sslutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/validate"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/ir"
@@ -88,6 +89,88 @@ func buildDefaultRouteKindsForProtocol(supportedRouteKindsForProtocol map[groupN
 	return rgks
 }
 
+// protocolSupportsRouteKind checks if the given protocol supports the specified route kind by default.
+// Returns true if the kind is in the default supported kinds for this protocol.
+func protocolSupportsRouteKind(protocol gwv1.ProtocolType, kind string) bool {
+	supportedProtocolToKinds := getSupportedProtocolsRoutes()
+	supportedRouteKinds, ok := supportedProtocolToKinds[string(protocol)]
+	if !ok {
+		return false
+	}
+
+	// Check all groups for this protocol
+	for _, kinds := range supportedRouteKinds {
+		for _, supportedKind := range kinds {
+			if supportedKind == kind {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// validateTLSConfiguration validates TLS-specific listener configurations.
+// It rejects TLS listeners with mode: Terminate that allow TLSRoute, since
+// TLSRoute requires TLS passthrough (SNI-based routing) which is incompatible
+// with TLS termination.
+func validateTLSConfiguration(listeners []ir.Listener, reporter reports.Reporter) []ir.Listener {
+	validListeners := []ir.Listener{}
+
+	for _, listener := range listeners {
+		// Only validate TLS protocol listeners
+		if listener.Protocol != gwv1.TLSProtocolType {
+			validListeners = append(validListeners, listener)
+			continue
+		}
+
+		// Check if TLS mode is Terminate
+		if listener.TLS != nil && listener.TLS.Mode != nil && *listener.TLS.Mode == gwv1.TLSModeTerminate {
+			// Check if TLSRoute is allowed
+			if allowsRouteKind(listener.Protocol, listener.AllowedRoutes, wellknown.TLSRouteKind) {
+				// Reject this listener - Terminate mode is not supported for TLSRoute
+				parentReporter := listener.GetParentReporter(reporter)
+				// Clear supported kinds since this listener is invalid
+				parentReporter.ListenerName(string(listener.Name)).SetSupportedKinds([]gwv1.RouteGroupKind{})
+				parentReporter.ListenerName(string(listener.Name)).SetCondition(reports.ListenerCondition{
+					Type:    gwv1.ListenerConditionAccepted,
+					Status:  metav1.ConditionFalse,
+					Reason:  sslutils.ListenerReasonUnsupportedValue,
+					Message: "TLS mode Terminate is not supported for TLSRoute. TLSRoute requires Passthrough mode for SNI-based routing.",
+				})
+				parentReporter.ListenerName(string(listener.Name)).SetCondition(reports.ListenerCondition{
+					Type:    gwv1.ListenerConditionProgrammed,
+					Status:  metav1.ConditionFalse,
+					Reason:  gwv1.ListenerReasonInvalid,
+					Message: "TLS mode Terminate is not supported for TLSRoute. TLSRoute requires Passthrough mode for SNI-based routing.",
+				})
+				// Skip this listener - don't add to validListeners
+				continue
+			}
+		}
+
+		validListeners = append(validListeners, listener)
+	}
+
+	return validListeners
+}
+
+// allowsRouteKind checks if the given AllowedRoutes configuration allows the specified route kind.
+// If no specific kinds are configured, checks the default supported kinds for the protocol.
+func allowsRouteKind(protocol gwv1.ProtocolType, allowedRoutes *gwv1.AllowedRoutes, kind string) bool {
+	if allowedRoutes == nil || len(allowedRoutes.Kinds) == 0 {
+		// If no specific kinds are specified, use the default supported kinds for this protocol
+		return protocolSupportsRouteKind(protocol, kind)
+	}
+
+	for _, rgk := range allowedRoutes.Kinds {
+		if string(rgk.Kind) == kind {
+			return true
+		}
+	}
+
+	return false
+}
+
 func validateSupportedRoutes(listeners []ir.Listener, reporter reports.Reporter) []ir.Listener {
 	supportedProtocolToKinds := getSupportedProtocolsRoutes()
 	validListeners := []ir.Listener{}
@@ -157,6 +240,7 @@ func validateListeners(gw *ir.Gateway, reporter reports.Reporter, settings Liste
 	}
 
 	validListeners := validateSupportedRoutes(gw.Listeners, reporter)
+	validListeners = validateTLSConfiguration(validListeners, reporter)
 
 	portListeners := map[gwv1.PortNumber]*portProtocol{}
 	// The listeners are already sorted based on listener precedence

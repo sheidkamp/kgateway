@@ -439,6 +439,49 @@ var _ = Describe("Query", func() {
 			It("should work with double catch all", func() {
 				expectHostnamesToMatch("", nil)
 			})
+			It("should work with wildcard listener and more specific wildcard route", func() {
+				expectHostnamesToMatch("*.com", []string{"*.example.com"}, "*.example.com")
+			})
+			It("should work with wildcard listener more specific than wildcard route", func() {
+				expectHostnamesToMatch("*.example.com", []string{"*.com"}, "*.example.com")
+			})
+			It("should work with exact listener and wildcard route", func() {
+				expectHostnamesToMatch("abc.example.com", []string{"*.example.com"}, "abc.example.com")
+			})
+			It("should work with identical wildcard patterns", func() {
+				expectHostnamesToMatch("*.example.com", []string{"*.example.com"}, "*.example.com")
+			})
+			It("should work with non-intersecting wildcards", func() {
+				// *.example.com and *.other.com have no intersection
+				gwWithListener := gw()
+				gwWithListener.Spec.Listeners = []gwv1.Listener{
+					{
+						Name:     "foo",
+						Protocol: gwv1.HTTPProtocolType,
+						Hostname: ptr.To(gwv1.Hostname("*.example.com")),
+					},
+				}
+				hr := httpRoute()
+				hr.Spec.Hostnames = []gwv1.Hostname{"*.other.com"}
+				hr.Spec.ParentRefs = []gwv1.ParentReference{
+					{
+						Name: gwv1.ObjectName(gwWithListener.Name),
+					},
+				}
+
+				gq := newQueries(GinkgoT(), hr)
+				routes, err := gq.GetRoutesForGateway(krt.TestingDummyContext{}, context.Background(), &ir.Gateway{Obj: gwWithListener})
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routes.RouteErrors).To(HaveLen(1))
+				Expect(routes.RouteErrors[0].Error.E).To(MatchError(query.ErrNoMatchingListenerHostname))
+			})
+			It("should work with multiple route hostnames where one matches", func() {
+				expectHostnamesToMatch("*.example.com", []string{"*.com", "*.other.com", "foo.bar.com"}, "*.example.com")
+			})
+			It("should work with nested wildcard patterns", func() {
+				expectHostnamesToMatch("*.example.com", []string{"*.sub.example.com"}, "*.sub.example.com")
+			})
 		})
 
 		It("should match TCPRoutes for Listener", func() {

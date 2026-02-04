@@ -23,6 +23,7 @@ const (
 	ListenerReasonInvalidCACertificateRef  gwv1.ListenerConditionReason = "InvalidCACertificateRef"
 	ListenerReasonInvalidCACertificateKind gwv1.ListenerConditionReason = "InvalidCACertificateKind"
 	ListenerReasonNoValidCACertificate     gwv1.ListenerConditionReason = "NoValidCACertificate"
+	ListenerReasonUnsupportedValue         gwv1.ListenerConditionReason = "UnsupportedValue"
 )
 
 var (

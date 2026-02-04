@@ -250,27 +250,34 @@ func (ml *MergedListeners) AppendTlsListener(
 	routeInfos []*query.RouteInfo,
 	reporter reports.ListenerReporter,
 ) {
-	parent := tcpFilterChainParent{
-		gatewayListenerName: query.GenerateRouteKey(listener.Parent, string(listener.Name)),
-		listener:            listener,
-		listenerReporter:    reporter,
-		routesWithHosts:     routeInfos,
-	}
 	tls := listener.TLS
 	if tls == nil {
 		tls = &gwv1.ListenerTLSConfig{}
 	}
-	fc := tcpFilterChain{
-		parents:          parent,
-		tls:              tls,
-		sniDomain:        listener.Hostname,
-		listenerReporter: reporter,
+
+	// Create one filter chain per route for TLS Passthrough mode
+	// Each route gets its own SNI matcher based on hostname intersection
+	filterChains := make([]tcpFilterChain, 0, len(routeInfos))
+	for _, routeInfo := range routeInfos {
+		parent := tcpFilterChainParent{
+			gatewayListenerName: query.GenerateRouteKey(listener.Parent, string(listener.Name)),
+			listener:            listener,
+			listenerReporter:    reporter,
+			routesWithHosts:     []*query.RouteInfo{routeInfo}, // One route per filter chain
+		}
+		fc := tcpFilterChain{
+			parents:          parent,
+			tls:              tls,
+			sniDomain:        listener.Hostname,
+			listenerReporter: reporter,
+		}
+		filterChains = append(filterChains, fc)
 	}
 
 	finalPort := getListenerPortNumber(listener)
 	for _, lis := range ml.Listeners {
 		if lis.port == finalPort {
-			lis.TcpFilterChains = append(lis.TcpFilterChains, fc)
+			lis.TcpFilterChains = append(lis.TcpFilterChains, filterChains...)
 			return
 		}
 	}
@@ -279,7 +286,7 @@ func (ml *MergedListeners) AppendTlsListener(
 	ml.Listeners = append(ml.Listeners, &MergedListener{
 		name:            GenerateListenerName(listener),
 		port:            finalPort,
-		TcpFilterChains: []tcpFilterChain{fc},
+		TcpFilterChains: filterChains,
 		listener:        listener,
 		settings:        ml.settings,
 	})
@@ -415,18 +422,23 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 		return nil
 	}
 
-	if len(parent.routesWithHosts) > 1 {
-		// Only one route per listener is supported
-		// TODO: report error on the listener
-		//	reporter.Gateway(gw).SetCondition(reports.RouteCondition{
-		//		Type:   gwv1.RouteConditionPartiallyInvalid,
-		//		Status: metav1.ConditionTrue,
-		//		Reason: gwv1.RouteReasonUnsupportedValue,
-		//	})
+	// TLSRoute: Each filter chain contains exactly one route (AppendTlsListener creates one filter chain per route)
+	// TCPRoute: Multiple routes may be attached (no SNI to distinguish them), select one deterministically
+	var r *query.RouteInfo
+	if len(parent.routesWithHosts) == 1 {
+		r = parent.routesWithHosts[0]
+	} else {
+		// Multiple routes attached - this is expected for TCPRoute (no SNI), unexpected for TLSRoute
+		// Select the oldest route by creation timestamp
+		r = slices.MinFunc(parent.routesWithHosts, func(a, b *query.RouteInfo) int {
+			return a.Object.GetSourceObject().GetCreationTimestamp().Time.Compare(b.Object.GetSourceObject().GetCreationTimestamp().Time)
+		})
+		if _, isTls := r.Object.(*ir.TlsRouteIR); isTls {
+			// This should not happen - TLSRoute should come from AppendTlsListener with one route per filter chain
+			logger.Error("tcpFilterChain received multiple TLSRoutes", "count", len(parent.routesWithHosts))
+		}
+		// For TCPRoute, selecting one route is expected behavior since there's no SNI to distinguish routes
 	}
-	r := slices.MinFunc(parent.routesWithHosts, func(a, b *query.RouteInfo) int {
-		return a.Object.GetSourceObject().GetCreationTimestamp().Compare(b.Object.GetSourceObject().GetCreationTimestamp().Time)
-	})
 
 	switch r.Object.(type) {
 	case *ir.TcpRouteIR:
@@ -564,7 +576,13 @@ func (tc *tcpFilterChain) translateTcpFilterChain(
 		}
 
 		var matcher ir.FilterChainMatch
-		if tc.sniDomain != nil {
+		// Use the hostname intersection result from RouteInfo instead of the listener hostname
+		// This ensures that the route only matches hostnames that are the intersection of
+		// the listener hostname and the route hostnames
+		if len(r.HostnameOverrides) > 0 {
+			matcher.SniDomains = r.HostnameOverrides
+		} else if tc.sniDomain != nil {
+			// Fallback to listener hostname if no intersection was computed
 			matcher.SniDomains = []string{string(*tc.sniDomain)}
 		}
 
