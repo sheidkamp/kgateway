@@ -17,7 +17,7 @@ SKIP_DOCKER="${SKIP_DOCKER:-false}"
 # Stop after creating the kind cluster
 JUST_KIND="${JUST_KIND:-false}"
 # The version of the k8s gateway api conformance tests to run.
-CONFORMANCE_VERSION="${CONFORMANCE_VERSION:-$(go list -m sigs.k8s.io/gateway-api | awk '{print $2}')}"
+CONFORMANCE_VERSION="${CONFORMANCE_VERSION:-v1.5.0}"
 # The channel of the k8s gateway api conformance tests to run.
 CONFORMANCE_CHANNEL="${CONFORMANCE_CHANNEL:-"experimental"}"
 # The kind CLI to use. Defaults to the latest version from the kind repo.
