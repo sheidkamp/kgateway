@@ -23,8 +23,6 @@ The underlying implementation is based on [github.com/prometheus/client_golang/p
 
 ## Metric collection packages
 Several packages have interfaces created to standardize collection of metrics around existing frameworks
-* [controllerMetricsRecorder](/pkg/kgateway/controller/metrics.go) for [/pkg/kgateway/controller](/pkg/kgateway/controller/)
-  * Created by `newControllerMetricsRecorder(controllerName string) controllerMetricsRecorder `
 * [CollectTranslationMetrics](/pkg/kgateway/translator/metrics/metrics.go) for [/pkg/kgateway/translator/](/pkg/kgateway/translator/)
   * Called with `CollectTranslationMetrics(labels TranslatorMetricLabels) func(error)` at the start of a translation function; the returned function is deferred to complete recording
 * [StartResourceStatusSync, StartResourceXDSSync, EndResourceStatusSync, and EndResourceXDSSync](/pkg/krtcollections/metrics/metrics.go) are used to track metrics related to resource sync.
