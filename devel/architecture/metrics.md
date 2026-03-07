@@ -38,8 +38,8 @@ These objects all support a "CollectMetrics()" method, that can be called at the
 var rErr error
 
 finishMetrics := metrics.CollectTranslationMetrics(metrics.TranslatorMetricLabels{
-  Name:       gateway.Name,
-  Namespace:  gateway.Namespace,
+  Name:       "gateway.Name",
+  Namespace:  "gateway.Namespace",
 })
 defer func() {
   finishMetrics(rErr)
