@@ -723,6 +723,39 @@ func TestBasic(t *testing.T) {
 		})
 	})
 
+	t.Run("TrafficPolicy with fault injection attached to route", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/fault-injection-route.yaml",
+			outputFile: "traffic-policy/fault-injection-route.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("TrafficPolicy with fault injection attached to gateway", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/fault-injection-gateway.yaml",
+			outputFile: "traffic-policy/fault-injection-gateway.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("TrafficPolicy with fault injection disable overriding gateway policy", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/fault-injection-disable.yaml",
+			outputFile: "traffic-policy/fault-injection-disable.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
 	t.Run("TrafficPolicy with header modifiers attached to gateway", func(t *testing.T) {
 		test(t, translatorTestCase{
 			inputFile:  "traffic-policy/header-modifiers-gateway.yaml",
