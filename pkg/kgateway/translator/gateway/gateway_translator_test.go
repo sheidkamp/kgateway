@@ -1062,6 +1062,17 @@ func TestBasic(t *testing.T) {
 		})
 	})
 
+	t.Run("Backend TLS Policy with sectionName", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "backendtlspolicy/tls-section-name.yaml",
+			outputFile: "backendtlspolicy/tls-section-name.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
 	t.Run("Backend TLS Policy with SAN", func(t *testing.T) {
 		test(t, translatorTestCase{
 			inputFile:  "backendtlspolicy/tls-san.yaml",
