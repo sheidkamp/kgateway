@@ -10,7 +10,10 @@ import (
 	envoyendpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	envoycommondnsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/common/dns/v3"
 	envoydnsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/dns/v3"
+	envoytlsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	envoy_upstreams_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
+	envoywellknown "github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/kube/krt"
@@ -19,6 +22,7 @@ import (
 
 	apisettings "github.com/kgateway-dev/kgateway/v2/api/settings"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/endpoints"
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/extensions2/pluginutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/utils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
 	sdk "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk"
@@ -80,6 +84,10 @@ func (t *BackendTranslator) TranslateBackend(
 	// Apply policies to the computed cluster
 	if err := t.runPolicies(kctx, ctx, ucc, backend, inlineEps, out); err != nil {
 		logger.Error("failed to apply policies to cluster", "cluster", out.GetName(), "error", err)
+		return buildBlackholeCluster(backend), err
+	}
+	if err := applyGatewayBackendClientCertificate(out, backend); err != nil {
+		logger.Error("failed to apply gateway backend client certificate", "cluster", out.GetName(), "error", err)
 		return buildBlackholeCluster(backend), err
 	}
 
@@ -325,4 +333,101 @@ func createCommonLbConfig(b *ir.BackendObjectIR) *envoyclusterv3.Cluster_CommonL
 		}
 	}
 	return nil
+}
+
+func applyGatewayBackendClientCertificate(out *envoyclusterv3.Cluster, backend *ir.BackendObjectIR) error {
+	if backend == nil || backend.GatewayBackendClientCertificate == nil {
+		return nil
+	}
+
+	certificate := backend.GatewayBackendClientCertificate.Certificate
+
+	transportSocket, err := applyGatewayBackendClientCertificateToTransportSocket(out.GetTransportSocket(), certificate)
+	if err != nil {
+		return err
+	}
+	if transportSocket != nil {
+		out.TransportSocket = transportSocket
+	}
+
+	if len(out.GetTransportSocketMatches()) == 0 {
+		return nil
+	}
+
+	updatedMatches := make([]*envoyclusterv3.Cluster_TransportSocketMatch, 0, len(out.GetTransportSocketMatches()))
+	for _, match := range out.GetTransportSocketMatches() {
+		updatedMatch, err := applyGatewayBackendClientCertificateToTransportSocketMatch(match, certificate)
+		if err != nil {
+			return err
+		}
+		updatedMatches = append(updatedMatches, updatedMatch)
+	}
+	out.TransportSocketMatches = updatedMatches
+
+	return nil
+}
+
+func applyGatewayBackendClientCertificateToTransportSocket(
+	transportSocket *envoycorev3.TransportSocket,
+	certificate ir.TLSCertificate,
+) (*envoycorev3.TransportSocket, error) {
+	if transportSocket == nil || transportSocket.GetName() != envoywellknown.TransportSocketTls {
+		return transportSocket, nil
+	}
+
+	typedConfig := transportSocket.GetTypedConfig()
+	if typedConfig == nil {
+		return transportSocket, nil
+	}
+
+	tlsContext := &envoytlsv3.UpstreamTlsContext{}
+	if err := typedConfig.UnmarshalTo(tlsContext); err != nil {
+		return nil, err
+	}
+	if tlsContext.CommonTlsContext == nil {
+		tlsContext.CommonTlsContext = &envoytlsv3.CommonTlsContext{}
+	}
+
+	tlsContext.CommonTlsContext.TlsCertificates = []*envoytlsv3.TlsCertificate{
+		{
+			CertificateChain: pluginutils.InlineStringDataSource(string(certificate.CertChain)),
+			PrivateKey:       pluginutils.InlineStringDataSource(string(certificate.PrivateKey)),
+		},
+	}
+	tlsContext.CommonTlsContext.TlsCertificateSdsSecretConfigs = nil
+
+	updatedTypedConfig, err := utils.MessageToAny(tlsContext)
+	if err != nil {
+		return nil, err
+	}
+
+	clone, ok := proto.Clone(transportSocket).(*envoycorev3.TransportSocket)
+	if !ok {
+		return nil, errors.New("failed to clone transport socket")
+	}
+	clone.ConfigType = &envoycorev3.TransportSocket_TypedConfig{
+		TypedConfig: updatedTypedConfig,
+	}
+	return clone, nil
+}
+
+func applyGatewayBackendClientCertificateToTransportSocketMatch(
+	match *envoyclusterv3.Cluster_TransportSocketMatch,
+	certificate ir.TLSCertificate,
+) (*envoyclusterv3.Cluster_TransportSocketMatch, error) {
+	if match == nil {
+		return nil, nil
+	}
+
+	transportSocket, err := applyGatewayBackendClientCertificateToTransportSocket(match.GetTransportSocket(), certificate)
+	if err != nil {
+		return nil, err
+	}
+
+	clone, ok := proto.Clone(match).(*envoyclusterv3.Cluster_TransportSocketMatch)
+	if !ok {
+		return nil, errors.New("failed to clone transport socket match")
+	}
+	clone.TransportSocket = transportSocket
+	return clone, nil
 }
