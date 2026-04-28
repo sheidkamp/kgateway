@@ -93,8 +93,10 @@ func (test *Test) Run(t *testing.T, s *Suite) {
 	}
 
 	ns := s.ensureTestNamespace(t, test)
-	t.Cleanup(func() { failureHook(t, test, ns) })
 	s.applyManifestsInNamespace(t, test, ns)
+	// Registered after applyManifestsInNamespace so it runs before manifest
+	// cleanup (t.Cleanup is LIFO) and can dump live test resources.
+	t.Cleanup(func() { failureHook(t, test, ns) })
 
 	if test.Test == nil {
 		t.Fatalf("kgwtest: test %q has no Test func", test.ShortName)
