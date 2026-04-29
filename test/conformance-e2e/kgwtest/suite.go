@@ -19,8 +19,10 @@ import (
 // unset. Keeps test binaries flag-free for the common case while still giving
 // CI/dev a way to filter.
 const (
-	EnvRunTest   = "KGWTEST_RUN_TEST"
-	EnvSkipTests = "KGWTEST_SKIP_TESTS"
+	EnvRunTest    = "KGWTEST_RUN_TEST"
+	EnvSkipTests  = "KGWTEST_SKIP_TESTS"
+	EnvRunLabels  = "KGWTEST_RUN_LABELS"
+	EnvSkipLabels = "KGWTEST_SKIP_LABELS"
 )
 
 // Options configures a new Suite.
@@ -53,6 +55,15 @@ type Options struct {
 	// SkipTests is a list of ShortNames to skip. Defaults from
 	// KGWTEST_SKIP_TESTS (comma-separated).
 	SkipTests []string
+
+	// RunLabels, if non-empty, restricts the suite to tests that have at
+	// least one matching label in Test.Labels. Defaults from
+	// KGWTEST_RUN_LABELS (comma-separated).
+	RunLabels []string
+
+	// SkipLabels skips any test that has a matching label in Test.Labels.
+	// Defaults from KGWTEST_SKIP_LABELS (comma-separated).
+	SkipLabels []string
 }
 
 // Suite runs kgwtest.Tests against a shared ConformanceTestSuite.
@@ -122,8 +133,25 @@ func NewSuite(t *testing.T, opts Options) *Suite {
 // Run executes all tests against this suite. Tests are run as subtests under
 // the provided *testing.T, using their ShortName. Parallel tests call
 // t.Parallel() internally via Test.Run.
+//
+// Returns an error if two Tests share a non-empty Namespace value — running
+// such a pair in parallel would race on Create/Delete of the namespace.
 func (s *Suite) Run(t *testing.T, tests []Test) error {
 	t.Helper()
+
+	seen := map[string]string{}
+	for i := range tests {
+		ns := tests[i].Namespace
+		if ns == "" {
+			continue
+		}
+		if prev, ok := seen[ns]; ok {
+			return fmt.Errorf("kgwtest: tests %q and %q both set Namespace=%q; values must be unique within a suite",
+				prev, tests[i].ShortName, ns)
+		}
+		seen[ns] = tests[i].ShortName
+	}
+
 	for i := range tests {
 		tc := tests[i]
 		t.Run(tc.ShortName, func(t *testing.T) {
@@ -143,14 +171,20 @@ func (s *Suite) ApiVersion() string { return s.apiVersion }
 func (s *Suite) ApiChannel() Channel { return s.apiChannel }
 
 // shouldSkip evaluates per-test skip conditions: explicit SkipTests list, a
-// RunTest filter that names a different test, unmet feature requirements,
-// and version/channel bounds.
+// RunTest filter that names a different test, label filters, unmet feature
+// requirements, and version/channel bounds.
 func (s *Suite) shouldSkip(test *Test) (string, bool) {
 	if s.Conformance.SkipTests.Has(test.ShortName) {
 		return "test in SkipTests", true
 	}
 	if s.Conformance.RunTest != "" && s.Conformance.RunTest != test.ShortName {
 		return "RunTest filter does not match", true
+	}
+	if len(s.opts.RunLabels) > 0 && !labelOverlap(test.Labels, s.opts.RunLabels) {
+		return fmt.Sprintf("no Test.Labels match RunLabels %v", s.opts.RunLabels), true
+	}
+	if len(s.opts.SkipLabels) > 0 && labelOverlap(test.Labels, s.opts.SkipLabels) {
+		return fmt.Sprintf("Test.Labels match SkipLabels %v", s.opts.SkipLabels), true
 	}
 	for _, f := range test.Features {
 		if !s.Conformance.SupportedFeatures.Has(f) {
@@ -162,6 +196,23 @@ func (s *Suite) shouldSkip(test *Test) (string, bool) {
 		return reason, true
 	}
 	return "", false
+}
+
+// labelOverlap reports whether any element of a is also in b.
+func labelOverlap(a, b []string) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+	want := make(map[string]struct{}, len(b))
+	for _, s := range b {
+		want[s] = struct{}{}
+	}
+	for _, s := range a {
+		if _, ok := want[s]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // applySuiteSetup selects the matching Setup from VersionedSetup and applies
@@ -184,13 +235,29 @@ func applyEnvDefaults(opts *Options) {
 		opts.RunTest = os.Getenv(EnvRunTest)
 	}
 	if len(opts.SkipTests) == 0 {
-		if v := os.Getenv(EnvSkipTests); v != "" {
-			for _, s := range strings.Split(v, ",") {
-				s = strings.TrimSpace(s)
-				if s != "" {
-					opts.SkipTests = append(opts.SkipTests, s)
-				}
-			}
+		opts.SkipTests = parseCSVEnv(EnvSkipTests)
+	}
+	if len(opts.RunLabels) == 0 {
+		opts.RunLabels = parseCSVEnv(EnvRunLabels)
+	}
+	if len(opts.SkipLabels) == 0 {
+		opts.SkipLabels = parseCSVEnv(EnvSkipLabels)
+	}
+}
+
+// parseCSVEnv reads a comma-separated env var, trims whitespace, and drops
+// empty entries.
+func parseCSVEnv(name string) []string {
+	v := os.Getenv(name)
+	if v == "" {
+		return nil
+	}
+	var out []string
+	for _, s := range strings.Split(v, ",") {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			out = append(out, s)
 		}
 	}
+	return out
 }

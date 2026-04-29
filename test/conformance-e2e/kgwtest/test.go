@@ -17,20 +17,39 @@ const (
 	ChannelExperimental Channel = "experimental"
 )
 
+// ManifestTransform mutates raw manifest bytes before they are parsed and
+// applied. The Suite is provided so transforms can branch on detected
+// Gateway API version/channel or other suite state. A transform that has
+// nothing to do should return the input unchanged.
+type ManifestTransform func(s *Suite, in []byte) []byte
+
 // Test describes a single kgateway test scenario.
 type Test struct {
-	// ShortName uniquely identifies the test and drives filtering and the
-	// default per-test namespace name.
+	// ShortName uniquely identifies the test and drives filtering.
 	ShortName string
 
 	// Description is a human-readable summary shown in logs.
 	Description string
 
-	// Manifests is a list of paths (resolved against Suite.ManifestFS) that
-	// are rendered through text/template with TestNamespace and
-	// GatewayClassName and then applied before Test runs. Resources are
-	// cleaned up automatically via t.Cleanup.
+	// Manifests is a list of paths (resolved against Suite.ManifestFS)
+	// applied before Test runs. Resources are cleaned up automatically via
+	// t.Cleanup. No templating is performed; manifests must be valid YAML
+	// that could be applied directly with kubectl.
 	Manifests []string
+
+	// ManifestTransforms are applied in order to the bytes of every
+	// Manifests entry before parsing. Use for resource-version compatibility
+	// shims (e.g., rewriting a kind name when the API moves between
+	// experimental and standard channels). A transform that does not apply
+	// to the current suite should return the input unchanged so manifests
+	// remain valid for kubectl-based debugging.
+	ManifestTransforms []ManifestTransform
+
+	// Labels classifies the test for filtering via Options.RunLabels and
+	// Options.SkipLabels. Labels are free-form strings. A test runs if it
+	// has at least one label in Options.RunLabels (or RunLabels is empty)
+	// and no label in Options.SkipLabels.
+	Labels []string
 
 	// Parallel, when true, causes the subtest to call t.Parallel().
 	Parallel bool
@@ -57,30 +76,36 @@ type Test struct {
 	// not match.
 	RequireChannel Channel
 
-	// Namespace overrides the default per-test namespace name. Default is
-	// "kgw-e2e-<slug(ShortName)>".
+	// Namespace, if set, causes the framework to create a namespace with
+	// this exact name before the test runs and delete it after. Manifests
+	// for this test must hardcode the same namespace name. Two Tests in
+	// the same Suite must not share a non-empty Namespace value.
+	//
+	// Empty (the default) means the test relies on shared namespaces
+	// created by VersionedSetup. Authors put resources in those shared
+	// namespaces with unique resource names per scenario.
 	Namespace string
 
 	// Test is the test body. It receives a TestContext carrying the
-	// per-test namespace and the underlying ConformanceTestSuite.
+	// underlying ConformanceTestSuite and the per-test namespace (if any).
 	Test func(t *testing.T, ctx TestContext)
 }
 
-// TestContext is the handle passed to each Test body. It exposes the per-test
-// namespace along with the underlying ConformanceTestSuite so assertions have
-// access to Client, RoundTripper, TimeoutConfig, etc.
+// TestContext is the handle passed to each Test body. It exposes the
+// underlying ConformanceTestSuite (Client, RoundTripper, TimeoutConfig, etc.)
+// and the per-test namespace if Test.Namespace was set.
 type TestContext struct {
 	// Suite is the gateway-api conformance suite handle.
 	Suite *suite.ConformanceTestSuite
 
-	// Namespace is the per-test namespace created by the framework.
-	// All templated manifests are applied into this namespace.
+	// Namespace is the namespace the framework created for this test, or
+	// "" when Test.Namespace was unset (test uses shared namespaces).
 	Namespace string
 }
 
 // Run executes the test against the provided Suite. It handles skip
-// filtering, per-test namespace creation, manifest templating, and invokes
-// the Test body.
+// filtering, per-test namespace creation (when Test.Namespace is set),
+// manifest application, and invokes the Test body.
 func (test *Test) Run(t *testing.T, s *Suite) {
 	t.Helper()
 
@@ -93,9 +118,9 @@ func (test *Test) Run(t *testing.T, s *Suite) {
 	}
 
 	ns := s.ensureTestNamespace(t, test)
-	s.applyManifestsInNamespace(t, test, ns)
-	// Registered after applyManifestsInNamespace so it runs before manifest
-	// cleanup (t.Cleanup is LIFO) and can dump live test resources.
+	s.applyManifests(t, test.Manifests, test.ManifestTransforms)
+	// Registered after applyManifests so it runs before manifest cleanup
+	// (t.Cleanup is LIFO) and can dump live test resources.
 	t.Cleanup(func() { failureHook(t, test, ns) })
 
 	if test.Test == nil {

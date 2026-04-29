@@ -20,7 +20,7 @@ test/
 │   │   ├── suite.go               # kgwtest.NewSuite() + Options
 │   │   ├── version.go             # GW API version parsing + gating
 │   │   ├── setup.go               # VersionedSetup and suite-scoped fixture application
-│   │   ├── namespace.go           # per-test namespace templating
+│   │   ├── namespace.go           # per-test namespace + manifest application
 │   │   ├── diagnostics.go         # on-failure dump hook
 │   │   ├── install/               # see "kgateway install" section
 │   │   │   └── install.go
@@ -30,88 +30,229 @@ test/
 │   │       ├── policy/
 │   │       ├── envoy/
 │   │       └── metrics/
-│   ├── basic-routing/             # one Go package per feature
-│   │   ├── gateway_with_route_test.go       # one scenario
-│   │   ├── multiple_listeners_test.go       # another scenario, same package
-│   │   └── testdata/*.yaml                  # shared across scenarios in this feature
+│   ├── basic-routing/                          # one Go package per feature
+│   │   ├── basic_routing.go                    # importable: ManifestFS, Tests, TestNamespace, Setup
+│   │   ├── gateway_with_route.go               # importable: scenario + init() registration
+│   │   ├── multiple_listeners.go               # importable: another scenario, same package
+│   │   ├── suite_test.go                       # _test entry point: TestBasicRouting(t)
+│   │   └── testdata/*.yaml                     # shared across scenarios in this feature
 │   ├── cors/
-│   │   ├── <scenario>_test.go
-│   │   └── testdata/*.yaml
+│   │   └── ...
 │   └── ...
-└── e2e/                           # existing homegrown framework + tests (unchanged during migration)
+└── e2e/                                        # existing homegrown framework + tests (unchanged during migration)
 ```
 
-Each feature directory is its own Go package. Scenarios are `*_test.go` files in the same package; they share `testdata/` via `//go:embed testdata/*.yaml`. When scenarios within a feature need distinct testdata, use subdirectories in `testdata/` — not nested packages.
+### Feature packages: importable scenarios + thin test entry
 
-### One suite per feature package
+Each feature package has **two kinds of files**:
 
-Each feature package has one entry-point test function that creates the `kgwtest.Suite` and runs every scenario in that package. Scenarios register themselves as package-level vars via `init()` — same pattern envoy-gateway uses in [test/e2e/tests/tests.go](../envoyproxy/gateway/test/e2e/tests/tests.go) and [test/e2e/tests/fault_injection.go:20-24](../envoyproxy/gateway/test/e2e/tests/fault_injection.go#L20-L24).
+- **Importable files** (no `_test` suffix, build-tagged `//go:build e2e`): hold the scenarios as a slice of `kgwtest.Test`, the embedded `ManifestFS`, the shared `TestNamespace` constant, and the suite-level `Setup`. These are exported so the package can be reused — composed into a larger suite, extended with additional scenarios, or filtered.
+- **Entry-point file** (`suite_test.go`): the only `_test.go` file in the package. Holds the `TestX(t)` function `go test` invokes. Constructs the `kgwtest.Suite` and runs `package.Tests`.
 
 ```go
-// test/conformance-e2e/basic-routing/suite_test.go
-package basicrouting_test
+// basic_routing.go (importable: package basicrouting)
+//go:build e2e
+
+package basicrouting
+
+import (
+    "embed"
+    "io/fs"
+    "github.com/kgateway-dev/kgateway/v2/test/conformance-e2e/kgwtest"
+)
 
 //go:embed testdata/*.yaml
-var manifests embed.FS
+var manifestsFS embed.FS
 
-var tests []kgwtest.Test
+var ManifestFS fs.FS = manifestsFS
+
+const TestNamespace = "kgw-e2e-basic-routing"
+
+var Setup = kgwtest.VersionedSetup{
+    Default: kgwtest.Setup{Manifests: []string{"testdata/_suite.yaml"}},
+}
+
+var Tests []kgwtest.Test
+```
+
+```go
+// gateway_with_route.go (importable: package basicrouting)
+//go:build e2e
+
+package basicrouting
+
+func init() { Tests = append(Tests, gatewayWithRouteTest) }
+
+var gatewayWithRouteTest = kgwtest.Test{
+    ShortName: "GatewayWithRoute",
+    Manifests: []string{"testdata/gateway-with-route.yaml"},
+    Parallel:  true,
+    Test:      func(t *testing.T, ctx kgwtest.TestContext) { /* ... */ },
+}
+```
+
+```go
+// suite_test.go (entry point: package basicrouting_test)
+//go:build e2e
+
+package basicrouting_test
 
 func TestBasicRouting(t *testing.T) {
     s := kgwtest.NewSuite(t, kgwtest.Options{
         GatewayClassName: "kgateway",
-        ManifestFS:       []fs.FS{manifests},
-        VersionedSetup:   suiteSetup,
+        ManifestFS:       []fs.FS{basicrouting.ManifestFS},
+        VersionedSetup:   basicrouting.Setup,
     })
-    require.NoError(t, s.Run(t, tests))
-}
-
-// test/conformance-e2e/basic-routing/gateway_with_route_test.go
-package basicrouting_test
-
-func init() { tests = append(tests, gatewayWithRouteTest) }
-
-var gatewayWithRouteTest = kgwtest.Test{
-    ConformanceTest: suite.ConformanceTest{
-        ShortName: "GatewayWithRoute",
-        Manifests: []string{"testdata/gateway-with-route.yaml"},
-        Parallel:  true,
-        Test:      func(t *testing.T, cSuite *suite.ConformanceTestSuite) { /* ... */ },
-    },
+    require.NoError(t, s.Run(t, basicrouting.Tests))
 }
 ```
 
-Result: suite setup + fixtures apply once per `go test ./test/conformance-e2e/basic-routing/...`, and every scenario runs against that one suite. Scenarios with `Parallel: true` run concurrently against the shared fixtures. Adding a new scenario is a new `*_test.go` file with an `init()` — no changes to `suite_test.go`.
+Result: suite setup + fixtures apply once per `go test ./test/conformance-e2e/basic-routing/...`, and every scenario runs against that one suite. Scenarios with `Parallel: true` run concurrently against the shared fixtures. Adding a new scenario is a new importable `.go` file with an `init()` — no changes to `suite_test.go`.
 
-Labels are deliberately omitted from this iteration. Add them later if filtering by feature tag becomes a pain point. For now, `RunTest` (single test by `ShortName`) and `SkipTests` (list of `ShortName`s) from upstream are sufficient.
+## Reuse and extension
+
+The framework is built around composition, not inheritance. There is no base suite to embed and no lifecycle hooks to override; instead, every reusable piece is a value an external caller can construct, mutate, and feed into `kgwtest.NewSuite`. This makes it easy for another module to:
+
+- **Reuse the existing scenarios as-is**: import the feature package, hand `package.Tests` and `package.ManifestFS` to its own `kgwtest.NewSuite`. The entry-point `_test.go` is the only file unique to the upstream binary; everything the test bodies need is exported.
+- **Add scenarios alongside the existing ones**: build a slice with `append(basicrouting.Tests, extraTests...)` and pass it to `Suite.Run`. Order is preserved, the suite-level fixture from `basicrouting.Setup` still applies, and the new scenarios share the existing `TestNamespace` (or set their own `Test.Namespace` for isolation).
+- **Filter scenarios out**: walk `package.Tests` and drop entries by `ShortName` before passing to `Suite.Run`. Or use `Options.SkipTests`.
+- **Replace the suite-level setup**: ignore `package.Setup` and pass a different `VersionedSetup`. The exported `TestNamespace` constant tells the new setup which namespace the test bodies expect.
+- **Install a different control plane**: skip `kgwtest.Main` / pre-call `kgwtest/install.InstallCore` with different chart paths and values. The `kgwtest.Suite` itself is install-agnostic — it operates against whatever's already running.
+- **Extend the client scheme**: pass `Options.Schemes []func(*runtime.Scheme) error` so non-default API groups (CRDs introduced by an extension) are decodable from the conformance suite's `client.Client`.
+- **Wrap the entry point with extra setup**: a downstream entry function does its own pre-suite work (install extension, apply additional fixtures, register cleanup), then calls `kgwtest.NewSuite` and `Suite.Run` with whatever scenario slice it wants. There's no upstream hook to register against — just regular Go control flow before/after the suite call.
+
+The compose-don't-inherit shape means a downstream that wants different behavior writes its own entry point rather than overriding lifecycle methods on a shared base. Everything the suite needs is a value passed into `Options`; everything the scenarios need is a value reachable from the imported package.
+
+### Composing multiple feature packages
+
+Because feature packages export their `Tests` slice and `ManifestFS`, an entry point can pull scenarios from several packages into one suite. Three common patterns:
+
+**Pattern 1: union — one suite, scenarios from many packages.**
+
+Hand the combined slice to a single `kgwtest.Suite`. All scenarios share the same suite-level fixtures (so the union of `Setup` manifests must be applied), the same `GatewayClassName`, and run as subtests under one parent `*testing.T`.
+
+```go
+func TestCombined(t *testing.T) {
+    s := kgwtest.NewSuite(t, kgwtest.Options{
+        GatewayClassName: "kgateway",
+        ManifestFS:       []fs.FS{basicrouting.ManifestFS, cors.ManifestFS},
+        VersionedSetup: kgwtest.VersionedSetup{
+            Default: kgwtest.Setup{Manifests: []string{
+                "testdata/basic-routing/_suite.yaml",
+                "testdata/cors/_suite.yaml",
+            }},
+        },
+    })
+    tests := append(append([]kgwtest.Test{}, basicrouting.Tests...), cors.Tests...)
+    require.NoError(t, s.Run(t, tests))
+}
+```
+
+Right when the constituent packages already coexist namespace-wise (each uses its own `TestNamespace`) and downstream wants one CI job for them. The cost is that suite-level setup grows to the union, so any one package's setup failure fails the whole suite.
+
+**Pattern 2: separate sub-suites — one binary, one suite per package.**
+
+Each feature package gets its own `kgwtest.Suite` and runs as a subtest. Suite setups stay isolated, fixtures don't share namespaces by accident, and a setup failure in one package leaves the others runnable.
+
+```go
+func TestAllFeatures(t *testing.T) {
+    t.Run("basic-routing", func(t *testing.T) {
+        s := kgwtest.NewSuite(t, kgwtest.Options{
+            GatewayClassName: "kgateway",
+            ManifestFS:       []fs.FS{basicrouting.ManifestFS},
+            VersionedSetup:   basicrouting.Setup,
+        })
+        require.NoError(t, s.Run(t, basicrouting.Tests))
+    })
+    t.Run("cors", func(t *testing.T) {
+        s := kgwtest.NewSuite(t, kgwtest.Options{
+            GatewayClassName: "kgateway",
+            ManifestFS:       []fs.FS{cors.ManifestFS},
+            VersionedSetup:   cors.Setup,
+        })
+        require.NoError(t, s.Run(t, cors.Tests))
+    })
+}
+```
+
+Right when packages have meaningfully different setups, different supported features, or you want `go test -run TestAllFeatures/cors` to filter at the package boundary.
+
+**Pattern 3: filter + extend — base package + downstream additions.**
+
+A downstream consumer takes the upstream `Tests` slice, drops scenarios that don't apply, and appends its own. The shared `ManifestFS` and `Setup` are reused as-is; downstream-specific manifests come from a second `fs.FS` layered into `Options.ManifestFS`.
+
+```go
+func TestDownstream(t *testing.T) {
+    keep := slices.DeleteFunc(slices.Clone(basicrouting.Tests), func(tc kgwtest.Test) bool {
+        return tc.ShortName == "GatewayWithRoute" // covered by a downstream variant
+    })
+    keep = append(keep, downstreamRoutingTests...)
+
+    s := kgwtest.NewSuite(t, kgwtest.Options{
+        GatewayClassName: "kgateway-extension",
+        ManifestFS:       []fs.FS{basicrouting.ManifestFS, downstreamManifests},
+        VersionedSetup:   basicrouting.Setup,
+    })
+    require.NoError(t, s.Run(t, keep))
+}
+```
+
+Right when downstream wants the upstream coverage minus a few cases plus its own scenarios under one CI invocation.
 
 ## Core type: `kgwtest.Test`
 
-Embeds `suite.ConformanceTest` so it's a drop-in wherever the upstream type is expected, and adds kgateway-only fields:
+A flat struct (no embedding) with the fields kgateway tests need:
 
 ```go
-// test/kgwtest/test.go
+// test/conformance-e2e/kgwtest/test.go
 type Test struct {
-    suite.ConformanceTest            // ShortName, Description, Features, Manifests, Slow, Parallel, Provisional, Test
+    ShortName       string
+    Description     string
+    Manifests       []string                   // applied verbatim before Test runs
+    ManifestTransforms []ManifestTransform     // applied in order to each manifest's bytes
+    Labels          []string                   // see "Labels" section
+    Parallel, Slow, Provisional bool
+    Features        []features.FeatureName
 
-    MinGwApiVersion  string          // "1.2.0", empty = no lower bound
-    MaxGwApiVersion  string          // empty = no upper bound
-    RequireChannel   string          // "standard" | "experimental" | ""
+    MinGwApiVersion string                     // "1.2.0", empty = no lower bound
+    MaxGwApiVersion string
+    RequireChannel  Channel                    // ChannelStandard, ChannelExperimental, or ""
 
-    // Optional override of per-test namespace name; defaults to `kgw-e2e-<slug(ShortName)>`
-    Namespace        string
+    // Namespace, if set, causes the framework to create a namespace with
+    // this exact name before the test and delete it after. Manifests must
+    // hardcode the same name. Empty (default) means the test uses shared
+    // namespaces created by VersionedSetup.
+    Namespace string
+
+    Test func(t *testing.T, ctx TestContext)
 }
 
-func (test *Test) Run(t *testing.T, s *Suite) {
-    if reason, skip := s.shouldSkip(test); skip {
-        t.Skipf("kgwtest: skipping %s: %s", test.ShortName, reason)
-    }
-    ns := s.ensureTestNamespace(t, test)           // creates + registers cleanup
-    s.applyManifestsInNamespace(t, test, ns)       // templates {{.TestNamespace}} before apply
-    test.ConformanceTest.Test(t, s.Conformance)
+type TestContext struct {
+    Suite     *suite.ConformanceTestSuite
+    Namespace string                           // empty when Test.Namespace is unset
+}
+
+// ManifestTransform mutates raw manifest bytes before they are parsed and
+// applied. The Suite is provided so transforms can branch on detected
+// Gateway API version/channel. A transform that has nothing to do should
+// return its input unchanged so the underlying YAML stays kubectl-applyable.
+type ManifestTransform func(s *Suite, in []byte) []byte
+```
+
+### Manifest transforms
+
+Templating is off the table for the reasons in the parallelism section: manifests are kubectl-applyable as written. Manifest transforms are the escape hatch for cross-cutting compatibility shims that genuinely can't be encoded as static YAML — for example, rewriting a kind name when an API moves between channels. The transform inspects the bytes, decides whether the suite is in a context that needs the rewrite, and either returns the input unchanged or returns a modified copy:
+
+```go
+var test = kgwtest.Test{
+    Manifests:          []string{"testdata/listenerset-policy.yaml"},
+    ManifestTransforms: []kgwtest.ManifestTransform{kgwtest.TransformListenerSetForGwApiVersion},
 }
 ```
 
-The `Run` above replaces upstream's `ConformanceTest.Run`. The suite loop calls `kgwtest.Test.Run` instead of `ConformanceTest.Run` so filtering and namespace templating happen in the right order.
+`TransformListenerSetForGwApiVersion` ([kgwtest/transforms.go](test/conformance-e2e/kgwtest/transforms.go)) is the canonical example: on experimental channels below 1.5.1 it rewrites `ListenerSet` to the legacy `XListenerSet` form; on every other release it returns the input unchanged. New transforms live in the same file and follow the same pattern. The default for any author is to add nothing — most manifests don't need it.
+
+The Test body receives a `TestContext` rather than the bare conformance suite — gives us a place to add per-test fields without breaking signatures.
 
 ## GW API version gating — per-test and per-suite
 
@@ -132,6 +273,19 @@ Per-test level: `MinGwApiVersion`, `MaxGwApiVersion`, `RequireChannel` on `kgwte
 Detection mirrors [gateway-api/conformance/utils/suite/suite.go:694-723](../kubernetes-sigs/gateway-api/conformance/utils/suite/suite.go#L694-L723) — read CRD annotations `gateway.networking.k8s.io/bundle-version` and `channel` at suite init.
 
 Version comparison uses `golang.org/x/mod/semver` (add `v` prefix before comparing).
+
+## Labels
+
+Tests carry an optional `Labels []string` for free-form classification — `smoke`, `slow`, `extension-only`, a feature name, a stability bucket, anything an author or CI job wants to filter on. The framework gives every test the same neutral mechanism rather than a fixed taxonomy.
+
+Two suite-level filters consume them:
+
+- `Options.RunLabels []string` — if non-empty, restricts the suite to tests with at least one matching label. Defaults from `KGWTEST_RUN_LABELS` (comma-separated).
+- `Options.SkipLabels []string` — skips any test that has at least one matching label. Defaults from `KGWTEST_SKIP_LABELS`.
+
+Match semantics are "any-of": a test passes the run filter if its label set overlaps the run filter, and is dropped by the skip filter if its label set overlaps the skip filter. The two filters are independent and combine with `RunTest` / `SkipTests` (which match on `ShortName`).
+
+Labels are off by default. Adding labels to a test should be motivated by an actual filter someone wants to run; speculative labels are noise. CI jobs that need a fast pre-merge subset can add `Labels: []string{"smoke"}` to the relevant scenarios and run with `KGWTEST_RUN_LABELS=smoke`.
 
 ## Versioned setup
 
@@ -162,18 +316,19 @@ At `NewSuite`, after version detection, `selectSetup(VersionedSetup)` picks the 
 
 Existing callers like [test/e2e/features/metrics/suite.go:36-42](test/e2e/features/metrics/suite.go#L36-L42) map cleanly onto this shape when migrated.
 
-## Parallelism and per-test namespaces
+## Parallelism and namespaces
 
 Upstream `ConformanceTest.Run` already calls `t.Parallel()` when `Parallel: true` is set ([gateway-api/conformance/utils/suite/conformance.go:42-45](../kubernetes-sigs/gateway-api/conformance/utils/suite/conformance.go#L42-L45)) — we preserve that.
 
-To keep parallel tests from colliding on resource names in a shared namespace:
+**No templating.** Manifests in `testdata/` are applied verbatim. They reference namespaces by literal name and hardcode `gatewayClassName: kgateway` (or `kgateway-waypoint` etc.), so `kubectl apply -f testdata/...` works directly during local debugging — the same YAML the test framework runs.
 
-1. **Suite-scoped fixtures** (shared backends, echo services, base namespaces) are applied once by `selectSetup`/`applySetup` in `NewSuite` and cleaned up at suite teardown. Read-only during test execution, so any number of parallel tests share them safely.
-2. **Per-test namespace**: `ensureTestNamespace` creates `kgw-e2e-<slug(ShortName)>` (or `test.Namespace` if set), registers `t.Cleanup` to delete it, and makes the name available to manifest templates.
-3. **Manifest templating**: `applyManifestsInNamespace` reads each manifest from `cSuite.ManifestFS`, runs it through `text/template` with `{{.TestNamespace}}` and `{{.GatewayClassName}}`, then hands the rendered YAML to `Applier.MustApplyWithCleanup`. Upstream Applier already templates `spec.gatewayClassName`; we layer namespace templating on top.
-4. Authors write manifests like `metadata: { name: gw, namespace: {{.TestNamespace}} }` — no collision risk between parallel tests, no author discipline required.
+The model is "shared namespaces by default, opt-in isolation":
 
-Serial tests (`Parallel: false`) also get their own namespace — consistent behavior and cheap to create.
+1. **Shared namespaces** (the default). Each feature package declares one or more namespaces in a `_suite.yaml` manifest applied via `VersionedSetup.Default.Manifests`. Every scenario in the package puts its resources into those namespaces with names unique per scenario (e.g., `gateway-with-route-svc` vs `multiple-listeners-svc`). This matches upstream gateway-api conformance, which uses fixed namespaces like `gateway-conformance-infra` for the same reason.
+2. **Per-test namespaces** (opt-in). A scenario that needs isolation — e.g., it watches for a resource to be deleted, or installs cluster-scoped resources — sets `Test.Namespace = "kgw-e2e-<unique-name>"`. The framework creates the namespace before the test, deletes it after, and exposes the name as `ctx.Namespace` in the test body. Manifests for that scenario hardcode the same namespace name. `kgwtest.Suite.Run` validates that no two Tests share a non-empty `Namespace` value.
+3. **Why parallel-safe**: parallel scenarios in the same shared namespace must use unique resource names. Parallel scenarios that opt into isolation get fully separate namespaces. Both modes work together.
+
+`gatewayClassName` is **not** rewritten. Manifests hardcode the class they need. `Options.GatewayClassName` stays — it tells the upstream conformance suite which class to look up for ControllerName resolution and feature discovery — but it does not mutate applied manifests. Suites can mix kgateway-managed classes (`kgateway`, `kgateway-waypoint`, etc.) freely, since they all map to the same ControllerName.
 
 ## Assertions
 
@@ -303,6 +458,13 @@ type Options struct {
     ManifestFS        []fs.FS
     SupportedFeatures sets.Set[features.FeatureName]
 
+    // Schemes are applied to the conformance suite's runtime.Scheme so
+    // CRDs from extension API groups (anything beyond gateway.networking.k8s.io
+    // and the kgateway core groups) are decodable through Suite.Client.
+    // Each function receives the scheme and adds its types via the standard
+    // AddToScheme pattern.
+    Schemes []func(*runtime.Scheme) error
+
     VersionedSetup    VersionedSetup       // empty is valid — no suite fixtures
     MinGwApiVersion   string
     MaxGwApiVersion   string
@@ -310,6 +472,8 @@ type Options struct {
 
     RunTest           string               // filter to single ShortName; reads KGWTEST_RUN_TEST
     SkipTests         []string             // reads KGWTEST_SKIP_TESTS
+    RunLabels         []string             // reads KGWTEST_RUN_LABELS
+    SkipLabels        []string             // reads KGWTEST_SKIP_LABELS
 }
 
 func NewSuite(t *testing.T, opts Options) *Suite
@@ -644,4 +808,24 @@ Mirrors the kinds of admin queries the deployer suite makes today via `serverInf
 3. Migrate `multi-install` — exercises `install.*` and in-cluster curl. Run with the helm chart paths used by `make e2e-test`.
 4. Compare wall-clock time: legacy serial runs vs new parallel runs for `deployer`. Should be materially faster if parallel actually works.
 5. Force a deployer test to fail; confirm the diagnostics hook dumps controller logs, Envoy admin output, and per-test-namespace resource YAMLs.
+
+## Open Questions
+
+These are design choices the framework leaves to team consensus rather than enforcing. Each captures the proposed default and the tradeoffs so the discussion has a starting point.
+
+### File organization within a feature package: one file per scenario?
+
+Proposal: **one `.go` file per scenario** inside a feature package. A "scenario" is a `kgwtest.Test` value with its own `Manifests` list and `ShortName` (e.g., `gateway_with_route.go`, `multiple_listeners.go` inside `basic-routing/`). Sub-cases that share a single Test body — variants of the same scenario tested via `t.Run` blocks against the same applied manifests — stay in the same file.
+
+Reasons to default to one-file-per-scenario:
+
+1. **Mirrors upstream gateway-api conformance.** Their [conformance/tests/](../kubernetes-sigs/gateway-api/conformance/tests/) directory is one `.go` file per scenario. Matching that layout makes the framework feel familiar to anyone coming from upstream.
+2. **Greppable identity.** A `ShortName` maps directly to a filename, so failures in CI logs lead to the file they describe without an index lookup.
+3. **Clear test-vs-subtest split rule.** Different manifest set or different setup -> separate `Test` value -> separate file. Same manifests, multiple variants of the request/assertion -> subtests inside one Test body. The rule is mechanical, not judgment-based.
+4. **Merge conflict isolation.** Adding or modifying a scenario touches one file; concurrent PRs adding scenarios don't collide.
+5. **Shared-state has a home.** The importable `basic_routing.go` (or whatever the package is named) holds `ManifestFS`, `TestNamespace`, `Setup`, and the `Tests` slice — the cross-cutting bits — while each scenario file holds only its own `kgwtest.Test`. Authors don't have to decide where the shared state goes.
+
+When a feature package outgrows the one-file-per-scenario pattern (~15+ scenarios and discovery starts to suffer), the escape hatch is **subpackages**, not file consolidation: `basic-routing/routes/`, `basic-routing/listeners/`, each with its own `Tests` slice, composed at the parent via `append(routes.Tests, listeners.Tests...)`. That preserves the one-file-per-scenario rule inside each subpackage and keeps the parent entry point trivial.
+
+Open for team discussion: the threshold at which subpackages should kick in, whether scenario files should also carry their `init()` registration (current proposal) or whether registration should be centralized in the importable package file. The first is more local; the second is easier to audit.
 

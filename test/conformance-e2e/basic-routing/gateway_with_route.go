@@ -1,6 +1,6 @@
 //go:build e2e
 
-package basicrouting_test
+package basicrouting
 
 import (
 	"testing"
@@ -20,7 +20,7 @@ const (
 )
 
 func init() {
-	tests = append(tests, gatewayWithRouteTest)
+	Tests = append(Tests, gatewayWithRouteTest)
 }
 
 var gatewayWithRouteTest = kgwtest.Test{
@@ -33,8 +33,8 @@ var gatewayWithRouteTest = kgwtest.Test{
 			t, ctx.Suite.Client, ctx.Suite.TimeoutConfig, ctx.Suite.GatewayClassName,
 		)
 
-		gatewayNN := types.NamespacedName{Name: gatewayName, Namespace: ctx.Namespace}
-		routeNN := types.NamespacedName{Name: routeName, Namespace: ctx.Namespace}
+		gatewayNN := types.NamespacedName{Name: gatewayName, Namespace: TestNamespace}
+		routeNN := types.NamespacedName{Name: routeName, Namespace: TestNamespace}
 
 		for _, listenerName := range []string{"http", "http-privileged"} {
 			t.Run(listenerName, func(t *testing.T) {
@@ -55,7 +55,7 @@ var gatewayWithRouteTest = kgwtest.Test{
 							StatusCodes: []int{200},
 						},
 						Backend:   backendName,
-						Namespace: ctx.Namespace,
+						Namespace: TestNamespace,
 					},
 				)
 			})

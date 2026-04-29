@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: example-svc
-  namespace: {{.TestNamespace}}
+  namespace: kgw-e2e-basic-routing
 spec:
   selector:
     app.kubernetes.io/name: example-svc
@@ -16,7 +16,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: example-svc
-  namespace: {{.TestNamespace}}
+  namespace: kgw-e2e-basic-routing
 spec:
   replicas: 1
   selector:
@@ -50,9 +50,9 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: gateway
-  namespace: {{.TestNamespace}}
+  namespace: kgw-e2e-basic-routing
 spec:
-  gatewayClassName: {{.GatewayClassName}}
+  gatewayClassName: kgateway
   listeners:
     - protocol: HTTP
       port: 8080
@@ -71,7 +71,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: example-route
-  namespace: {{.TestNamespace}}
+  namespace: kgw-e2e-basic-routing
 spec:
   parentRefs:
     - name: gateway
