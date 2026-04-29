@@ -53,6 +53,7 @@ require sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 require (
 	github.com/PuerkitoBio/goquery v1.10.1
 	github.com/golang/protobuf v1.5.4
+	sigs.k8s.io/e2e-framework v0.6.0
 	sigs.k8s.io/gateway-api/conformance v1.5.1
 )
 
@@ -128,7 +129,6 @@ require (
 	gotest.tools/gotestsum v1.13.0 // indirect
 	oras.land/oras-go/v2 v2.6.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.32.1 // indirect
-	sigs.k8s.io/e2e-framework v0.6.0 // indirect
 	sigs.k8s.io/gateway-api-inference-extension v1.4.0 // indirect
 )
 
