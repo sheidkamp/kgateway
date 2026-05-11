@@ -822,6 +822,72 @@ func TestBasic(t *testing.T) {
 			},
 		})
 	})
+	t.Run("TrafficPolicy with header modifiers from secret (same namespace)", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/header-modifiers-from-secret.yaml",
+			outputFile: "traffic-policy/header-modifiers-from-secret.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("TrafficPolicy with header modifiers from secret (cross namespace with ReferenceGrant)", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/header-modifiers-from-secret-cross-namespace.yaml",
+			outputFile: "traffic-policy/header-modifiers-from-secret-cross-namespace.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("TrafficPolicy with header modifiers from secret (cross namespace, no ReferenceGrant)", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/header-modifiers-from-secret-cross-namespace-no-refgrant.yaml",
+			outputFile: "traffic-policy/header-modifiers-from-secret-cross-namespace-no-refgrant.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("TrafficPolicy with header modifiers from secret (policy and secret in different namespace from Gateway)", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/header-modifiers-from-secret-policy-cross-namespace.yaml",
+			outputFile: "traffic-policy/header-modifiers-from-secret-policy-cross-namespace.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("TrafficPolicy with header modifiers from secret (key/name defaulting)", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/header-modifiers-from-secret-key-defaulting.yaml",
+			outputFile: "traffic-policy/header-modifiers-from-secret-key-defaulting.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("TrafficPolicy with header modifiers from secret (all keys)", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "traffic-policy/header-modifiers-from-secret-all-keys.yaml",
+			outputFile: "traffic-policy/header-modifiers-from-secret-all-keys.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
 	t.Run("TrafficPolicy with compression Policy", func(t *testing.T) {
 		test(t, translatorTestCase{
 			inputFile:  "traffic-policy/compression-route.yaml",
