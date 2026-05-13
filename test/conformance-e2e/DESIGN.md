@@ -32,7 +32,7 @@ test/
 │   │       └── metrics/
 │   ├── basic-routing/                          # one Go package per feature
 │   │   ├── basic_routing.go                    # importable: ManifestFS, Tests, TestNamespace, Setup
-│   │   ├── gateway_with_route.go               # importable: scenario + init() registration
+│   │   ├── gateway_with_route.go               # importable: exported scenario value (e.g. GatewayWithRoute)
 │   │   ├── multiple_listeners.go               # importable: another scenario, same package
 │   │   ├── suite_test.go                       # _test entry point: TestBasicRouting(t)
 │   │   └── testdata/*.yaml                     # shared across scenarios in this feature
@@ -46,8 +46,10 @@ test/
 
 Each feature package has **two kinds of files**:
 
-- **Importable files** (no `_test` suffix, build-tagged `//go:build e2e`): hold the scenarios as a slice of `kgwtest.Test`, the embedded `ManifestFS`, the shared `TestNamespace` constant, and the suite-level `Setup`. These are exported so the package can be reused — composed into a larger suite, extended with additional scenarios, or filtered.
+- **Importable files** (no `_test` suffix, build-tagged `//go:build e2e`): each scenario file declares one exported `kgwtest.Test` value. The package's main file aggregates them into a single explicit `Tests` slice, alongside the embedded `ManifestFS`, the shared `TestNamespace` constant, and the suite-level `Setup`. These are exported so the package can be reused — composed into a larger suite, extended with additional scenarios, or filtered.
 - **Entry-point file** (`suite_test.go`): the only `_test.go` file in the package. Holds the `TestX(t)` function `go test` invokes. Constructs the `kgwtest.Suite` and runs `package.Tests`.
+
+The aggregation is **explicit, not via `init()`**. Adding a scenario means creating a new file with an exported `var` and adding one line to the `Tests` slice — slightly more typing than a registry pattern, but the slice is statically auditable, scenarios can be addressed individually by external callers (`basicrouting.GatewayWithRoute`), and there is no import-order surprise.
 
 ```go
 // basic_routing.go (importable: package basicrouting)
@@ -72,7 +74,13 @@ var Setup = kgwtest.VersionedSetup{
     Default: kgwtest.Setup{Manifests: []string{"testdata/_suite.yaml"}},
 }
 
-var Tests []kgwtest.Test
+// Tests is the canonical, ordered list of scenarios in this package.
+// Add new scenarios by declaring an exported var in their own file and
+// appending the name here.
+var Tests = []kgwtest.Test{
+    GatewayWithRoute,
+    MultipleListeners,
+}
 ```
 
 ```go
@@ -81,9 +89,7 @@ var Tests []kgwtest.Test
 
 package basicrouting
 
-func init() { Tests = append(Tests, gatewayWithRouteTest) }
-
-var gatewayWithRouteTest = kgwtest.Test{
+var GatewayWithRoute = kgwtest.Test{
     ShortName: "GatewayWithRoute",
     Manifests: []string{"testdata/gateway-with-route.yaml"},
     Parallel:  true,
@@ -107,7 +113,7 @@ func TestBasicRouting(t *testing.T) {
 }
 ```
 
-Result: suite setup + fixtures apply once per `go test ./test/conformance-e2e/basic-routing/...`, and every scenario runs against that one suite. Scenarios with `Parallel: true` run concurrently against the shared fixtures. Adding a new scenario is a new importable `.go` file with an `init()` — no changes to `suite_test.go`.
+Result: suite setup + fixtures apply once per `go test ./test/conformance-e2e/basic-routing/...`, and every scenario runs against that one suite. Scenarios with `Parallel: true` run concurrently against the shared fixtures. Adding a new scenario means a new importable `.go` file with an exported `kgwtest.Test` value plus a one-line entry in the package's `Tests` slice — no changes to `suite_test.go`.
 
 ## Reuse and extension
 
@@ -827,5 +833,28 @@ Reasons to default to one-file-per-scenario:
 
 When a feature package outgrows the one-file-per-scenario pattern (~15+ scenarios and discovery starts to suffer), the escape hatch is **subpackages**, not file consolidation: `basic-routing/routes/`, `basic-routing/listeners/`, each with its own `Tests` slice, composed at the parent via `append(routes.Tests, listeners.Tests...)`. That preserves the one-file-per-scenario rule inside each subpackage and keeps the parent entry point trivial.
 
-Open for team discussion: the threshold at which subpackages should kick in, whether scenario files should also carry their `init()` registration (current proposal) or whether registration should be centralized in the importable package file. The first is more local; the second is easier to audit.
+Open for team discussion: the threshold at which subpackages should kick in. Test aggregation is explicit (the `Tests` slice in the package's main file) rather than via `init()` — chosen so the canonical scenario list is statically auditable in one place and individual scenarios remain addressable by external callers (`basicrouting.GatewayWithRoute`).
+
+### Scenario aggregation: explicit slice vs `init()`
+
+Proposal: **explicit `Tests = []kgwtest.Test{...}` slice** in each feature package's main file, listing each scenario by name. A new scenario PR touches two files: the new scenario file and a one-line addition to the slice.
+
+The main alternative — and the one to weigh this against — is **`init()` registration in each scenario file** (`func init() { Tests = append(Tests, GatewayWithRoute) }`). Upstream gateway-api conformance uses this pattern, so it would feel familiar to anyone coming from there.
+
+Comparison:
+
+| Property | Explicit slice (proposal) | `init()` registration |
+|---|---|---|
+| Files touched per new scenario | 2 (scenario file + slice) | 1 (scenario file only) |
+| Canonical scenario list | One greppable slice in `<feature>.go` | Spread across files; requires runtime to assemble |
+| Order | Explicit, controlled by author | Filename-dependent (Go spec is well-defined but fragile) |
+| Addressable from outside the package | Yes (`basicrouting.GatewayWithRoute`) | Only via the assembled `Tests` slice |
+| Side effects on import | None | `init()` runs on every import, even from non-test code |
+| Familiarity from upstream | New | Matches upstream pattern |
+
+The proposal trades one extra line of bookkeeping per scenario for static auditability and no `init()` side effects. Reasonable people can disagree; the question is open.
+
+A distant third option is **codegen via `go:generate`**: a small tool AST-parses the package directory for `kgwtest.Test` literals and emits `tests_gen.go` containing the slice. Author writes only the scenario file; the generated file holds the slice. Real cost (build-time tooling, generated code committed, must be regenerated on rename) makes this overkill at the scale we expect, but it's the right escape hatch if a feature package grows past ~20 scenarios and the manual slice becomes friction.
+
+Open for team discussion: whether anyone strongly prefers `init()` (familiarity from upstream) over the explicit slice, and the threshold at which codegen should be revisited.
 
