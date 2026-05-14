@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +37,11 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
+
+// keepIsolationNamespacesEnv, if set to a truthy value, preserves any
+// IsolationNamespace created by a BaseTestingSuite after the suite completes.
+// Useful for debugging a parallel run.
+const keepIsolationNamespacesEnv = "KGATEWAY_TEST_KEEP_NAMESPACES"
 
 // GwApiChannel represents the Gateway API release channel
 type GwApiChannel string
@@ -111,6 +117,12 @@ var (
 var (
 	currentGwApiVersion *semver.Version
 	currentGwApiChannel GwApiChannel
+	// currentGwApiVersionMu guards the package-level cache below. Tests
+	// running in parallel (SuiteParallel) can each call detectAndCacheGwApiInfo
+	// concurrently, so a plain assignment is a data race. The cache itself is
+	// idempotent — every detection produces the same result for a given
+	// cluster — so a mutex is sufficient.
+	currentGwApiVersionMu sync.Mutex
 )
 
 // selfManagedGatewayAnnotation is the annotation used to mark a Gateway as self-managed in e2e tests
@@ -206,6 +218,18 @@ type BaseTestingSuite struct {
 
 	// selectedSetup tracks which setup was actually used, so we can clean it up in TearDownSuite
 	selectedSetup *TestCase
+
+	// IsolationNamespace, if set, causes the suite to create a dedicated namespace
+	// with this exact name in SetupSuite and delete it in TearDownSuite. Suites
+	// that test namespace-scoped lifecycle (deployer, routereplacement, etc.)
+	// opt into this; everyone else shares the kgateway-base fixtures namespace
+	// and prefixes resources with their suite name.
+	IsolationNamespace string
+
+	// suiteTempDir is a per-suite subdirectory of TestInstallation.GeneratedFiles.TempDir.
+	// Two SuiteParallel suites would otherwise write to the same delete_manifests.yaml
+	// path and clobber each other. Populated in SetupSuite.
+	suiteTempDir string
 }
 
 // SuiteOption is a functional option for configuring BaseTestingSuite
@@ -228,6 +252,17 @@ func WithSetupByVersion(setupByVersion map[GwApiChannel]map[GwApiVersion]*TestCa
 func WithCrdPath(crdPath string) SuiteOption {
 	return func(s *BaseTestingSuite) {
 		s.CrdPath = crdPath
+	}
+}
+
+// WithIsolationNamespace opts the suite into per-suite namespace isolation.
+// The namespace is created in SetupSuite and deleted in TearDownSuite (unless
+// KGATEWAY_TEST_KEEP_NAMESPACES is set). Use only for suites that genuinely
+// need namespace-scoped lifecycle isolation; the default is to share the
+// kgateway-base fixtures namespace with suite-prefixed resource names.
+func WithIsolationNamespace(ns string) SuiteOption {
+	return func(s *BaseTestingSuite) {
+		s.IsolationNamespace = ns
 	}
 }
 
@@ -354,6 +389,18 @@ func (s *BaseTestingSuite) SetupSuite() {
 		return
 	}
 
+	// Allocate a per-suite temp dir so SuiteParallel suites don't clobber
+	// each other's generated files (delete_manifests.yaml, etc.).
+	s.suiteTempDir = filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, sanitizeDNSName(s.T().Name()))
+	s.Require().NoError(os.MkdirAll(s.suiteTempDir, 0o755))
+
+	// If the suite opted into isolation, create its namespace before applying
+	// any setup manifests. Manifests in the suite's testdata must hardcode this
+	// same namespace.
+	if s.IsolationNamespace != "" {
+		s.createIsolationNamespace()
+	}
+
 	// set up the helpers once and store them on the suite
 	s.setupHelpers()
 
@@ -370,6 +417,36 @@ func (s *BaseTestingSuite) TearDownSuite() {
 	// Use the selected setup if available, otherwise fall back to default Setup
 	setupToDelete := s.selectedSetup
 	s.DeleteManifests(setupToDelete)
+
+	// If this suite opted into namespace isolation, drop the namespace last.
+	// Unlike the shared kgateway-base namespace (which we intentionally never
+	// delete because it's super slow), an IsolationNamespace exists solely for
+	// this suite's lifecycle and we want it gone.
+	if s.IsolationNamespace != "" && !keepIsolationNamespaces() {
+		s.deleteIsolationNamespace()
+	}
+}
+
+func (s *BaseTestingSuite) createIsolationNamespace() {
+	nsYAML := fmt.Sprintf("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: %s\n", s.IsolationNamespace)
+	err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", nsYAML)
+	s.Require().NoErrorf(err, "failed to create isolation namespace %q", s.IsolationNamespace)
+}
+
+func (s *BaseTestingSuite) deleteIsolationNamespace() {
+	// Best-effort: kubectl delete ns is the supported path here. We don't wait
+	// for full deletion because that can be slow; the cluster will reap the
+	// namespace asynchronously and a future suite using the same name will
+	// block on it if needed.
+	_ = s.TestInstallation.Actions.Kubectl().RunCommand(s.Ctx,
+		"delete", "namespace", s.IsolationNamespace,
+		"--ignore-not-found", "--wait=false",
+	)
+}
+
+func keepIsolationNamespaces() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(keepIsolationNamespacesEnv)))
+	return v == "1" || v == "true" || v == "yes"
 }
 
 func (s *BaseTestingSuite) BeforeTest(suiteName, testName string) {
@@ -622,7 +699,7 @@ func stripNamespaceResourcesFromContent(t *testing.T, content string) string {
 // DeleteManifests deletes the manifests and waits until the resources are deleted.
 func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
 	nf := stripNamespaceResources(s.T(), testCase.Manifests...)
-	fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_manifests.yaml")
+	fp := filepath.Join(s.tempDir(), "delete_manifests.yaml")
 	s.Require().NoError(os.WriteFile(fp, []byte(nf), 0o600))
 
 	err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", fp)
@@ -640,10 +717,21 @@ func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
 		transformedCfgs = append(transformedCfgs, stripNamespaceResourcesFromContent(s.T(), transform(string(d))))
 	}
 
-	transformedDeleteManifest := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_transformed_manifests.yaml")
+	transformedDeleteManifest := filepath.Join(s.tempDir(), "delete_transformed_manifests.yaml")
 	s.Require().NoError(os.WriteFile(transformedDeleteManifest, []byte(strings.Join(transformedCfgs, "\n---\n")), 0o600))
 	err = s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", transformedDeleteManifest)
 	s.Require().NoError(err)
+}
+
+// tempDir returns the suite-scoped temp dir if SetupSuite has been called and
+// it's available; otherwise it falls back to the shared TestInstallation
+// temp dir. The suite-scoped dir prevents SuiteParallel siblings from
+// clobbering each other's generated files (e.g., delete_manifests.yaml).
+func (s *BaseTestingSuite) tempDir() string {
+	if s.suiteTempDir != "" {
+		return s.suiteTempDir
+	}
+	return s.TestInstallation.GeneratedFiles.TempDir
 }
 
 func (s *BaseTestingSuite) setupHelpers() {
@@ -737,8 +825,12 @@ func (s *BaseTestingSuite) detectAndCacheGwApiInfo() {
 	version, err := semver.NewVersion(versionStr)
 	s.Require().NoError(err, "failed to parse Gateway API version '%s'", versionStr)
 	s.gwApiVersion = version
+
+	// Guard the package-level cache so parallel suites don't race writes.
+	currentGwApiVersionMu.Lock()
 	currentGwApiVersion = version
 	currentGwApiChannel = s.gwApiChannel
+	currentGwApiVersionMu.Unlock()
 }
 
 // getCurrentGwApiChannel returns the cached Gateway API channel

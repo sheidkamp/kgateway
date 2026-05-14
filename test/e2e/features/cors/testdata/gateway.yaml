@@ -1,14 +1,14 @@
-kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
 metadata:
-  name: headermods-gateway
+  name: cors-gateway
   namespace: kgateway-base
 spec:
   gatewayClassName: kgateway
   listeners:
     - protocol: HTTP
-      port: 8080
+      port: 80
       name: http
       allowedRoutes:
         namespaces:
-          from: Same
+          from: All

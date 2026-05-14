@@ -43,12 +43,12 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 
 func (s *testingSuite) checkPodsRunning() {
 	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(s.Ctx,
-		testdefaults.CurlPod.GetNamespace(), metav1.ListOptions{
-			LabelSelector: testdefaults.CurlPodLabelSelector,
+		GatewayNamespace, metav1.ListOptions{
+			LabelSelector: curlPodLabelSelector,
 		})
 	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(s.Ctx,
-		testdefaults.HttpbinDeployment.GetNamespace(), metav1.ListOptions{
-			LabelSelector: testdefaults.HttpbinLabelSelector,
+		GatewayNamespace, metav1.ListOptions{
+			LabelSelector: httpbinLabelSelector,
 		})
 	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(s.Ctx,
 		proxyObjectMeta.GetNamespace(), metav1.ListOptions{
@@ -73,7 +73,7 @@ func (s *testingSuite) TestListenerSetLevelHeaderModifiers() {
 
 func (s *testingSuite) TestHeaderModifiersFromSecret() {
 	s.checkPodsRunning()
-	// The TrafficPolicy injects X-Api-Key and X-Tenant-Id from the backend-creds Secret.
+	// The TrafficPolicy injects X-Api-Key and X-Tenant-Id from the headermods-backend-creds Secret.
 	s.assertHeaders(8080, map[string][]any{
 		"X-Api-Key":   {"my-secret-api-key"},
 		"X-Tenant-Id": {"tenant-abc"},
@@ -131,7 +131,7 @@ func (s *testingSuite) assertHeaders(port int,
 
 	s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
 		s.Ctx,
-		testdefaults.CurlPodExecOpt,
+		curlPodExecOpt,
 		allOptions,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,

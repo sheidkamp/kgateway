@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
@@ -18,9 +19,13 @@ import (
 
 var _ e2e.NewSuiteFunc = NewTestingSuite
 
-// testingSuite is a suite of tests for testing CORS policies
+// testingSuite is a suite of tests for testing CORS policies. The suite owns
+// its Gateway (cors-gateway/kgateway-base) — under SuiteParallel it can't
+// share common.BaseGateway because the gateway-level TrafficPolicy tests would
+// race other suites attached to the same Gateway.
 type testingSuite struct {
 	*base.BaseTestingSuite
+	gw common.Gateway
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
@@ -29,6 +34,18 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 			base.WithMinGwApiVersion(base.GwApiRequireCorsFilters),
 		),
 	}
+}
+
+func (s *testingSuite) SetupSuite() {
+	s.BaseTestingSuite.SetupSuite()
+	// Resolve the suite-owned Gateway's address once. The Gateway itself is
+	// applied at run-start by the framework (see WithSuiteGateways in the
+	// suite registration), so by the time SetupSuite runs it is Programmed
+	// and has an address assigned.
+	s.gw = common.LookupGateway(s.Ctx, s.T(), s.TestInstallation, types.NamespacedName{
+		Name:      GatewayName,
+		Namespace: GatewayNamespace,
+	})
 }
 
 // Test cors on specific route in a traffic policy
@@ -305,7 +322,7 @@ func (s *testingSuite) TestHttpRouteAndTrafficPolicyCors() {
 }
 
 func (s *testingSuite) assertResponse(path string, requestHeaders map[string]string, expectedHeaders map[string]any, notExpectedHeaders []string) {
-	common.BaseGateway.Send(
+	s.gw.Send(
 		s.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
@@ -325,7 +342,7 @@ func (s *testingSuite) assertResponse(path string, requestHeaders map[string]str
 // (HTTPRouteCORS), non-matching preflight responses may return 200, 204, or 403
 // and must not include the Access-Control-Allow-Origin header.
 func (s *testingSuite) assertNegativePreflightResponse(path string, requestHeaders map[string]string) {
-	common.BaseGateway.Send(
+	s.gw.Send(
 		s.T(),
 		&testmatchers.HttpResponse{
 			StatusCodes: []int{http.StatusOK, http.StatusNoContent, http.StatusForbidden},

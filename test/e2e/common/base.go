@@ -28,6 +28,15 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 }
 
 func SetupBaseGateway(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, name types.NamespacedName) {
+	BaseGateway = LookupGateway(ctx, t, installation, name)
+}
+
+// LookupGateway resolves a Gateway's external address and returns a Gateway
+// value scoped to that name+address. Suites that own their gateway (so they
+// can run in parallel against a private gateway without sharing
+// common.BaseGateway with other suites) populate a local Gateway field via
+// this helper in SetupSuite.
+func LookupGateway(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, name types.NamespacedName) Gateway {
 	address := installation.AssertionsT(t).EventuallyGatewayAddress(
 		ctx,
 		name.Name,
@@ -38,7 +47,7 @@ func SetupBaseGateway(ctx context.Context, t *testing.T, installation *e2e.TestI
 	if override := os.Getenv("GATEWAY_ADDRESS_OVERRIDE"); override != "" {
 		address = override
 	}
-	BaseGateway = Gateway{
+	return Gateway{
 		NamespacedName: name,
 		Address:        address,
 	}

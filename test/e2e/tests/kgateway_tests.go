@@ -68,7 +68,9 @@ func KubeGatewaySuiteRunner() e2e.SuiteRunner {
 	// kubeGatewaySuiteRunner.Register("RouteProbe", loadtesting.NewRouteProbeSuite)
 	// kubeGatewaySuiteRunner.Register("RouteChange", loadtesting.NewRouteChangeSuite)
 	kubeGatewaySuiteRunner.Register("LeaderElection", leaderelection.NewTestingSuite)
-	kubeGatewaySuiteRunner.Register("HeaderModifiers", header_modifiers.NewTestingSuite)
+	kubeGatewaySuiteRunner.RegisterWithOpts("HeaderModifiers", header_modifiers.NewTestingSuite,
+		e2e.WithSuiteMode(e2e.SuiteParallel),
+	)
 	kubeGatewaySuiteRunner.Register("FrontendTLS", frontendtls.NewTestingSuite)
 
 	// Fast tests
@@ -83,7 +85,10 @@ func KubeGatewaySuiteRunner() e2e.SuiteRunner {
 	kubeGatewaySuiteRunner.Register("GlobalRateLimit", global_rate_limit.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("PolicySelector", policyselector.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("TrafficPolicyStatus", trafficpolicystatus.NewTestingSuite)
-	kubeGatewaySuiteRunner.Register("Cors", cors.NewTestingSuite)
+	kubeGatewaySuiteRunner.RegisterWithOpts("Cors", cors.NewTestingSuite,
+		e2e.WithSuiteMode(e2e.SuiteParallel),
+		e2e.WithSuiteGateways(cors.GatewayManifest),
+	)
 	kubeGatewaySuiteRunner.Register("Compression", compression.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("FaultInjection", faultinjection.NewTestingSuite)
 	kubeGatewaySuiteRunner.Register("BackendConfigPolicy", backendconfigpolicy.NewTestingSuite)

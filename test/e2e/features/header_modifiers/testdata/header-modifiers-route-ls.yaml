@@ -1,12 +1,13 @@
 apiVersion: gateway.kgateway.dev/v1alpha1
 kind: TrafficPolicy
 metadata:
-  name: header-modifiers-route-policy-2
+  name: headermods-route-policy-2
+  namespace: kgateway-base
 spec:
   targetRefs:
   - group: gateway.networking.k8s.io
     kind: HTTPRoute
-    name: svc-route-2
+    name: headermods-route-2
   headerModifiers:
     request:
       add:
