@@ -88,18 +88,26 @@ func (g *Gateway) SendConsistently(t *testing.T, match *matchers.HttpResponse, o
 // Any divergence within the window fails the test (no per-iteration retries).
 func (g *Gateway) SendConsistentlyFor(t *testing.T, match *matchers.HttpResponse, window, poll time.Duration, opts ...curl.Option) {
 	t.Helper()
+	if poll <= 0 {
+		t.Fatalf("SendConsistentlyFor: poll interval must be positive, got %v", poll)
+	}
 	g.Send(t, match, opts...)
 
 	fullOpts := g.curlOpts(opts)
-	deadline := time.Now().Add(window)
+	windowTimer := time.NewTimer(window)
+	defer windowTimer.Stop()
+	ticker := time.NewTicker(poll)
+	defer ticker.Stop()
+
 	for {
-		if err := g.matchOnce(fullOpts, match); err != nil {
-			t.Fatalf("response did not consistently match within %v: %v", window, err)
-		}
-		if !time.Now().Before(deadline) {
+		select {
+		case <-windowTimer.C:
 			return
+		case <-ticker.C:
+			if err := g.matchOnce(fullOpts, match); err != nil {
+				t.Fatalf("response did not consistently match within %v: %v", window, err)
+			}
 		}
-		time.Sleep(poll)
 	}
 }
 
