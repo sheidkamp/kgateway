@@ -87,9 +87,10 @@ func (s *testingSuite) SetupSuite() {
 	}
 }
 
-// setupTestGateway resolves the secondary gateway used only by
-// TestInvalidChildValidStandalone. Called lazily so other tests don't pay the wait.
-func (s *testingSuite) setupTestGateway() {
+// resolveTestGateway looks up the LB address for the secondary gateway used only
+// by TestInvalidChildValidStandalone. Called lazily so other tests don't pay the
+// wait — the Gateway itself is created by that test's per-test manifest.
+func (s *testingSuite) resolveTestGateway() {
 	addr := s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayAddress(s.Ctx, proxyTestMeta.Name, proxyTestMeta.Namespace)
 	s.testGateway = common.Gateway{
 		NamespacedName: types.NamespacedName{Name: proxyTestMeta.Name, Namespace: proxyTestMeta.Namespace},
@@ -201,7 +202,7 @@ func (s *testingSuite) TestMultipleParents() {
 }
 
 func (s *testingSuite) TestInvalidChildValidStandalone() {
-	s.setupTestGateway()
+	s.resolveTestGateway()
 
 	// Assert traffic to team1 route
 	s.testGateway.SendConsistently(s.T(),
