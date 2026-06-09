@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	envoy_hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -22,6 +23,7 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
 	testdefaults "github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
+	"github.com/kgateway-dev/kgateway/v2/test/envoyutils/admincli"
 	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
 	"github.com/kgateway-dev/kgateway/v2/test/helpers"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
@@ -67,6 +69,7 @@ func (s *testingSuite) SetupSuite() {
 		"TestHttpListenerPolicyClearStaleStatus": {gatewayManifest, httpRouteManifest, serverHeaderManifest},
 		"TestEarlyRequestHeaderModifier":         {gatewayManifest, earlyHeaderMutationManifest},
 		"TestProxyProtocol":                      {gatewayManifest, httpRouteManifest, proxyProtocolManifest},
+		"TestListenerPolicyMaxHeadersCount":      {gatewayManifest, httpRouteManifest, maxHeadersCountManifest},
 	}
 }
 
@@ -374,4 +377,78 @@ func (s *testingSuite) TestProxyProtocol() {
 			curl.WithProxyProto(),
 		},
 		&matchers.HttpResponse{StatusCode: http.StatusOK})
+}
+
+// TestListenerPolicyMaxHeadersCount verifies that maxHeadersCount in a ListenerPolicy is
+// enforced by Envoy. The policy sets the limit to 5. A standard curl request sends 3 headers
+// (Host, User-Agent, Accept), which is under the limit and succeeds. Adding 3 more custom
+// headers brings the total to 6, exceeding the limit and triggering a 431.
+func (s *testingSuite) TestListenerPolicyMaxHeadersCount() {
+	// Verify the setting appears in the Envoy config dump via the admin API.
+	s.testInstallation.Assertions.AssertEnvoyAdminApi(
+		s.ctx,
+		proxyDeployment.ObjectMeta,
+		func(ctx context.Context, adminClient *admincli.Client) {
+			s.testInstallation.Assertions.Gomega.Eventually(func(g gomega.Gomega) {
+				listener, err := adminClient.GetSingleListenerFromDynamicListeners(ctx, "listener~8080")
+				g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get dynamic listener from config dump")
+				g.Expect(listener.GetFilterChains()).NotTo(gomega.BeEmpty(), "listener should have at least one filter chain")
+
+				var hcm *envoy_hcm.HttpConnectionManager
+				for _, chain := range listener.GetFilterChains() {
+					for _, f := range chain.GetFilters() {
+						candidate := &envoy_hcm.HttpConnectionManager{}
+						if err := f.GetTypedConfig().UnmarshalTo(candidate); err == nil {
+							hcm = candidate
+							break
+						}
+					}
+					if hcm != nil {
+						break
+					}
+				}
+				g.Expect(hcm).NotTo(gomega.BeNil(), "could not find an HCM filter in any filter chain")
+
+				g.Expect(hcm.GetCommonHttpProtocolOptions().GetMaxHeadersCount().GetValue()).
+					To(gomega.Equal(uint32(5)),
+						"max_headers_count should be 5 as set in the ListenerPolicy")
+			}).
+				WithContext(ctx).
+				WithTimeout(60 * time.Second).
+				WithPolling(2 * time.Second).
+				Should(gomega.Succeed())
+		},
+	)
+
+	// A standard curl request (Host, User-Agent, Accept = 3 headers) is under the limit of 5
+	// and should succeed. This also confirms the policy was accepted without a NACK.
+	s.testInstallation.Assertions.AssertEventualCurlResponse(
+		s.ctx,
+		testdefaults.CurlPodExecOpt,
+		[]curl.Option{
+			curl.WithHost(kubeutils.ServiceFQDN(proxyService.ObjectMeta)),
+			curl.WithHostHeader("example.com"),
+		},
+		&matchers.HttpResponse{
+			StatusCode: http.StatusOK,
+			Body:       gomega.ContainSubstring("Welcome to nginx!"),
+		},
+	)
+
+	// Adding 3 extra headers brings the total to 6, which exceeds the limit of 5.
+	// Envoy should reject the request with 431 Request Header Fields Too Large.
+	s.testInstallation.Assertions.AssertEventualCurlResponse(
+		s.ctx,
+		testdefaults.CurlPodExecOpt,
+		[]curl.Option{
+			curl.WithHost(kubeutils.ServiceFQDN(proxyService.ObjectMeta)),
+			curl.WithHostHeader("example.com"),
+			curl.WithHeader("x-custom-1", "a"),
+			curl.WithHeader("x-custom-2", "b"),
+			curl.WithHeader("x-custom-3", "c"),
+		},
+		&matchers.HttpResponse{
+			StatusCode: http.StatusRequestHeaderFieldsTooLarge,
+		},
+	)
 }

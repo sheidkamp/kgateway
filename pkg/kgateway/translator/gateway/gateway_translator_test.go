@@ -1371,6 +1371,28 @@ func TestBasic(t *testing.T) {
 		})
 	})
 
+	t.Run("ListenerPolicy with maxHeadersCount", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "listener-policy-http/max-headers-count.yaml",
+			outputFile: "listener-policy-http/max-headers-count.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
+	t.Run("ListenerPolicy maxHeadersCount merge conflict", func(t *testing.T) {
+		test(t, translatorTestCase{
+			inputFile:  "listener-policy-http/max-headers-count-merge-conflict.yaml",
+			outputFile: "listener-policy-http/max-headers-count-merge-conflict.yaml",
+			gwNN: types.NamespacedName{
+				Namespace: "default",
+				Name:      "example-gateway",
+			},
+		})
+	})
+
 	t.Run("Service with appProtocol=kubernetes.io/h2c", func(t *testing.T) {
 		test(t, translatorTestCase{
 			inputFile:  "backend-protocol/svc-h2c.yaml",
