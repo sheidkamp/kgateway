@@ -44,6 +44,7 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.set_vars.outputs.version }}
+      stage_tag: ${{ steps.set_vars.outputs.stage_tag }}
       goreleaser_args: ${{ steps.set_vars.outputs.goreleaser_args }}
       needs_release: ${{ steps.set_vars.outputs.needs_release }}
       previous_tag: ${{ steps.set_vars.outputs.previous_tag }}
@@ -106,17 +107,26 @@ jobs:
               exit 1
             fi
             NEEDS_RELEASE=true
-            GORELEASER_ARGS="--clean --skip=validate --release-notes _output/RELEASE_NOTES.md"
+            # goreleaser only builds/stages images now (release disabled); the GitHub release and
+            # its notes are created by the publish job, so no --release-notes here.
+            GORELEASER_ARGS="--clean --skip=validate"
+            # Stage built images under a non-semver tag so consumption automation (Kargo,
+            # semver-only) does not adopt them before the gate passes. Publishing copies the
+            # staged image to ${VERSION} only after validation.
+            STAGE_TAG="stage-${GIT_SHA}"
           elif [[ $GITHUB_REF == refs/heads/main ]]; then
             VERSION="$(make --no-print-directory print-ROLLING_MAIN_VERSION)"
             NEEDS_RELEASE=false
             GORELEASER_ARGS="--clean --skip=validate"
+            # No staging on the rolling-main path; images are tagged at VERSION as before.
+            STAGE_TAG="${VERSION}"
           elif [[ $GITHUB_REF == refs/pull/* ]]; then
             GIT_TAG=$(git describe --tags --abbrev=0)
             PR_NUM=$(echo "${GITHUB_REF}" | sed -E 's|refs/pull/([^/]+)/?.*|\1|')
             VERSION="${GIT_TAG}-pr.${PR_NUM}-${GIT_SHA}"
             NEEDS_RELEASE=false
             GORELEASER_ARGS="--snapshot --clean"
+            STAGE_TAG="${VERSION}"
           else
             echo "Unknown event type"
             exit 1
@@ -125,6 +135,7 @@ jobs:
           # Group redirects to satisfy shellcheck SC2129
           {
             echo "version=${VERSION}"
+            echo "stage_tag=${STAGE_TAG}"
             echo "previous_tag=${PREVIOUS_TAG:-}"
             echo "needs_release=${NEEDS_RELEASE}"
             echo "goreleaser_args=${GORELEASER_ARGS}"
@@ -132,22 +143,35 @@ jobs:
 
   helm:
     name: Package helm charts
-    needs: [setup, goreleaser]
+    # Packaging is independent of the image build, so this runs in parallel with `stage`.
+    # The packaged charts are uploaded as an artifact; the gate jobs install from those exact
+    # bytes, and the publish job pushes them. Charts are NOT pushed to the registry on the
+    # release path (publish does that, only after the gate passes).
+    needs: [setup]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Helm login to ${{ env.IMAGE_REGISTRY }}
-        if: ${{ github.event_name != 'pull_request' }}
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.IMAGE_REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
 
       - name: Package kgateway charts
         run: make package-kgateway-charts
         env:
           VERSION: ${{ needs.setup.outputs.version }}
 
+      - name: Upload packaged charts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: helm-charts
+          path: _test/*.tgz
+          retention-days: 1
+
+      # Rolling-main builds publish charts here (they are never staged/promoted). Release
+      # builds (workflow_dispatch) push charts from the publish job instead.
+      - name: Helm login to ${{ env.IMAGE_REGISTRY }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.IMAGE_REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
+
       - name: Push kgateway charts to registry
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: make release-charts
         env:
           VERSION: ${{ needs.setup.outputs.version }}
@@ -181,10 +205,14 @@ jobs:
           path: _output/RELEASE_NOTES.md
           retention-days: 1
 
-  goreleaser:
-    name: goreleaser
-    needs: [setup, release-notes]
+  stage:
+    name: Build and stage images
+    needs: [setup]
     runs-on: ubuntu-22.04
+    outputs:
+      kgateway: ${{ steps.digests.outputs.kgateway }}
+      sds: ${{ steps.digests.outputs.sds }}
+      envoy_wrapper: ${{ steps.digests.outputs.envoy_wrapper }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -192,8 +220,10 @@ jobs:
       - name: Prep Go Runner
         uses: ./.github/actions/prep-go-runner
 
-      - name: Conditionally disable release for pushes to main
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Disable goreleaser GitHub release
+        # goreleaser only builds and pushes images here (to the stage tag). The git tag and
+        # GitHub Release are created by the publish job after the gate passes, so goreleaser
+        # must never create a release on any path.
         run: |
           echo "GORELEASER_DISABLE_RELEASE=true" >> "$GITHUB_ENV"
 
@@ -220,13 +250,6 @@ jobs:
           image: tonistiigi/binfmt:qemu-v10.2.3
       - uses: "docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2" # v3.10.0
 
-      - name: Download release notes
-        if: ${{ needs.setup.outputs.needs_release == 'true' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: release-notes
-          path: _output
-
       - name: Disable Docker cache for releases
         if: ${{ needs.setup.outputs.needs_release == 'true' }}
         run: echo "DOCKER_NO_CACHE=1" >> "$GITHUB_ENV"
@@ -235,7 +258,10 @@ jobs:
         run: make release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # VERSION stamps the binary (LDFLAGS) with the final published version.
           VERSION: ${{ needs.setup.outputs.version }}
+          # ARTIFACT_TAG is the image/manifest tag — the non-semver stage tag on the release path.
+          ARTIFACT_TAG: ${{ needs.setup.outputs.stage_tag }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           GORELEASER_ARGS: ${{ needs.setup.outputs.goreleaser_args }}
           GORELEASER_CURRENT_TAG: ${{ needs.setup.outputs.version }}
@@ -258,16 +284,34 @@ jobs:
             for image in kgateway sds envoy-wrapper; do
               echo "Testing ${image} (${arch})..."
               container-structure-test test \
-                --image "${{ env.IMAGE_REGISTRY }}/${image}:${{ needs.setup.outputs.version }}-${arch}" \
+                --image "${{ env.IMAGE_REGISTRY }}/${image}:${{ needs.setup.outputs.stage_tag }}-${arch}" \
                 --platform "linux/${arch}" \
                 --config "test/container-structure/${image}.yaml"
             done
           done
 
+      - name: Capture staged image digests
+        id: digests
+        if: ${{ needs.setup.outputs.needs_release == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The digest of a manifest is the sha256 of its raw bytes; --raw returns exactly those.
+          digest() { docker buildx imagetools inspect "$1" --raw | sha256sum | awk '{print "sha256:"$1}'; }
+          {
+            echo "kgateway=$(digest "${IMAGE_REGISTRY}/kgateway:${STAGE_TAG}")"
+            echo "sds=$(digest "${IMAGE_REGISTRY}/sds:${STAGE_TAG}")"
+            echo "envoy_wrapper=$(digest "${IMAGE_REGISTRY}/envoy-wrapper:${STAGE_TAG}")"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          STAGE_TAG: ${{ needs.setup.outputs.stage_tag }}
+
   validate:
     name: Validate release artifacts e2e (${{ matrix.arch }})
-    needs: [setup, helm, goreleaser]
-    if: ${{ inputs.validate }}
+    needs: [setup, helm, stage]
+    # Mandatory gate on the release path; still manually triggerable on other events.
+    if: ${{ needs.setup.outputs.needs_release == 'true' || inputs.validate }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
     strategy:
       fail-fast: false
@@ -291,18 +335,23 @@ jobs:
           VERSION: ${{ needs.setup.outputs.version }}
           SKIP_DOCKER: "true"
 
-      - name: Install the released chart
+      - name: Download packaged charts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: helm-charts
+          path: _test
+
+      - name: Install the staged chart
         run: |
-          # install the crds first
-          go tool helm install kgateway-crds oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway-crds \
-            --version ${{ needs.setup.outputs.version }} \
+          # install the crds first (from the packaged chart)
+          go tool helm install kgateway-crds _test/kgateway-crds-${{ needs.setup.outputs.version }}.tgz \
             --wait --timeout 5m
 
-          # install the main chart
+          # install the main chart, pointing images at the staged (not-yet-published) tag
           go tool helm install --create-namespace --namespace kgateway-system kgateway \
-            oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway \
+            _test/kgateway-${{ needs.setup.outputs.version }}.tgz \
             --set image.registry=${{ env.IMAGE_REGISTRY }} \
-            --version ${{ needs.setup.outputs.version }} \
+            --set image.tag=${{ needs.setup.outputs.stage_tag }} \
             --wait --timeout 5m
 
       - name: Wait for the kgateway deployment to be ready
@@ -317,7 +366,8 @@ jobs:
 
   load_tests:
     name: Load Testing
-    needs: [setup, helm, goreleaser]
+    # Advisory: runs against the staged artifact when opted in, but does NOT gate publish.
+    needs: [setup, helm, stage]
     if: ${{ inputs.run_load_tests }}
     runs-on: ubuntu-22.04
     steps:
@@ -338,18 +388,23 @@ jobs:
           VERSION: ${{ needs.setup.outputs.version }}
           SKIP_DOCKER: "true"
 
-      - name: Install the released chart
+      - name: Download packaged charts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: helm-charts
+          path: _test
+
+      - name: Install the staged chart
         run: |
-          # install the crds first
-          go tool helm install kgateway-crds oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway-crds \
-            --version ${{ needs.setup.outputs.version }} \
+          # install the crds first (from the packaged chart)
+          go tool helm install kgateway-crds _test/kgateway-crds-${{ needs.setup.outputs.version }}.tgz \
             --wait --timeout 5m
 
-          # install the main chart
+          # install the main chart, pointing images at the staged (not-yet-published) tag
           go tool helm install --create-namespace --namespace kgateway-system kgateway \
-            oci://${{ env.IMAGE_REGISTRY }}/charts/kgateway \
+            _test/kgateway-${{ needs.setup.outputs.version }}.tgz \
             --set image.registry=${{ env.IMAGE_REGISTRY }} \
-            --version ${{ needs.setup.outputs.version }} \
+            --set image.tag=${{ needs.setup.outputs.stage_tag }} \
             --wait --timeout 5m
 
       - name: Wait for the kgateway deployment to be ready
@@ -359,4 +414,109 @@ jobs:
       - name: Run load tests
         run: make run-load-tests
         env:
+          VERSION: ${{ needs.setup.outputs.version }}
+
+  publish:
+    name: Publish release
+    # Gated on the validation jobs that block a release: build + container-structure (in `stage`)
+    # and conformance (`validate`). Load tests are intentionally NOT a dependency (advisory).
+    needs: [setup, helm, stage, validate, release-notes]
+    if: ${{ needs.setup.outputs.needs_release == 'true' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: Prep Go Runner
+        uses: ./.github/actions/prep-go-runner
+
+      - name: Log into ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: "docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2" # v3.10.0
+
+      - name: Helm login to ${{ env.IMAGE_REGISTRY }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.IMAGE_REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
+
+      - name: Refuse to republish an existing version
+        run: |
+          set -euo pipefail
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            echo "Release ${VERSION} already exists; refusing to republish."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "Tag ${VERSION} already exists; refusing to republish."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.setup.outputs.version }}
+
+      - name: Promote staged images to the published tag
+        run: |
+          set -euo pipefail
+          # The digest of a manifest is the sha256 of its raw bytes; --raw returns exactly those.
+          digest() { docker buildx imagetools inspect "$1" --raw | sha256sum | awk '{print "sha256:"$1}'; }
+          declare -A expected=(
+            [kgateway]="${KGATEWAY_DIGEST}"
+            [sds]="${SDS_DIGEST}"
+            [envoy-wrapper]="${ENVOY_WRAPPER_DIGEST}"
+          )
+          for image in kgateway sds envoy-wrapper; do
+            src="${IMAGE_REGISTRY}/${image}:${STAGE_TAG}"
+            dst="${IMAGE_REGISTRY}/${image}:${VERSION}"
+            cur="$(digest "$src")"
+            exp="${expected[$image]}"
+            if [[ "$cur" != "$exp" ]]; then
+              echo "stage digest drift for ${image}: ${cur} != gated ${exp}"
+              exit 1
+            fi
+            # Copy the validated bytes by digest; no rebuild.
+            docker buildx imagetools create -t "$dst" "${src}@${cur}"
+            new="$(digest "$dst")"
+            if [[ "$new" != "$cur" ]]; then
+              echo "promotion mismatch for ${image}: published ${new} != staged ${cur}"
+              exit 1
+            fi
+            echo "promoted ${image} -> ${dst} (${cur})"
+          done
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          STAGE_TAG: ${{ needs.setup.outputs.stage_tag }}
+          VERSION: ${{ needs.setup.outputs.version }}
+          KGATEWAY_DIGEST: ${{ needs.stage.outputs.kgateway }}
+          SDS_DIGEST: ${{ needs.stage.outputs.sds }}
+          ENVOY_WRAPPER_DIGEST: ${{ needs.stage.outputs.envoy_wrapper }}
+
+      - name: Push charts at the published version
+        run: make release-charts
+        env:
+          VERSION: ${{ needs.setup.outputs.version }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+
+      - name: Download release notes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-notes
+          path: _output
+
+      - name: Create the GitHub release
+        run: |
+          set -euo pipefail
+          # gh release create makes the git tag at --target, so no separate tag push is needed.
+          PRERELEASE_FLAG=""
+          if [[ "${VERSION}" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "${VERSION}" \
+            --target "${GITHUB_SHA}" \
+            --title "${VERSION}" \
+            --notes-file _output/RELEASE_NOTES.md \
+            ${PRERELEASE_FLAG}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.setup.outputs.version }}
