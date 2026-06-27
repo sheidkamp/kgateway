@@ -57,7 +57,7 @@ builds:
       - arm64
 dockers:
   - image_templates:
-      - &controller_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.CONTROLLER_IMAGE_REPO }}:{{ .Env.VERSION }}-arm64"
+      - &controller_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.CONTROLLER_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}-arm64"
     use: buildx
     dockerfile: &controller_dockerfile cmd/kgateway/Dockerfile
     goos: linux
@@ -75,7 +75,7 @@ dockers:
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--pull{{ else }}--progress=auto{{ end }}'
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--no-cache{{ else }}--progress=auto{{ end }}'
   - image_templates:
-      - &controller_amd_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.CONTROLLER_IMAGE_REPO }}:{{ .Env.VERSION }}-amd64"
+      - &controller_amd_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.CONTROLLER_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}-amd64"
     use: buildx
     dockerfile: *controller_dockerfile
     goos: linux
@@ -93,7 +93,7 @@ dockers:
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--pull{{ else }}--progress=auto{{ end }}'
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--no-cache{{ else }}--progress=auto{{ end }}'
   - image_templates:
-      - &sds_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.SDS_IMAGE_REPO }}:{{ .Env.VERSION }}-arm64"
+      - &sds_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.SDS_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}-arm64"
     use: buildx
     dockerfile: &sds_dockerfile cmd/sds/Dockerfile
     goos: linux
@@ -107,7 +107,7 @@ dockers:
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--pull{{ else }}--progress=auto{{ end }}'
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--no-cache{{ else }}--progress=auto{{ end }}'
   - image_templates:
-      - &sds_amd_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.SDS_IMAGE_REPO }}:{{ .Env.VERSION }}-amd64"
+      - &sds_amd_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.SDS_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}-amd64"
     use: buildx
     dockerfile: *sds_dockerfile
     goos: linux
@@ -121,7 +121,7 @@ dockers:
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--pull{{ else }}--progress=auto{{ end }}'
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--no-cache{{ else }}--progress=auto{{ end }}'
   - image_templates:
-      - &envoyinit_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.ENVOYINIT_IMAGE_REPO }}:{{ .Env.VERSION }}-arm64"
+      - &envoyinit_arm_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.ENVOYINIT_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}-arm64"
     use: buildx
     dockerfile: &envoyinit_dockerfile cmd/envoyinit/Dockerfile
     goos: linux
@@ -140,7 +140,7 @@ dockers:
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--pull{{ else }}--progress=auto{{ end }}'
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--no-cache{{ else }}--progress=auto{{ end }}'
   - image_templates:
-      - &envoyinit_amd_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.ENVOYINIT_IMAGE_REPO }}:{{ .Env.VERSION }}-amd64"
+      - &envoyinit_amd_image "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.ENVOYINIT_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}-amd64"
     use: buildx
     dockerfile: *envoyinit_dockerfile
     goos: linux
@@ -159,15 +159,15 @@ dockers:
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--pull{{ else }}--progress=auto{{ end }}'
       - '{{ if isEnvSet "DOCKER_NO_CACHE" }}--no-cache{{ else }}--progress=auto{{ end }}'
 docker_manifests:
-  - name_template: "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.CONTROLLER_IMAGE_REPO }}:{{ .Env.VERSION }}"
+  - name_template: "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.CONTROLLER_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}"
     image_templates:
       - *controller_arm_image
       - *controller_amd_image
-  - name_template: "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.SDS_IMAGE_REPO }}:{{ .Env.VERSION }}"
+  - name_template: "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.SDS_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}"
     image_templates:
       - *sds_arm_image
       - *sds_amd_image
-  - name_template: "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.ENVOYINIT_IMAGE_REPO }}:{{ .Env.VERSION }}"
+  - name_template: "{{ .Env.IMAGE_REGISTRY }}/{{ .Env.ENVOYINIT_IMAGE_REPO }}:{{ .Env.ARTIFACT_TAG }}"
     image_templates:
       - *envoyinit_arm_image
       - *envoyinit_amd_image
