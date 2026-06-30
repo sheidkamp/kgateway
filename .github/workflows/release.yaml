@@ -315,6 +315,13 @@ jobs:
       matrix:
         arch: ['amd64', 'arm64']
     steps:
+      # NEGATIVE TEST ONLY — do not merge. Forces the gate to fail so we can confirm the
+      # `publish` job is skipped and nothing reaches the published tag. A failed `validate`
+      # conclusion is what blocks publish, regardless of which step fails, so this fails fast.
+      - name: Force gate failure (negative test)
+        run: |
+          echo "Simulating a conformance gate failure to verify publish is blocked."
+          exit 1
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Prep Go Runner
         uses: ./.github/actions/prep-go-runner
