@@ -2,10 +2,6 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      validate:
-        type: boolean
-        default: false
-        description: "Validate the release artifacts"
       version:
         type: string
         required: true
@@ -15,7 +11,7 @@ on:
       run_load_tests:
         type: boolean
         default: false
-        description: "Run load testing suite after release"
+        description: "Run load tests against the staged artifacts before publishing (does not gate the release)"
   push:
     branches:
       - main
@@ -310,8 +306,9 @@ jobs:
   validate:
     name: Validate release artifacts e2e (${{ matrix.arch }})
     needs: [setup, helm, stage]
-    # Mandatory gate on the release path; still manually triggerable on other events.
-    if: ${{ needs.setup.outputs.needs_release == 'true' || inputs.validate }}
+    # Mandatory gate on the release path: conformance must pass against the staged
+    # artifacts before publish. Every workflow_dispatch sets needs_release=true.
+    if: ${{ needs.setup.outputs.needs_release == 'true' }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
     strategy:
       fail-fast: false
