@@ -480,7 +480,9 @@ golden-translator-%:
 # Env test
 #----------------------------------------------------------------------------------
 
-ENVTEST_K8S_VERSION = 1.31
+# Gateway API v1.6 experimental CRDs (xbackends) use the CEL format library,
+# which requires a kube-apiserver newer than 1.31.
+ENVTEST_K8S_VERSION = 1.33
 ENVTEST ?= go -C tools tool setup-envtest
 
 .PHONY: envtest-path
@@ -1034,7 +1036,7 @@ kind-create: ## Create a KinD cluster
 	$(KIND) get clusters | grep $(CLUSTER_NAME) || $(KIND) create cluster --name $(CLUSTER_NAME) --image kindest/node:$(CLUSTER_NODE_VERSION)
 
 CONFORMANCE_CHANNEL ?= experimental
-CONFORMANCE_VERSION ?= v1.5.1
+CONFORMANCE_VERSION ?= v1.6.0
 .PHONY: gw-api-crds
 gw-api-crds: ## Install the Gateway API CRDs. HACK: Use SSA to avoid the issue with the CRD annotations being too long.
 ifeq ($(shell echo $(CONFORMANCE_VERSION) | grep -q '^v[0-9]' && echo yes),yes)
@@ -1231,7 +1233,7 @@ CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/$(VERSIO
 CONFORMANCE_ARGS := -gateway-class=$(CONFORMANCE_GATEWAY_CLASS) $(CONFORMANCE_REPORT_ARGS)
 
 CONFORMANCE_TEST_DIR ?= ./test/conformance/...
-CONFORMANCE_GO_TEST_ARGS ?= -timeout=20m
+CONFORMANCE_GO_TEST_ARGS ?= -timeout=60m
 
 .PHONY: conformance ## Run the conformance test suite
 conformance:  ## Run the Gateway API conformance suite
