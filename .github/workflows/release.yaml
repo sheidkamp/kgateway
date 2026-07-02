@@ -20,6 +20,14 @@ on:
       - main
       - 'v[0-9]*.[0-9]*.x'
 
+# Serialize releases that target the same version: a duplicate dispatch waits for the
+# in-flight run rather than racing it (otherwise both could pass the republish guard and
+# promote to the same tag from different commits). Cancel-in-progress applies only to
+# PRs (normal superseding CI); a release or main build is never cancelled mid-publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   # this uses the `github.repository_owner` to support releases from forks (useful for testing).
   IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -51,6 +59,8 @@ jobs:
       - name: Set the release related variables
         id: set_vars
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -x
           GIT_SHA=$(git rev-parse --short HEAD)
@@ -96,6 +106,15 @@ jobs:
               echo "Error: Version '$VERSION' does not match required semver format (e.g., v1.2.3, v2.0.0-alpha.1)"
               exit 1
             fi
+            # Fail fast on a duplicate release. The concurrency group serializes same-version
+            # dispatches, so a second run reaches here only after the first has finished and
+            # created the tag/release — reject it before spending a full build + gate. The
+            # publish job re-checks this immediately before promoting, as a final guard.
+            if gh release view "${VERSION}" >/dev/null 2>&1 \
+               || git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+              echo "Error: Release ${VERSION} already exists; refusing to re-run."
+              exit 1
+            fi
             # Find the previous tag for release notes generation
             PREVIOUS_TAG=$(find_previous_release_notes_tag "$VERSION")
             if [ -z "$PREVIOUS_TAG" ]; then
@@ -114,7 +133,7 @@ jobs:
             VERSION="$(make --no-print-directory print-ROLLING_MAIN_VERSION)"
             NEEDS_RELEASE=false
             GORELEASER_ARGS="--clean --skip=validate"
-            # No staging on the rolling-main path; images are tagged at VERSION as before.
+            # No staging on the rolling-main path; images are tagged at VERSION.
             STAGE_TAG="${VERSION}"
           elif [[ $GITHUB_REF == refs/pull/* ]]; then
             GIT_TAG=$(git describe --tags --abbrev=0)
@@ -140,16 +159,24 @@ jobs:
   helm:
     name: Package helm charts
     # Packaging is independent of the image build, so this runs in parallel with `stage`.
-    # The packaged charts are uploaded as an artifact; the gate jobs install from those exact
-    # bytes, and the publish job pushes them. Charts are NOT pushed to the registry on the
-    # release path (publish does that, only after the gate passes).
+    # The packaged charts are uploaded as an artifact and the gate jobs install those exact
+    # bytes. On the release path charts are NOT pushed to the registry here; the publish job
+    # re-packages them from the same commit and pushes after the gate passes. Rolling-main
+    # builds push directly from this job.
     needs: [setup]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Package kgateway charts
-        run: make package-kgateway-charts
+        # Package both the vX.Y.Z and X.Y.Z charts so the publish job can push the exact tested
+        # bytes. helm derives the OCI tag from each chart's embedded version, so the two tags are
+        # genuinely different artifacts (not one chart aliased twice). The gate installs the
+        # v-version; both are uploaded and both are published from those bytes.
+        run: |
+          for v in "${VERSION}" "${VERSION#v}"; do
+            make package-kgateway-charts VERSION="$v"
+          done
         env:
           VERSION: ${{ needs.setup.outputs.version }}
 
@@ -159,6 +186,24 @@ jobs:
           name: helm-charts
           path: _test/*.tgz
           retention-days: 1
+
+      # The gate installs with --set image.tag=<stage>, so the chart's own default tag
+      # resolution (appVersion -> the kgateway.imageTag helper) is otherwise never exercised —
+      # a bad appVersion or a helper regression would ship a chart pointing at a tag that does
+      # not exist. Render both published chart versions (v-prefixed and bare, both packaged
+      # above) with defaults and assert the controller image resolves to the version we publish.
+      - name: Verify charts default to the release image tag
+        run: |
+          set -euo pipefail
+          for v in "${VERSION}" "${VERSION#v}"; do
+            if ! go tool helm template kgateway "_test/kgateway-${v}.tgz" | grep -qF "/kgateway:${VERSION}"; then
+              echo "chart ${v}: default controller image did not resolve to ${VERSION}"
+              go tool helm template kgateway "_test/kgateway-${v}.tgz" | grep -E 'image:' || true
+              exit 1
+            fi
+          done
+        env:
+          VERSION: ${{ needs.setup.outputs.version }}
 
       # Rolling-main builds publish charts here (they are never staged/promoted). Release
       # builds (workflow_dispatch) push charts from the publish job instead.
@@ -292,12 +337,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # The digest of a manifest is the sha256 of its raw bytes; --raw returns exactly those.
-          digest() { docker buildx imagetools inspect "$1" --raw | sha256sum | awk '{print "sha256:"$1}'; }
           {
-            echo "kgateway=$(digest "${IMAGE_REGISTRY}/kgateway:${STAGE_TAG}")"
-            echo "sds=$(digest "${IMAGE_REGISTRY}/sds:${STAGE_TAG}")"
-            echo "envoy_wrapper=$(digest "${IMAGE_REGISTRY}/envoy-wrapper:${STAGE_TAG}")"
+            echo "kgateway=$(./hack/ci/manifest-digest.sh "${IMAGE_REGISTRY}/kgateway:${STAGE_TAG}")"
+            echo "sds=$(./hack/ci/manifest-digest.sh "${IMAGE_REGISTRY}/sds:${STAGE_TAG}")"
+            echo "envoy_wrapper=$(./hack/ci/manifest-digest.sh "${IMAGE_REGISTRY}/envoy-wrapper:${STAGE_TAG}")"
           } >> "$GITHUB_OUTPUT"
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
@@ -332,24 +375,12 @@ jobs:
           VERSION: ${{ needs.setup.outputs.version }}
           SKIP_DOCKER: "true"
 
-      - name: Download packaged charts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: helm-charts
-          path: _test
-
       - name: Install the staged chart
-        run: |
-          # install the crds first (from the packaged chart)
-          go tool helm install kgateway-crds _test/kgateway-crds-${{ needs.setup.outputs.version }}.tgz \
-            --wait --timeout 5m
-
-          # install the main chart, pointing images at the staged (not-yet-published) tag
-          go tool helm install --create-namespace --namespace kgateway-system kgateway \
-            _test/kgateway-${{ needs.setup.outputs.version }}.tgz \
-            --set image.registry=${{ env.IMAGE_REGISTRY }} \
-            --set image.tag=${{ needs.setup.outputs.stage_tag }} \
-            --wait --timeout 5m
+        uses: ./.github/actions/install-staged-chart
+        with:
+          version: ${{ needs.setup.outputs.version }}
+          image-registry: ${{ env.IMAGE_REGISTRY }}
+          stage-tag: ${{ needs.setup.outputs.stage_tag }}
 
       - name: Wait for the kgateway deployment to be ready
         run: |
@@ -385,24 +416,12 @@ jobs:
           VERSION: ${{ needs.setup.outputs.version }}
           SKIP_DOCKER: "true"
 
-      - name: Download packaged charts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: helm-charts
-          path: _test
-
       - name: Install the staged chart
-        run: |
-          # install the crds first (from the packaged chart)
-          go tool helm install kgateway-crds _test/kgateway-crds-${{ needs.setup.outputs.version }}.tgz \
-            --wait --timeout 5m
-
-          # install the main chart, pointing images at the staged (not-yet-published) tag
-          go tool helm install --create-namespace --namespace kgateway-system kgateway \
-            _test/kgateway-${{ needs.setup.outputs.version }}.tgz \
-            --set image.registry=${{ env.IMAGE_REGISTRY }} \
-            --set image.tag=${{ needs.setup.outputs.stage_tag }} \
-            --wait --timeout 5m
+        uses: ./.github/actions/install-staged-chart
+        with:
+          version: ${{ needs.setup.outputs.version }}
+          image-registry: ${{ env.IMAGE_REGISTRY }}
+          stage-tag: ${{ needs.setup.outputs.stage_tag }}
 
       - name: Wait for the kgateway deployment to be ready
         run: |
@@ -456,8 +475,6 @@ jobs:
       - name: Promote staged images to the published tag
         run: |
           set -euo pipefail
-          # The digest of a manifest is the sha256 of its raw bytes; --raw returns exactly those.
-          digest() { docker buildx imagetools inspect "$1" --raw | sha256sum | awk '{print "sha256:"$1}'; }
           declare -A expected=(
             [kgateway]="${KGATEWAY_DIGEST}"
             [sds]="${SDS_DIGEST}"
@@ -466,7 +483,7 @@ jobs:
           for image in kgateway sds envoy-wrapper; do
             src="${IMAGE_REGISTRY}/${image}:${STAGE_TAG}"
             dst="${IMAGE_REGISTRY}/${image}:${VERSION}"
-            cur="$(digest "$src")"
+            cur="$(./hack/ci/manifest-digest.sh "$src")"
             exp="${expected[$image]}"
             if [[ "$cur" != "$exp" ]]; then
               echo "stage digest drift for ${image}: ${cur} != gated ${exp}"
@@ -474,7 +491,7 @@ jobs:
             fi
             # Copy the validated bytes by digest; no rebuild.
             docker buildx imagetools create -t "$dst" "${src}@${cur}"
-            new="$(digest "$dst")"
+            new="$(./hack/ci/manifest-digest.sh "$dst")"
             if [[ "$new" != "$cur" ]]; then
               echo "promotion mismatch for ${image}: published ${new} != staged ${cur}"
               exit 1
@@ -489,10 +506,23 @@ jobs:
           SDS_DIGEST: ${{ needs.stage.outputs.sds }}
           ENVOY_WRAPPER_DIGEST: ${{ needs.stage.outputs.envoy_wrapper }}
 
-      - name: Push charts at the published version
-        run: make release-charts
+      - name: Download the validated charts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: helm-charts
+          path: _test
+
+      # Push the exact chart bytes the gate validated — both the vX.Y.Z and X.Y.Z tags — rather
+      # than re-packaging. helm derives the OCI tag from each chart's embedded version, so pushing
+      # kgateway-<v>.tgz publishes the <v> tag. This is the chart analogue of the images'
+      # copy-by-digest: ship what was tested, byte for byte.
+      - name: Push the validated charts
+        run: |
+          set -euo pipefail
+          for tgz in _test/*.tgz; do
+            go tool helm push "$tgz" oci://"${IMAGE_REGISTRY}"/charts
+          done
         env:
-          VERSION: ${{ needs.setup.outputs.version }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
 
       - name: Download release notes
@@ -516,4 +546,60 @@ jobs:
             ${PRERELEASE_FLAG}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.setup.outputs.version }}
+
+  smoke:
+    name: Post-publish smoke test
+    # Alert-only, and by construction NOT a gate: it runs after publish, when the images are
+    # already at their final (world-visible) tags, so it cannot prevent a bad release — it can
+    # only surface one. A failure means "investigate and roll forward" (ship a patch); it does
+    # NOT roll back, and the published tag already blocks a same-version re-run via the publish
+    # guard. Its unique coverage vs the gate: it installs the REAL published OCI chart with the
+    # chart's DEFAULT image tag (no --set image.tag), exercising appVersion -> :VERSION against
+    # the actually-published image. Registry is pointed at where we published so it works on
+    # forks; that means the chart's default registry / vanity-mirror path is intentionally not
+    # covered here (separate concern).
+    needs: [setup, publish]
+    if: ${{ needs.setup.outputs.needs_release == 'true' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Prep Go Runner
+        uses: ./.github/actions/prep-go-runner
+
+      - name: Login to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.IMAGE_REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
+
+      - name: Setup kind cluster
+        run: ./hack/kind/setup-kind.sh
+        env:
+          VERSION: ${{ needs.setup.outputs.version }}
+          SKIP_DOCKER: "true"
+
+      - name: Install the published chart with its default image tag
+        run: |
+          set -euo pipefail
+          go tool helm install kgateway-crds \
+            oci://${IMAGE_REGISTRY}/charts/kgateway-crds --version "${VERSION}" \
+            --wait --timeout 5m
+          # No --set image.tag: the chart's default (appVersion -> :VERSION) must resolve to the
+          # published image. Point the registry at where we published so this works on forks too.
+          go tool helm install --create-namespace --namespace kgateway-system kgateway \
+            oci://${IMAGE_REGISTRY}/charts/kgateway --version "${VERSION}" \
+            --set image.registry=${IMAGE_REGISTRY} \
+            --wait --timeout 5m
+          kubectl wait --for=condition=available --timeout=5m deployment/kgateway -n kgateway-system
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          VERSION: ${{ needs.setup.outputs.version }}
+
+      - name: Confirm the bare-version chart tags were published
+        run: |
+          set -euo pipefail
+          # publish pushes both the v-prefixed and bare-semver chart tags; the install above
+          # covered the v-prefixed chart, so confirm the bare-version tags are also pullable.
+          go tool helm pull oci://${IMAGE_REGISTRY}/charts/kgateway --version "${VERSION#v}"
+          go tool helm pull oci://${IMAGE_REGISTRY}/charts/kgateway-crds --version "${VERSION#v}"
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           VERSION: ${{ needs.setup.outputs.version }}
