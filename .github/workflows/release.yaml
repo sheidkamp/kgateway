@@ -7,6 +7,8 @@ on:
         required: true
         description: |
           Version override for the release (must start with 'v' followed by semantic version).
+          Prereleases are allowed; build metadata (a '+' suffix) is not, because the version
+          becomes an image/chart tag and '+' is not a valid OCI tag character.
           Examples: v1.2.3, v2.0.0-alpha.1, v1.0.0-beta.2
       run_load_tests:
         type: boolean
@@ -20,10 +22,11 @@ on:
       - main
       - 'v[0-9]*.[0-9]*.x'
 
-# Serialize releases that target the same version: a duplicate dispatch waits for the
-# in-flight run rather than racing it (otherwise both could pass the republish guard and
-# promote to the same tag from different commits). Cancel-in-progress applies only to
-# PRs (normal superseding CI); a release or main build is never cancelled mid-publish.
+# Serialize releases of the same version. There's no way to tell where the current release is in the workflow,
+# so it is not safe to cancel if it has partially released. A concurrent attempt to release the same version
+# will wait for the first release workflow to finish and then fail fast on the duplicate tag check (if the earlier
+# run succeeded) or re-attempt the release (if the earlier run failed).
+# Releases initiated by `pull_request` do not publish anything so may be cancelled safely
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.version || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -35,7 +38,6 @@ env:
   # forks publish to ghcr.io/<owner>, so their release notes should point there too — otherwise
   # the install commands in the GitHub release page reference images that don't exist.
   VANITY_REGISTRY: ${{ github.repository == 'kgateway-dev/kgateway' && 'cr.kgateway.dev/kgateway-dev' || format('ghcr.io/{0}', github.repository_owner) }}
-  GORELEASER_DISABLE_RELEASE: false
   CGO_ENABLED: '0'
 
 permissions:
@@ -68,7 +70,7 @@ jobs:
           find_previous_release_notes_tag() {
             local version="$1"
 
-            if [[ ! "$version" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?$ ]]; then
+            if [[ ! "$version" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)?$ ]]; then
               echo "Error: Version '$version' does not match required semver format" >&2
               return 1
             fi
@@ -100,16 +102,15 @@ jobs:
           # Validate version input for workflow_dispatch
           if [[ ${{ github.event_name }} == 'workflow_dispatch' ]]; then
             VERSION="${{ inputs.version }}"
-            # Validate semver format. Modified version from the recommended semver format.
+            # Validate semver format. Adapted from the recommended semver regex, with the build-
+            # metadata ('+...') group intentionally dropped: the version becomes an image and chart
+            # tag, and '+' is not a valid OCI tag character. Prereleases ('-...') are still allowed.
             # See https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string.
-            if ! echo "$VERSION" | grep -q -i -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*))*))?(\+([0-9a-z-]+(\.[0-9a-z-]+)*))?$'; then
-              echo "Error: Version '$VERSION' does not match required semver format (e.g., v1.2.3, v2.0.0-alpha.1)"
+            if ! echo "$VERSION" | grep -q -i -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*))*))?$'; then
+              echo "Error: Version '$VERSION' must be a 'v'-prefixed semver with no build metadata (e.g., v1.2.3, v2.0.0-alpha.1); a '+' suffix is not supported because it cannot be an OCI tag"
               exit 1
             fi
-            # Fail fast on a duplicate release. The concurrency group serializes same-version
-            # dispatches, so a second run reaches here only after the first has finished and
-            # created the tag/release — reject it before spending a full build + gate. The
-            # publish job re-checks this immediately before promoting, as a final guard.
+            # Fail fast if the release exists already (either as a GitHub release or a git tag).
             if gh release view "${VERSION}" >/dev/null 2>&1 \
                || git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
               echo "Error: Release ${VERSION} already exists; refusing to re-run."
@@ -122,16 +123,14 @@ jobs:
               exit 1
             fi
             NEEDS_RELEASE=true
-            # goreleaser only builds/stages images now (release disabled); the GitHub release and
-            # its notes are created by the publish job, so no --release-notes here.
+            # goreleaser only builds/stages images. The GitHub release, tag, and notes are created
+            # by the publish job. --skip=validate is required because goreleaser's git-state check
+            # would otherwise fail: the release tag does not exist yet (publish creates it).
             GORELEASER_ARGS="--clean --skip=validate"
-            # Stage built images under a non-semver tag so consumption automation (Kargo,
-            # semver-only) does not adopt them before the gate passes. Publishing copies the
+            # Stage built images under a non-semver tag. Publishing copies the
             # staged image to ${VERSION} only after validation. The version is included so two
-            # different versions built from the same commit don't share a staging tag (the
-            # concurrency group serializes by version, not commit); '+' isn't a valid image-tag
-            # character, so map any build metadata to '-'.
-            STAGE_TAG="stage-${GIT_SHA}-${VERSION//+/-}"
+            # different versions built from the same commit don't share a staging tag.
+            STAGE_TAG="stage-${GIT_SHA}-${VERSION}"
           elif [[ $GITHUB_REF == refs/heads/main ]]; then
             VERSION="$(make --no-print-directory print-ROLLING_MAIN_VERSION)"
             NEEDS_RELEASE=false
@@ -162,10 +161,9 @@ jobs:
   helm:
     name: Package helm charts
     # Packaging is independent of the image build, so this runs in parallel with `stage`.
-    # The packaged charts are uploaded as an artifact and the gate jobs install those exact
-    # bytes. On the release path charts are NOT pushed to the registry here; the publish job
-    # re-packages them from the same commit and pushes after the gate passes. Rolling-main
-    # builds push directly from this job.
+    # The packaged charts are uploaded as an artifact and used for validation.
+    # If validation succeeds the publish job pushes those exact chart bytes (the same .tgz files)
+    # to the registry — no repackage.
     needs: [setup]
     runs-on: ubuntu-22.04
     steps:
@@ -174,7 +172,7 @@ jobs:
       - name: Package kgateway charts
         # Package both the vX.Y.Z and X.Y.Z charts so the publish job can push the exact tested
         # bytes. helm derives the OCI tag from each chart's embedded version, so the two tags are
-        # genuinely different artifacts (not one chart aliased twice). The gate installs the
+        # genuinely different artifacts (not one chart aliased twice). The validation tests install the
         # v-version; both are uploaded and both are published from those bytes.
         run: |
           for v in "${VERSION}" "${VERSION#v}"; do
@@ -190,11 +188,11 @@ jobs:
           path: _test/*.tgz
           retention-days: 1
 
-      # The gate installs with --set image.tag=<stage>, so the chart's own default tag
+      # The validation tests install with --set image.tag=<stage>, so the chart's own default tag
       # resolution (appVersion -> the kgateway.imageTag helper) is otherwise never exercised —
       # a bad appVersion or a helper regression would ship a chart pointing at a tag that does
-      # not exist. Render both published chart versions (v-prefixed and bare, both packaged
-      # above) with defaults and assert the controller image resolves to the version we publish.
+      # not exist. Render both published chart versions (with and without the `v-` prefix)
+      # with defaults and assert the controller image resolves to the version we publish.
       - name: Verify charts default to the release image tag
         run: |
           set -euo pipefail
@@ -233,10 +231,8 @@ jobs:
 
       - name: Generate release notes
         if: ${{ needs.setup.outputs.needs_release == 'true' }}
-        # Note(tim): CURRENT_TAG defaults to HEAD since the version tag doesn't exist yet.
-        # This is because that tag is created by goreleaser. We may want to move tag management
-        # outside of goreleaser in the future. The additional benefit of doing that is we can
-        # remove the logic where we set --skip-validate when we configure the goreleaser args.
+        # CURRENT_TAG defaults to HEAD because the release tag does not exist yet: the publish
+        # job creates it (via `gh release create --target`) only after the gate passes.
         run: make release-notes PREVIOUS_TAG="${{ needs.setup.outputs.previous_tag }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -263,13 +259,6 @@ jobs:
           fetch-depth: 0
       - name: Prep Go Runner
         uses: ./.github/actions/prep-go-runner
-
-      - name: Disable goreleaser GitHub release
-        # goreleaser only builds and pushes images here (to the stage tag). The git tag and
-        # GitHub Release are created by the publish job after the gate passes, so goreleaser
-        # must never create a release on any path.
-        run: |
-          echo "GORELEASER_DISABLE_RELEASE=true" >> "$GITHUB_ENV"
 
       - name: Log into ghcr.io
         if: ${{ github.event_name != 'pull_request' }}
@@ -309,7 +298,6 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           GORELEASER_ARGS: ${{ needs.setup.outputs.goreleaser_args }}
           GORELEASER_CURRENT_TAG: ${{ needs.setup.outputs.version }}
-          GORELEASER_DISABLE_RELEASE: ${{ env.GORELEASER_DISABLE_RELEASE }}
 
       - name: Install container-structure-test
         shell: bash
@@ -534,6 +522,28 @@ jobs:
           name: release-notes
           path: _output
 
+      # goreleaser used to wrap the generated changelog with a welcome header and an
+      # installation/quickstart footer; it no longer creates the release (see the `stage` job),
+      # so reproduce that wrapping here. The header/footer text lives in hack/release-notes/ so
+      # it is edited in one place rather than inline in this workflow. envsubst substitutes only
+      # the named variables, leaving any other `$` in the notes untouched.
+      - name: Assemble the release body
+        run: |
+          set -euo pipefail
+          # envsubst takes its variable allowlist as a literal shell-format string, so the single
+          # quotes are intentional — the shell must NOT expand these before envsubst sees them.
+          # shellcheck disable=SC2016
+          {
+            envsubst '${VERSION}' < hack/release-notes/header.md.tmpl
+            echo
+            cat _output/RELEASE_NOTES.md
+            echo
+            envsubst '${VERSION} ${VANITY_REGISTRY}' < hack/release-notes/footer.md.tmpl
+          } > _output/RELEASE_BODY.md
+        env:
+          VERSION: ${{ needs.setup.outputs.version }}
+          VANITY_REGISTRY: ${{ env.VANITY_REGISTRY }}
+
       - name: Create the GitHub release
         run: |
           set -euo pipefail
@@ -545,7 +555,7 @@ jobs:
           gh release create "${VERSION}" \
             --target "${GITHUB_SHA}" \
             --title "${VERSION}" \
-            --notes-file _output/RELEASE_NOTES.md \
+            --notes-file _output/RELEASE_BODY.md \
             ${PRERELEASE_FLAG}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -553,15 +563,9 @@ jobs:
 
   smoke:
     name: Post-publish smoke test
-    # Alert-only, and by construction NOT a gate: it runs after publish, when the images are
-    # already at their final (world-visible) tags, so it cannot prevent a bad release — it can
-    # only surface one. A failure means "investigate and roll forward" (ship a patch); it does
-    # NOT roll back, and the published tag already blocks a same-version re-run via the publish
-    # guard. Its unique coverage vs the gate: it installs the REAL published OCI chart with the
-    # chart's DEFAULT image tag (no --set image.tag), exercising appVersion -> :VERSION against
-    # the actually-published image. Registry is pointed at where we published so it works on
-    # forks; that means the chart's default registry / vanity-mirror path is intentionally not
-    # covered here (separate concern).
+    # Alert-only, NOT a gate, and doesn't rollback.
+    # Installs published chart with default image tag to confirm the published chart points at the published image.
+    # Uses the vanity alias for the official repo, or the fork's own ghcr.io/<owner> for forks.
     needs: [setup, publish]
     if: ${{ needs.setup.outputs.needs_release == 'true' }}
     runs-on: ubuntu-22.04
@@ -583,13 +587,16 @@ jobs:
         run: |
           set -euo pipefail
           go tool helm install kgateway-crds \
-            oci://${IMAGE_REGISTRY}/charts/kgateway-crds --version "${VERSION}" \
+            "oci://${IMAGE_REGISTRY}/charts/kgateway-crds" --version "${VERSION}" \
             --wait --timeout 5m
-          # No --set image.tag: the chart's default (appVersion -> :VERSION) must resolve to the
-          # published image. Point the registry at where we published so this works on forks too.
+          #  Forks have no vanity alias, so point the registry at the fork's own ghcr where the images were actually published.
+          registry_args=()
+          if [[ "${GITHUB_REPOSITORY}" != "kgateway-dev/kgateway" ]]; then
+            registry_args=(--set "image.registry=${IMAGE_REGISTRY}")
+          fi
           go tool helm install --create-namespace --namespace kgateway-system kgateway \
-            oci://${IMAGE_REGISTRY}/charts/kgateway --version "${VERSION}" \
-            --set image.registry=${IMAGE_REGISTRY} \
+            "oci://${IMAGE_REGISTRY}/charts/kgateway" --version "${VERSION}" \
+            "${registry_args[@]}" \
             --wait --timeout 5m
           kubectl wait --for=condition=available --timeout=5m deployment/kgateway -n kgateway-system
         env:
@@ -601,8 +608,8 @@ jobs:
           set -euo pipefail
           # publish pushes both the v-prefixed and bare-semver chart tags; the install above
           # covered the v-prefixed chart, so confirm the bare-version tags are also pullable.
-          go tool helm pull oci://${IMAGE_REGISTRY}/charts/kgateway --version "${VERSION#v}"
-          go tool helm pull oci://${IMAGE_REGISTRY}/charts/kgateway-crds --version "${VERSION#v}"
+          go tool helm pull "oci://${IMAGE_REGISTRY}/charts/kgateway" --version "${VERSION#v}"
+          go tool helm pull "oci://${IMAGE_REGISTRY}/charts/kgateway-crds" --version "${VERSION#v}"
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           VERSION: ${{ needs.setup.outputs.version }}
