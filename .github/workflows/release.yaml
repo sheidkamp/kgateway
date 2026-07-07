@@ -127,8 +127,11 @@ jobs:
             GORELEASER_ARGS="--clean --skip=validate"
             # Stage built images under a non-semver tag so consumption automation (Kargo,
             # semver-only) does not adopt them before the gate passes. Publishing copies the
-            # staged image to ${VERSION} only after validation.
-            STAGE_TAG="stage-${GIT_SHA}"
+            # staged image to ${VERSION} only after validation. The version is included so two
+            # different versions built from the same commit don't share a staging tag (the
+            # concurrency group serializes by version, not commit); '+' isn't a valid image-tag
+            # character, so map any build metadata to '-'.
+            STAGE_TAG="stage-${GIT_SHA}-${VERSION//+/-}"
           elif [[ $GITHUB_REF == refs/heads/main ]]; then
             VERSION="$(make --no-print-directory print-ROLLING_MAIN_VERSION)"
             NEEDS_RELEASE=false
