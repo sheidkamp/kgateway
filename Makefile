@@ -74,7 +74,7 @@ export GCFLAGS ?=
 # Tag used for built image artifacts (per-arch images and multi-arch manifests). Distinct from
 # VERSION, which is compiled into the binary via LDFLAGS. Defaults to VERSION so local dev, PR
 # snapshots, and rolling-main builds are unchanged; the release workflow overrides it with a
-# non-semver staging tag (e.g. stage-<gitsha>) so consumption automation (Kargo, semver-only)
+# non-semver staging tag (e.g. stage-<gitsha>-<version>) so consumption automation (Kargo, semver-only)
 # does not adopt the artifacts before they are validated and published.
 export ARTIFACT_TAG ?= $(VERSION)
 
