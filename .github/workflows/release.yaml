@@ -26,7 +26,7 @@ on:
 # so it is not safe to cancel if it has partially released. A concurrent attempt to release the same version
 # will wait for the first release workflow to finish and then fail fast on the duplicate tag check (if the earlier
 # run succeeded) or re-attempt the release (if the earlier run failed).
-# Releases initiated by `pull_request` do not publish anything so may be cancelled safely
+# Releases initiated by `pull_request` do not publish anything so may be canceled safely
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.version || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -63,6 +63,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pass the user-controlled dispatch input through the environment rather than
+          # interpolating it into the script, so a crafted version string can't inject shell.
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -x
           GIT_SHA=$(git rev-parse --short HEAD)
@@ -100,19 +104,18 @@ jobs:
           }
 
           # Validate version input for workflow_dispatch
-          if [[ ${{ github.event_name }} == 'workflow_dispatch' ]]; then
-            VERSION="${{ inputs.version }}"
-            # Validate semver format. Adapted from the recommended semver regex, with the build-
-            # metadata ('+...') group intentionally dropped: the version becomes an image and chart
-            # tag, and '+' is not a valid OCI tag character. Prereleases ('-...') are still allowed.
-            # See https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string.
-            if ! echo "$VERSION" | grep -q -i -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-z-][0-9a-z-]*))*))?$'; then
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            VERSION="$INPUT_VERSION"
+            # The version doubles as an image and chart tag, so it must be a 'v'-prefixed semver that
+            # is also a valid OCI tag: lowercase 'v' (stripped via ${VERSION#v}; an uppercase 'V'
+            # breaks helm) and no '+' build metadata ('+' is not a valid OCI tag character).
+            # Prereleases, including uppercase like v1.2.3-RC.1, are accepted.
+            if ! echo "$VERSION" | grep -q -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$'; then
               echo "Error: Version '$VERSION' must be a 'v'-prefixed semver with no build metadata (e.g., v1.2.3, v2.0.0-alpha.1); a '+' suffix is not supported because it cannot be an OCI tag"
               exit 1
             fi
             # Fail fast if the release exists already (either as a GitHub release or a git tag).
-            if gh release view "${VERSION}" >/dev/null 2>&1 \
-               || git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            if ./hack/ci/release-exists.sh "$VERSION"; then
               echo "Error: Release ${VERSION} already exists; refusing to re-run."
               exit 1
             fi
@@ -181,7 +184,10 @@ jobs:
         env:
           VERSION: ${{ needs.setup.outputs.version }}
 
+      # Only the publish job (release path) consumes this artifact; rolling-main repackages and
+      # pushes directly, and PR runs consume nothing, so skip the upload off the release path.
       - name: Upload packaged charts
+        if: ${{ needs.setup.outputs.needs_release == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: helm-charts
@@ -206,14 +212,21 @@ jobs:
         env:
           VERSION: ${{ needs.setup.outputs.version }}
 
-      # Rolling-main builds publish charts here (they are never staged/promoted). Release
-      # builds (workflow_dispatch) push charts from the publish job instead.
+  rolling-charts:
+    name: Publish rolling main charts
+    # Rolling-main builds publish charts directly (they are never staged/promoted). Gated on
+    # `stage` so charts never ship ahead of the images they reference, and on `helm` so the
+    # default-tag assertion runs first. Release builds (workflow_dispatch) push from `publish`.
+    needs: [setup, helm, stage]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
       - name: Helm login to ${{ env.IMAGE_REGISTRY }}
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.IMAGE_REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
 
       - name: Push kgateway charts to registry
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: make release-charts
         env:
           VERSION: ${{ needs.setup.outputs.version }}
@@ -249,10 +262,14 @@ jobs:
     name: Build and stage images
     needs: [setup]
     runs-on: ubuntu-22.04
+    env:
+      # Single source of the released image list, shared by the container-structure tests and the
+      # digest capture below and consumed (via the digests output) by publish's promote loop, so a
+      # new image is added in one place rather than three.
+      IMAGES: kgateway sds envoy-wrapper
     outputs:
-      kgateway: ${{ steps.digests.outputs.kgateway }}
-      sds: ${{ steps.digests.outputs.sds }}
-      envoy_wrapper: ${{ steps.digests.outputs.envoy_wrapper }}
+      # JSON object mapping image name -> staged manifest digest; publish iterates its keys.
+      digests: ${{ steps.digests.outputs.digests }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -313,29 +330,48 @@ jobs:
         run: |
           set -euo pipefail
           for arch in amd64 arm64; do
-            for image in kgateway sds envoy-wrapper; do
+            for image in $IMAGES; do
               echo "Testing ${image} (${arch})..."
               container-structure-test test \
-                --image "${{ env.IMAGE_REGISTRY }}/${image}:${{ needs.setup.outputs.stage_tag }}-${arch}" \
+                --image "${IMAGE_REGISTRY}/${image}:${STAGE_TAG}-${arch}" \
                 --platform "linux/${arch}" \
                 --config "test/container-structure/${image}.yaml"
             done
           done
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          STAGE_TAG: ${{ needs.setup.outputs.stage_tag }}
 
+      # Emit one JSON object mapping image name -> staged manifest digest. publish's promote loop
+      # iterates its keys, so the image set is defined once (the IMAGES env) and flows through.
       - name: Capture staged image digests
         id: digests
         if: ${{ needs.setup.outputs.needs_release == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
-          {
-            echo "kgateway=$(./hack/ci/manifest-digest.sh "${IMAGE_REGISTRY}/kgateway:${STAGE_TAG}")"
-            echo "sds=$(./hack/ci/manifest-digest.sh "${IMAGE_REGISTRY}/sds:${STAGE_TAG}")"
-            echo "envoy_wrapper=$(./hack/ci/manifest-digest.sh "${IMAGE_REGISTRY}/envoy-wrapper:${STAGE_TAG}")"
-          } >> "$GITHUB_OUTPUT"
+          digests='{}'
+          for image in $IMAGES; do
+            d="$(./hack/ci/manifest-digest.sh "${IMAGE_REGISTRY}/${image}:${STAGE_TAG}")"
+            digests="$(jq -c --arg k "$image" --arg v "$d" '. + {($k): $v}' <<<"$digests")"
+          done
+          echo "digests=${digests}" >> "$GITHUB_OUTPUT"
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           STAGE_TAG: ${{ needs.setup.outputs.stage_tag }}
+
+      # goreleaser builds the binary archives and a checksums file (its defaults) into dist/, but no
+      # longer creates the GitHub release. Upload them so publish can attach them, preserving the
+      # per-release binary tarballs + checksums every prior release carried.
+      - name: Upload release binaries
+        if: ${{ needs.setup.outputs.needs_release == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-binaries
+          path: |
+            dist/*.tar.gz
+            dist/*checksums.txt
+          retention-days: 1
 
   validate:
     name: Validate release artifacts e2e (${{ matrix.arch }})
@@ -353,8 +389,8 @@ jobs:
       - name: Prep Go Runner
         uses: ./.github/actions/prep-go-runner
 
+      # This job only runs on the release path (workflow_dispatch), so the login always applies.
       - name: Login to ghcr.io
-        if: ${{ github.event_name != 'pull_request' }}
         run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.IMAGE_REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
 
       - name: Download module dependencies
@@ -394,8 +430,8 @@ jobs:
       - name: Prep Go Runner
         uses: ./.github/actions/prep-go-runner
 
+      # This job only runs when opted in on the release path (workflow_dispatch), so the login always applies.
       - name: Login to ghcr.io
-        if: ${{ github.event_name != 'pull_request' }}
         run: echo "${{ secrets.GITHUB_TOKEN }}" | go tool helm registry login ${{ env.IMAGE_REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
 
       - name: Download module dependencies
@@ -431,11 +467,10 @@ jobs:
     if: ${{ needs.setup.outputs.needs_release == 'true' }}
     runs-on: ubuntu-22.04
     steps:
+      # This job only copies already-built artifacts (buildx imagetools, helm push, gh); it builds
+      # nothing, so it needs neither full history nor the prep-go-runner disk purge. Go is
+      # preinstalled for `go tool helm`.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 0
-      - name: Prep Go Runner
-        uses: ./.github/actions/prep-go-runner
 
       - name: Log into ghcr.io
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
@@ -451,51 +486,46 @@ jobs:
       - name: Refuse to republish an existing version
         run: |
           set -euo pipefail
-          if gh release view "${VERSION}" >/dev/null 2>&1; then
+          if ./hack/ci/release-exists.sh "${VERSION}"; then
             echo "Release ${VERSION} already exists; refusing to republish."
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
-            echo "Tag ${VERSION} already exists; refusing to republish."
             exit 1
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.setup.outputs.version }}
 
+      # Promote each image from its stage tag to the published tag by copying the exact gated
+      # digest — no rebuild. The image set and their gated digests come from the stage job's JSON
+      # output, so this loop needs no hardcoded image list. Copying `src@<gated-digest>` pins the
+      # bytes regardless of the stage tag, so a drift check on the tag is enough (no post-copy
+      # re-inspect: copying a manifest by digest reproduces that digest by construction). The
+      # per-arch child tags (:VERSION-amd64/-arm64) are published for parity with prior releases.
       - name: Promote staged images to the published tag
         run: |
           set -euo pipefail
-          declare -A expected=(
-            [kgateway]="${KGATEWAY_DIGEST}"
-            [sds]="${SDS_DIGEST}"
-            [envoy-wrapper]="${ENVOY_WRAPPER_DIGEST}"
-          )
-          for image in kgateway sds envoy-wrapper; do
+          if [[ "$(echo "$DIGESTS" | jq 'length')" -eq 0 ]]; then
+            echo "no staged image digests to promote"
+            exit 1
+          fi
+          while read -r image exp; do
             src="${IMAGE_REGISTRY}/${image}:${STAGE_TAG}"
             dst="${IMAGE_REGISTRY}/${image}:${VERSION}"
             cur="$(./hack/ci/manifest-digest.sh "$src")"
-            exp="${expected[$image]}"
             if [[ "$cur" != "$exp" ]]; then
               echo "stage digest drift for ${image}: ${cur} != gated ${exp}"
               exit 1
             fi
-            # Copy the validated bytes by digest; no rebuild.
-            docker buildx imagetools create -t "$dst" "${src}@${cur}"
-            new="$(./hack/ci/manifest-digest.sh "$dst")"
-            if [[ "$new" != "$cur" ]]; then
-              echo "promotion mismatch for ${image}: published ${new} != staged ${cur}"
-              exit 1
-            fi
-            echo "promoted ${image} -> ${dst} (${cur})"
-          done
+            docker buildx imagetools create -t "$dst" "${src}@${exp}"
+            for arch in amd64 arm64; do
+              docker buildx imagetools create -t "${dst}-${arch}" "${src}-${arch}"
+            done
+            echo "promoted ${image} -> ${dst} (${exp})"
+          done < <(echo "$DIGESTS" | jq -r 'to_entries[] | "\(.key) \(.value)"')
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           STAGE_TAG: ${{ needs.setup.outputs.stage_tag }}
           VERSION: ${{ needs.setup.outputs.version }}
-          KGATEWAY_DIGEST: ${{ needs.stage.outputs.kgateway }}
-          SDS_DIGEST: ${{ needs.stage.outputs.sds }}
-          ENVOY_WRAPPER_DIGEST: ${{ needs.stage.outputs.envoy_wrapper }}
+          DIGESTS: ${{ needs.stage.outputs.digests }}
 
       - name: Download the validated charts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -522,11 +552,16 @@ jobs:
           name: release-notes
           path: _output
 
-      # goreleaser used to wrap the generated changelog with a welcome header and an
-      # installation/quickstart footer; it no longer creates the release (see the `stage` job),
-      # so reproduce that wrapping here. The header/footer text lives in hack/release-notes/ so
-      # it is edited in one place rather than inline in this workflow. envsubst substitutes only
-      # the named variables, leaving any other `$` in the notes untouched.
+      - name: Download release binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-binaries
+          path: dist
+
+      # Assemble the release body: a welcome header, then the generated changelog, then an
+      # installation/quickstart footer. The header/footer live as templates in hack/release-notes/
+      # so they are edited in one place rather than inline here. envsubst substitutes only the
+      # named variables, leaving any other `$` in the notes untouched.
       - name: Assemble the release body
         run: |
           set -euo pipefail
@@ -548,15 +583,19 @@ jobs:
         run: |
           set -euo pipefail
           # gh release create makes the git tag at --target, so no separate tag push is needed.
+          # The binary archives + checksums file (goreleaser's dist/ output) are attached as
+          # release assets, matching what prior releases carried.
           PRERELEASE_FLAG=""
           if [[ "${VERSION}" == *-* ]]; then
             PRERELEASE_FLAG="--prerelease"
           fi
+          assets=(dist/*.tar.gz dist/*checksums.txt)
           gh release create "${VERSION}" \
             --target "${GITHUB_SHA}" \
             --title "${VERSION}" \
             --notes-file _output/RELEASE_BODY.md \
-            ${PRERELEASE_FLAG}
+            ${PRERELEASE_FLAG} \
+            "${assets[@]}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.setup.outputs.version }}
