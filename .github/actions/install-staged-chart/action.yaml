@@ -26,14 +26,20 @@ runs:
 
     - name: Install the staged chart
       shell: bash
+      # Pass inputs through the environment rather than interpolating them into the script.
+      env:
+        VERSION: ${{ inputs.version }}
+        IMAGE_REGISTRY: ${{ inputs.image-registry }}
+        STAGE_TAG: ${{ inputs.stage-tag }}
       run: |
+        set -euo pipefail
         # install the crds from the packaged crds chart
-        go tool helm install kgateway-crds _test/kgateway-crds-${{ inputs.version }}.tgz \
+        go tool helm install kgateway-crds "_test/kgateway-crds-${VERSION}.tgz" \
           --wait --timeout 5m
 
         # install the main chart, using the staged image tag and registry
         go tool helm install --create-namespace --namespace kgateway-system kgateway \
-          _test/kgateway-${{ inputs.version }}.tgz \
-          --set image.registry=${{ inputs.image-registry }} \
-          --set image.tag=${{ inputs.stage-tag }} \
+          "_test/kgateway-${VERSION}.tgz" \
+          --set "image.registry=${IMAGE_REGISTRY}" \
+          --set "image.tag=${STAGE_TAG}" \
           --wait --timeout 5m
