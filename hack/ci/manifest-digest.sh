@@ -3,7 +3,8 @@
 
 # Prints the sha256 digest of an image manifest's raw bytes for the given ref.
 #
-# The release workflow uses this in multiple places so move to a common script to avoid duplication and drift.
+# Shared by the release workflow's stage job (capturing the gated digest) and publish job
+# (drift check before promotion), so both compute the digest identically.
 set -o errexit
 set -o pipefail
 set -o nounset
