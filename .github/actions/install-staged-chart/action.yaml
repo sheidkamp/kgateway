@@ -1,5 +1,5 @@
 name: Install staged chart
-description: >-
+description: |-
   Download the packaged charts artifact and install them into the current cluster,
   pointing the images at the staged (not-yet-published) tag. Used by release validation jobs
   to install the staged chart.
