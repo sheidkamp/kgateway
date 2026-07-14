@@ -83,23 +83,31 @@ func (s *testingSuite) TestConfigureBackingDestinationsWithUpstream() {
 		LabelSelector: defaults.WellKnownAppLabel + "=gateway",
 	})
 
-	common.BaseGateway.Send(
-		s.T(),
-		&matchers.HttpResponse{
-			StatusCode: http.StatusOK,
-			Body:       gomega.ContainSubstring(defaults.NginxResponse),
-		},
-		curl.WithHostHeader("example.com"),
-		curl.WithPath("/"),
-		curl.WithPort(80),
-	)
-
+	// Wait for the controller to accept the Backend before sending traffic: a set
+	// status condition means kgateway has translated the Backend and pushed the
+	// corresponding cluster to envoy via xDS.
 	s.assertStatus(backend, metav1.Condition{
 		Type:    "Accepted",
 		Status:  metav1.ConditionTrue,
 		Reason:  "Accepted",
 		Message: "Backend accepted",
 	})
+
+	// Give envoy a window to receive and apply the xDS update before asserting the
+	// route is reachable. The controller having set the condition guarantees the
+	// push happened; this retry covers the propagation delay to envoy.
+	common.BaseGateway.SendWithRetry(
+		s.ctx,
+		s.T(),
+		&matchers.HttpResponse{
+			StatusCode: http.StatusOK,
+			Body:       gomega.ContainSubstring(defaults.NginxResponse),
+		},
+		[]retry.Option{retry.Timeout(30 * time.Second), retry.Delay(time.Second)},
+		curl.WithHostHeader("example.com"),
+		curl.WithPath("/"),
+		curl.WithPort(80),
+	)
 }
 
 // TestBackendWithRuntimeError tests if backend condition is updated with error
@@ -215,14 +223,17 @@ func (s *testingSuite) TestPriorityGroupsFailover() {
 	// and pod restarts add latency; give the eventual matches a generous window
 	failoverRetry := []retry.Option{retry.Timeout(1 * time.Minute)}
 
-	// group 0 (nginx) serves all traffic
-	common.BaseGateway.SendEventuallyConsistent(
+	// group 0 (nginx) serves all traffic. assertStatus above guarantees the
+	// Backend was translated and xDS was pushed; use a generous retry window to
+	// cover the propagation delay from the kgateway controller to envoy.
+	common.BaseGateway.SendWithRetry(
 		s.ctx,
 		s.T(),
 		&matchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(defaults.NginxResponse),
 		},
+		[]retry.Option{retry.Timeout(30 * time.Second), retry.Delay(time.Second)},
 		curlOpts...,
 	)
 
@@ -267,13 +278,16 @@ func (s *testingSuite) TestPriorityGroupsFailover() {
 	s.testInstallation.AssertionsT(s.T()).EventuallyPodsRunning(s.ctx, common.SharedNginxNamespace, metav1.ListOptions{
 		LabelSelector: defaults.WellKnownAppLabel + "=nginx",
 	})
-	common.BaseGateway.SendEventuallyConsistent(
+	// Pod readiness doesn't mean the health check has fired yet; give envoy time
+	// to observe the restored endpoint before asserting traffic is back.
+	common.BaseGateway.SendWithRetry(
 		s.ctx,
 		s.T(),
 		&matchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(defaults.NginxResponse),
 		},
+		failoverRetry,
 		curlOpts...,
 	)
 }
