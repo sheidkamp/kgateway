@@ -8,9 +8,8 @@ on:
   workflow_dispatch:
     inputs:
       run-regex:
-        description: "go -run regex for the test suite to validate"
-        required: false
-        default: '^TestKgateway$$/^Backends$$'
+        description: "go -run regex for the test suite to validate (e.g. '^TestKgateway$$/^Backends$$')"
+        required: true
         type: string
       repetitions:
         description: "Number of parallel cluster runs"
