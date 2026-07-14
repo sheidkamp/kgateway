@@ -246,12 +246,6 @@ jobs:
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.setup.outputs.floating_version != '' }}
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
-      - name: Package kgateway charts
-        run: make package-kgateway-charts
-        env:
-          VERSION: ${{ needs.setup.outputs.version }}
-
-
       - name: Push kgateway charts to registry
         run: make release-charts
         env:
@@ -259,11 +253,11 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
 
       # Promote the floating chart and image tags together, gated on a single origin/main
-      # HEAD check, so the two artifact tags can never diverge. Doing this in one step (rather
-      # than promoting images in the goreleaser job and charts here) avoids a race where
-      # origin/main advances between the two jobs and leaves the floating chart tag behind the
-      # floating image tag. This job needs [setup, goreleaser], so both the per-sha charts
-      # (pushed above) and the per-sha images (from goreleaser) already exist by now.
+      # HEAD check, so the two artifact tags can never diverge. Promoting both in one step
+      # (rather than splitting chart and image promotion across separate jobs) avoids a race
+      # where origin/main advances between jobs and leaves the floating chart tag behind the
+      # floating image tag. This job needs [setup, helm, stage], so both the per-sha charts
+      # (pushed above) and the per-sha images (from the stage job) already exist by now.
       - name: Promote floating chart and image tags if this commit is still main HEAD
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.setup.outputs.floating_version != '' }}
         shell: bash
