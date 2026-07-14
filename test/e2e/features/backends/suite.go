@@ -83,9 +83,7 @@ func (s *testingSuite) TestConfigureBackingDestinationsWithUpstream() {
 		LabelSelector: defaults.WellKnownAppLabel + "=gateway",
 	})
 
-	// Wait for the controller to accept the Backend before sending traffic: a set
-	// status condition means kgateway has translated the Backend and pushed the
-	// corresponding cluster to envoy via xDS.
+	// Wait for the controller to accept the Backend before sending traffic
 	s.assertStatus(backend, metav1.Condition{
 		Type:    "Accepted",
 		Status:  metav1.ConditionTrue,
@@ -93,9 +91,7 @@ func (s *testingSuite) TestConfigureBackingDestinationsWithUpstream() {
 		Message: "Backend accepted",
 	})
 
-	// Give envoy a window to receive and apply the xDS update before asserting the
-	// route is reachable. The controller having set the condition guarantees the
-	// push happened; this retry covers the propagation delay to envoy.
+	// Give envoy a window to receive and apply the xDS update when asserting the route is reachable.
 	common.BaseGateway.SendWithRetry(
 		s.ctx,
 		s.T(),
@@ -223,8 +219,7 @@ func (s *testingSuite) TestPriorityGroupsFailover() {
 	// and pod restarts add latency; give the eventual matches a generous window
 	failoverRetry := []retry.Option{retry.Timeout(1 * time.Minute)}
 
-	// group 0 (nginx) serves all traffic. assertStatus above guarantees the
-	// Backend was translated and xDS was pushed; use a generous retry window to
+	// group 0 (nginx) serves all traffic. Use a retry window to
 	// cover the propagation delay from the kgateway controller to envoy.
 	common.BaseGateway.SendWithRetry(
 		s.ctx,
