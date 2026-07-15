@@ -589,7 +589,9 @@ jobs:
               arch_digest="$(jq -er --arg arch "$arch" \
                 '.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest' \
                 <<<"$manifest_json")"
-              docker buildx imagetools create \
+              # --prefer-index=false carbon-copies the child manifest (preserving its media type
+              # and digest); the default wraps a single manifest in a new one-platform index.
+              docker buildx imagetools create --prefer-index=false \
                 -t "${dst}-${arch}" \
                 "${src}@${arch_digest}"
             done
