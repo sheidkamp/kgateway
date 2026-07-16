@@ -10,6 +10,7 @@ import (
 
 	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -35,8 +36,16 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 	// Apply manifests one at a time to avoid the concurrent-apply race where a namespace and
 	// namespace-scoped resources are applied simultaneously and the scoped resources are created
 	// before the namespace exists.
+	//
+	// Retry each apply: a gotestsum rerun starts a fresh process while the previous process's
+	// cleanup may still be deleting the namespaces these manifests create, and applying into a
+	// terminating namespace is rejected by the API server.
 	for _, manifest := range manifests {
-		if err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest); err != nil {
+		manifest := manifest
+		err := retry.UntilSuccess(func() error {
+			return installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest)
+		}, retry.Timeout(2*time.Minute), retry.Delay(2*time.Second))
+		if err != nil {
 			assert.NoError(t, err)
 			return
 		}
