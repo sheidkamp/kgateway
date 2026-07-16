@@ -41,7 +41,6 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 	// cleanup may still be deleting the namespaces these manifests create, and applying into a
 	// terminating namespace is rejected by the API server.
 	for _, manifest := range manifests {
-		manifest := manifest
 		err := retry.UntilSuccess(func() error {
 			return installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest)
 		}, retry.Timeout(2*time.Minute), retry.Delay(2*time.Second))
