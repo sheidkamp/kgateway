@@ -32,8 +32,15 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 			t.Logf("failed to delete base config manifests %v: %v", manifests, err)
 		}
 	})
-	err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifests...)
-	assert.NoError(t, err)
+	// Apply manifests one at a time to avoid the concurrent-apply race where a namespace and
+	// namespace-scoped resources are applied simultaneously and the scoped resources are created
+	// before the namespace exists.
+	for _, manifest := range manifests {
+		if err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest); err != nil {
+			assert.NoError(t, err)
+			return
+		}
+	}
 }
 
 // SetupSharedNginxBackend applies the shared nginx pod (ns nginx-shared)

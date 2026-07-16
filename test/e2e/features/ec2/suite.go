@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -14,12 +14,11 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/protobuf/encoding/protojson"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
+	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
 	"github.com/kgateway-dev/kgateway/v2/test/envoyutils/admincli"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
@@ -42,7 +41,22 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 }
 
 func (s *testingSuite) SetupSuite() {
-	err := s.testInstallation.Actions.Kubectl().ApplyFile(s.ctx, setupManifest)
+	// Probe localstack before applying any resources — Skip in SetupSuite prevents TearDownSuite,
+	// so no resources must be applied before this check.
+	localstackURL, found, err := common.LookupLocalstackEndpoint(s.ctx, s.testInstallation.ClusterContext.Client)
+	if err != nil {
+		s.Require().NoError(err, "look up localstack endpoint")
+	}
+	if !found {
+		if os.Getenv("REQUIRE_LOCALSTACK") == "true" {
+			s.Require().Fail("REQUIRE_LOCALSTACK=true but localstack service not found on this cluster")
+		}
+		s.T().Skip("localstack not installed on this cluster, skipping EC2 suite")
+		return
+	}
+	s.localstackURL = localstackURL
+
+	err = s.testInstallation.Actions.Kubectl().ApplyFile(s.ctx, setupManifest)
 	s.Require().NoError(err, "can apply "+setupManifest)
 
 	err = s.testInstallation.Actions.Kubectl().ApplyFile(s.ctx, awsCliPodManifest)
@@ -50,7 +64,6 @@ func (s *testingSuite) SetupSuite() {
 
 	s.testInstallation.AssertionsT(s.T()).EventuallyPodReady(s.ctx, testNamespace, awsCliPodName, 30*time.Second)
 
-	s.extractLocalstackEndpoint()
 	s.cleanupEc2Instances()
 	s.expectedPrivateIP = s.createEc2Instance()
 }
@@ -123,43 +136,6 @@ func (s *testingSuite) TestEc2BackendDiscovery() {
 			WithPolling(2 * time.Second).
 			Should(gomega.Succeed())
 	})
-}
-
-func (s *testingSuite) extractLocalstackEndpoint() {
-	c := s.testInstallation.ClusterContext.Client
-
-	var nodes corev1.NodeList
-	err := c.List(s.ctx, &nodes)
-	s.Require().NoError(err, "can list nodes")
-	s.Require().NotEmpty(nodes.Items, "cluster has at least one node")
-
-	var nodeIP string
-	for _, node := range nodes.Items {
-		for _, addr := range node.Status.Addresses {
-			if addr.Type == corev1.NodeInternalIP {
-				nodeIP = addr.Address
-				break
-			}
-		}
-		if nodeIP != "" {
-			break
-		}
-	}
-	s.Require().NotEmpty(nodeIP, "node has internal IP")
-
-	var svc corev1.Service
-	err = c.Get(s.ctx, client.ObjectKeyFromObject(&localstackService), &svc)
-	s.Require().NoError(err, "can get localstack service")
-	s.Require().NotEmpty(svc.Spec.Ports, "localstack service has ports")
-
-	port := svc.Spec.Ports[0].NodePort
-	s.Require().NotZero(port, "localstack service has node port")
-
-	endpoint := fmt.Sprintf("http://%s:%d", nodeIP, port)
-	parsed, err := url.Parse(endpoint)
-	s.Require().NoError(err, "can parse localstack endpoint")
-
-	s.localstackURL = parsed.String()
 }
 
 func (s *testingSuite) cleanupEc2Instances() {
