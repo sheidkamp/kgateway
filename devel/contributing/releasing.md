@@ -122,8 +122,8 @@ Use the "Run workflow" drop-down in the right corner of the page to dispatch a r
 The workflow builds and stages the images under a non-semver tag, runs the container-structure and
 Gateway API conformance checks against that staged copy, and only if they pass does it promote the
 images to the published tag and push the charts + create the GitHub release. A dispatch for a version
-that already exists (as a git tag or GitHub release) fails fast and refuses to republish, so re-running
-a completed release is a no-op rather than a clobber.
+that already exists (as a git tag or GitHub release) fails fast and refuses to republish, so a completed
+release can't be clobbered by a re-run — the re-run errors out instead.
 
 The workflow generates release notes automatically (see [Release Notes](#release-notes) below).
 Once the workflow completes, review the release notes on the GitHub release and edit the description
