@@ -204,7 +204,6 @@ jobs:
           run-regex: ${{ matrix.test.go-test-run-regex }}
           istio-version: ${{ steps.dotenv.outputs.istio_version }}
           matrix-label: "pr"
-          localstack: ${{ matrix.test.localstack }}
       - id: debug-space
         shell: bash
         run: |

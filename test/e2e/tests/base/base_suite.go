@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
+	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
@@ -584,22 +584,30 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 	}
 }
 
-// DeleteManifests deletes all resources in the manifests (fire-and-forget, does not wait).
-// Namespace resources should not appear in suite or test manifests — they belong in the
-// base-level manifests applied by SetupBaseConfig, whose teardown waits for full deletion.
+// DeleteManifests deletes the non-namespace resources in the manifests (fire-and-forget, no wait).
+// Namespace resources are intentionally skipped: namespaces are slow to delete, and deleting one
+// here would race the follow-up apply on a test retry. Namespaces belong to the base-level
+// manifests applied by SetupBaseConfig, whose teardown deletes and waits for them.
 func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
-	if len(testCase.Manifests) > 0 {
-		err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", testCase.Manifests...)
-		s.Require().NoError(err)
-	}
+	objects, err := common.ObjectsFromManifests(testCase.Manifests...)
+	s.Require().NoError(err, "parse manifests for deletion")
 
 	for manifest, transform := range testCase.ManifestsWithTransform {
 		d, err := os.ReadFile(manifest)
 		s.Require().NoError(err)
-		fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_transformed_manifests.yaml")
-		s.Require().NoError(os.WriteFile(fp, []byte(transform(string(d))), 0o600))
-		err = s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", fp)
-		s.Require().NoError(err)
+		more, err := common.ObjectsFromContent(transform(string(d)))
+		s.Require().NoError(err, "parse transformed manifest for deletion")
+		objects = append(objects, more...)
+	}
+
+	for _, obj := range objects {
+		if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" {
+			continue
+		}
+		if err := s.TestInstallation.ClusterContext.Client.Delete(s.Ctx, obj); client.IgnoreNotFound(err) != nil {
+			s.T().Logf("failed to delete %s %s/%s: %v",
+				obj.GetObjectKind().GroupVersionKind().Kind, obj.GetNamespace(), obj.GetName(), err)
+		}
 	}
 }
 

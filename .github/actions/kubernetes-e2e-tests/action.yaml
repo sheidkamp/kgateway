@@ -28,10 +28,6 @@ inputs:
     required: false
     default: '1.33'
     description: Kubernetes minor version for envtest API-server assets
-  localstack:
-    required: false
-    default: 'false'
-    description: Whether localstack is deployed and required on this cluster
 
 runs:
   using: "composite"
@@ -46,7 +42,6 @@ runs:
         # Doesn't really matter, but using the same as `go build` means we can re-use the same Go cache.
         CGO_ENABLED: 0
         ENVTEST_K8S_VERSION: ${{ inputs.envtest-k8s-version }}
-        REQUIRE_LOCALSTACK: ${{ inputs.localstack }}
       shell: bash
       run: make e2e-test
     - name: Archive bug report directory on failure

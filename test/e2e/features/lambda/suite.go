@@ -8,18 +8,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
 	testdefaults "github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
 	testmatchers "github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
@@ -44,22 +46,7 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 }
 
 func (s *testingSuite) SetupSuite() {
-	// Probe localstack before applying any resources — Skip in SetupSuite prevents TearDownSuite,
-	// so no resources must be applied before this check.
-	localstackURL, found, err := common.LookupLocalstackEndpoint(s.ctx, s.ti.ClusterContext.Client)
-	if err != nil {
-		s.Require().NoError(err, "look up localstack endpoint")
-	}
-	if !found {
-		if os.Getenv("REQUIRE_LOCALSTACK") == "true" {
-			s.Require().Fail("REQUIRE_LOCALSTACK=true but localstack service not found on this cluster")
-		}
-		s.T().Skip("localstack not installed on this cluster, skipping Lambda suite")
-		return
-	}
-	s.endpointURL = localstackURL
-
-	err = s.ti.Actions.Kubectl().ApplyFile(s.ctx, setupManifest)
+	err := s.ti.Actions.Kubectl().ApplyFile(s.ctx, setupManifest)
 	s.NoError(err, "can apply "+setupManifest)
 	err = s.ti.Actions.Kubectl().ApplyFile(s.ctx, testdefaults.CurlPodManifest)
 	s.NoError(err, "can apply curl pod manifest")
@@ -78,6 +65,7 @@ func (s *testingSuite) SetupSuite() {
 		"TestLambdaBackendQualifier":    {lambdaQualifierManifest},
 	}
 
+	s.extractLocalstackEndpoint()
 	s.createLambdaFunctions()
 }
 
@@ -265,6 +253,40 @@ func (s *testingSuite) TestLambdaBackendQualifier() {
 			StatusCode: http.StatusNotFound,
 		},
 	)
+}
+
+func (s *testingSuite) extractLocalstackEndpoint() {
+	s.T().Log("extracting localstack endpoint URL from cluster")
+	c := s.ti.ClusterContext.Client
+
+	var nodes corev1.NodeList
+	err := c.List(s.ctx, &nodes)
+	s.Require().NoError(err, "can list nodes")
+	s.Require().NotEmpty(nodes.Items, "cluster has at least one node")
+
+	var nodeIP string
+	for _, node := range nodes.Items {
+		for _, addr := range node.Status.Addresses {
+			if addr.Type == "InternalIP" {
+				nodeIP = addr.Address
+				break
+			}
+		}
+	}
+	s.Require().NotEmpty(nodeIP, "node has internal IP")
+
+	var svc corev1.Service
+	err = c.Get(s.ctx, client.ObjectKeyFromObject(&localstackService), &svc)
+	s.Require().NoError(err, "can get localstack service")
+	s.Require().Greater(len(svc.Spec.Ports), 0, "localstack service has ports")
+	port := svc.Spec.Ports[0].NodePort
+	s.Require().NotZero(port, "localstack service has node port")
+
+	s.endpointURL = fmt.Sprintf("http://%s:%d", nodeIP, port)
+	u, err := url.Parse(s.endpointURL)
+	s.Require().NoError(err, "can parse localstack endpoint URL")
+	s.endpointURL = u.String()
+	s.T().Logf("localstack endpoint URL: %s", s.endpointURL)
 }
 
 func (s *testingSuite) createLambdaFunctions() {
