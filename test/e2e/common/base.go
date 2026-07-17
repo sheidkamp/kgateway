@@ -30,6 +30,13 @@ import (
 // SetupSharedNginxBackend.
 const SharedNginxNamespace = "nginx-shared"
 
+// SetupBaseConfig applies the given base manifests and registers their teardown.
+//
+// Manifests are applied one file at a time, in the order given. A manifest that defines a
+// namespace must therefore be listed before any manifest that creates resources in that namespace,
+// so the namespace exists before those resources are applied. (Resources within a single file are
+// applied in document order by the Istio client, so a self-contained file that declares a namespace
+// and its resources together is always safe.)
 func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, manifests ...string) {
 	for _, s := range log.Scopes() {
 		s.SetOutputLevel(log.DebugLevel)
@@ -49,11 +56,14 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 			t.Logf("failed waiting for base config namespaces to delete: %v", err)
 		}
 	})
-	// Apply manifests one at a time to avoid the concurrent-apply race where a namespace and
-	// namespace-scoped resources are applied simultaneously and the scoped resources are created
-	// before the namespace exists.
+	// Apply manifests one at a time so a namespace file completes before the files that put
+	// resources in it . Each apply is retried briefly to ride out transient API server errors
+	// rather than hard-failing the whole test on a one-off failure.
 	for _, manifest := range manifests {
-		if err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest); err != nil {
+		err := retry.UntilSuccess(func() error {
+			return installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest)
+		}, retry.Timeout(1*time.Minute), retry.Delay(2*time.Second))
+		if err != nil {
 			t.Fatalf("apply manifest %s: %v", manifest, err)
 		}
 	}
@@ -87,10 +97,12 @@ func namespacesFromManifests(manifests ...string) ([]string, error) {
 }
 
 // waitForManifestNamespacesDeleted polls until every Namespace declared in the given manifests is
-// absent from the cluster, or ctx expires. Only Namespaces are checked: they are the slow,
-// race-prone part of teardown, and being cluster-scoped they can be looked up by name alone (no
-// namespace needed), avoiding the empty-namespace problem that affects namespace-scoped resources
-// whose manifests omit metadata.namespace.
+// absent from the cluster, or ctx expires.
+//
+// Only Namespaces are waited on. A terminating namespace blocks re-applying resources into it, so
+// it is the one piece of teardown that races the next process's apply; other resources either live
+// inside those namespaces (and are gone once the namespace is) or are cluster-scoped and idempotent
+// to re-apply, so they do not block a rerun.
 func waitForManifestNamespacesDeleted(ctx context.Context, c client.Client, manifests ...string) error {
 	names, err := namespacesFromManifests(manifests...)
 	if err != nil {
