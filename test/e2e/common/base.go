@@ -3,16 +3,22 @@
 package common
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
 
 	"istio.io/istio/pkg/log"
-	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/retry"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
 	testdefaults "github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
@@ -29,26 +35,93 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 	}
 	// Register cleanup before applying so partially applied manifests are still removed.
 	testutils.Cleanup(t, func() {
-		if err := installation.ClusterContext.IstioClient.DeleteYAMLFiles("", manifests...); err != nil {
-			t.Logf("failed to delete base config manifests %v: %v", manifests, err)
+		objects, err := ObjectsFromManifests(manifests...)
+		if err != nil {
+			t.Logf("failed to parse base config manifests for deletion: %v", err)
+			return
+		}
+		waitCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := DeleteObjects(waitCtx, installation.ClusterContext.Client, objects); err != nil {
+			t.Logf("failed to delete base config objects: %v", err)
 		}
 	})
 	// Apply manifests one at a time to avoid the concurrent-apply race where a namespace and
 	// namespace-scoped resources are applied simultaneously and the scoped resources are created
 	// before the namespace exists.
-	//
-	// Retry each apply: a gotestsum rerun starts a fresh process while the previous process's
-	// cleanup may still be deleting the namespaces these manifests create, and applying into a
-	// terminating namespace is rejected by the API server.
 	for _, manifest := range manifests {
-		err := retry.UntilSuccess(func() error {
-			return installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest)
-		}, retry.Timeout(2*time.Minute), retry.Delay(2*time.Second))
-		if err != nil {
-			assert.NoError(t, err)
-			return
+		if err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifest); err != nil {
+			t.Fatalf("apply manifest %s: %v", manifest, err)
 		}
 	}
+}
+
+// ObjectsFromManifests parses manifest files and returns all Kubernetes objects found.
+func ObjectsFromManifests(manifests ...string) ([]client.Object, error) {
+	var objects []client.Object
+	for _, manifest := range manifests {
+		data, err := os.ReadFile(manifest)
+		if err != nil {
+			return nil, fmt.Errorf("read manifest %s: %w", manifest, err)
+		}
+		objs, err := ObjectsFromContent(string(data))
+		if err != nil {
+			return nil, fmt.Errorf("parse manifest %s: %w", manifest, err)
+		}
+		objects = append(objects, objs...)
+	}
+	return objects, nil
+}
+
+// ObjectsFromContent parses YAML content and returns all Kubernetes objects found.
+func ObjectsFromContent(content string) ([]client.Object, error) {
+	var objects []client.Object
+	decoder := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(content)), 4096)
+	for {
+		obj := &unstructured.Unstructured{}
+		if err := decoder.Decode(obj); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("decode YAML: %w", err)
+		}
+		if obj.GetName() != "" {
+			objects = append(objects, obj)
+		}
+	}
+	return objects, nil
+}
+
+// DeleteObjects deletes all objects and waits for them to be fully removed from the API server.
+// Waiting for namespace deletion ensures that a subsequent apply (e.g., on test retry) does not
+// race against a still-terminating namespace.
+func DeleteObjects(ctx context.Context, c client.Client, objects []client.Object) error {
+	for _, obj := range objects {
+		if err := c.Delete(ctx, obj); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("delete %s %s/%s: %w",
+				obj.GetObjectKind().GroupVersionKind().Kind,
+				obj.GetNamespace(), obj.GetName(), err)
+		}
+	}
+	return waitForObjectsDeleted(ctx, c, objects)
+}
+
+// waitForObjectsDeleted polls until all objects are absent from the cluster or ctx expires.
+func waitForObjectsDeleted(ctx context.Context, c client.Client, objects []client.Object) error {
+	return retry.UntilSuccess(func() error {
+		for _, obj := range objects {
+			probe := &unstructured.Unstructured{}
+			probe.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+			err := c.Get(ctx, client.ObjectKeyFromObject(obj), probe)
+			if err == nil {
+				return fmt.Errorf("%s %s/%s still exists", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetNamespace(), obj.GetName())
+			}
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("get %s %s/%s: %w", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetNamespace(), obj.GetName(), err)
+			}
+		}
+		return nil
+	}, retry.Timeout(2*time.Minute), retry.Delay(2*time.Second))
 }
 
 // SetupSharedNginxBackend applies the shared nginx pod (ns nginx-shared)

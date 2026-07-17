@@ -11,23 +11,17 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
-	"istio.io/istio/pkg/test/util/assert"
-	"istio.io/istio/pkg/test/util/yml"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiserverschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -590,63 +584,23 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 	}
 }
 
-var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
-
-// Deleting namespaces is super super super slow. Avoid deleting them, ever
-func stripNamespaceResources(t *testing.T, manifests ...string) string {
-	cfgs := []string{}
-	for _, manifest := range manifests {
-		d, err := os.ReadFile(manifest)
-		assert.NoError(t, err)
-		cfgs = append(cfgs, stripNamespaceResourcesFromContent(t, string(d)))
-	}
-
-	return strings.Join(cfgs, "\n---\n")
-}
-
-func stripNamespaceResourcesFromContent(t *testing.T, content string) string {
-	cfgs := []string{}
-	for _, yml := range yml.SplitString(content) {
-		obj := &unstructured.Unstructured{}
-		_, gvk, err := decUnstructured.Decode([]byte(yml), nil, obj)
-		if runtime.IsMissingKind(err) {
-			// Not a k8s object, skip
-			continue
-		}
-		assert.NoError(t, err)
-		if gvk.Kind != "Namespace" {
-			cfgs = append(cfgs, yml)
-		}
-	}
-
-	return strings.Join(cfgs, "\n---\n")
-}
-
-// DeleteManifests deletes the manifests and waits until the resources are deleted.
+// DeleteManifests deletes all resources in the manifests (fire-and-forget, does not wait).
+// Namespace resources should not appear in suite or test manifests — they belong in the
+// base-level manifests applied by SetupBaseConfig, whose teardown waits for full deletion.
 func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
-	nf := stripNamespaceResources(s.T(), testCase.Manifests...)
-	fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_manifests.yaml")
-	s.Require().NoError(os.WriteFile(fp, []byte(nf), 0o600))
-
-	err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", fp)
-	s.Require().NoError(err)
-
-	if len(testCase.ManifestsWithTransform) == 0 {
-		return
+	if len(testCase.Manifests) > 0 {
+		err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", testCase.Manifests...)
+		s.Require().NoError(err)
 	}
 
-	transformedCfgs := []string{}
 	for manifest, transform := range testCase.ManifestsWithTransform {
 		d, err := os.ReadFile(manifest)
 		s.Require().NoError(err)
-
-		transformedCfgs = append(transformedCfgs, stripNamespaceResourcesFromContent(s.T(), transform(string(d))))
+		fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_transformed_manifests.yaml")
+		s.Require().NoError(os.WriteFile(fp, []byte(transform(string(d))), 0o600))
+		err = s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", fp)
+		s.Require().NoError(err)
 	}
-
-	transformedDeleteManifest := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_transformed_manifests.yaml")
-	s.Require().NoError(os.WriteFile(transformedDeleteManifest, []byte(strings.Join(transformedCfgs, "\n---\n")), 0o600))
-	err = s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", transformedDeleteManifest)
-	s.Require().NoError(err)
 }
 
 func (s *BaseTestingSuite) setupHelpers() {
