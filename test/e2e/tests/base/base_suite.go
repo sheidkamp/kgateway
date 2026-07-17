@@ -8,25 +8,31 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
+	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/yml"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiserverschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
@@ -584,31 +590,64 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 	}
 }
 
+var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
+
+// stripNamespaceResources returns the concatenated manifest contents with any Namespace
+// resources removed.
+func stripNamespaceResources(t *testing.T, manifests ...string) string {
+	cfgs := []string{}
+	for _, manifest := range manifests {
+		d, err := os.ReadFile(manifest)
+		assert.NoError(t, err)
+		cfgs = append(cfgs, stripNamespaceResourcesFromContent(t, string(d)))
+	}
+	return strings.Join(cfgs, "\n---\n")
+}
+
+// stripNamespaceResourcesFromContent returns the manifest content with any Namespace
+// resources removed.
+func stripNamespaceResourcesFromContent(t *testing.T, content string) string {
+	cfgs := []string{}
+	for _, y := range yml.SplitString(content) {
+		obj := &unstructured.Unstructured{}
+		_, gvk, err := decUnstructured.Decode([]byte(y), nil, obj)
+		if runtime.IsMissingKind(err) {
+			continue
+		}
+		assert.NoError(t, err)
+		if gvk.Kind != "Namespace" {
+			cfgs = append(cfgs, y)
+		}
+	}
+	return strings.Join(cfgs, "\n---\n")
+}
+
 // DeleteManifests deletes the non-namespace resources in the manifests (fire-and-forget, no wait).
 // Namespace resources are intentionally skipped: namespaces are slow to delete, and deleting one
 // here would race the follow-up apply on a test retry. Namespaces belong to the base-level
 // manifests applied by SetupBaseConfig, whose teardown deletes and waits for them.
+//
+// Deletion goes through the Istio client (not client.Delete on parsed objects) so that resources
+// whose manifests omit metadata.namespace are resolved to the same default namespace the apply used.
 func (s *BaseTestingSuite) DeleteManifests(testCase *TestCase) {
-	objects, err := common.ObjectsFromManifests(testCase.Manifests...)
-	s.Require().NoError(err, "parse manifests for deletion")
+	nf := stripNamespaceResources(s.T(), testCase.Manifests...)
+	fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_manifests.yaml")
+	s.Require().NoError(os.WriteFile(fp, []byte(nf), 0o600))
+	s.Require().NoError(s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", fp))
 
+	if len(testCase.ManifestsWithTransform) == 0 {
+		return
+	}
+
+	transformedCfgs := []string{}
 	for manifest, transform := range testCase.ManifestsWithTransform {
 		d, err := os.ReadFile(manifest)
 		s.Require().NoError(err)
-		more, err := common.ObjectsFromContent(transform(string(d)))
-		s.Require().NoError(err, "parse transformed manifest for deletion")
-		objects = append(objects, more...)
+		transformedCfgs = append(transformedCfgs, stripNamespaceResourcesFromContent(s.T(), transform(string(d))))
 	}
-
-	for _, obj := range objects {
-		if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" {
-			continue
-		}
-		if err := s.TestInstallation.ClusterContext.Client.Delete(s.Ctx, obj); client.IgnoreNotFound(err) != nil {
-			s.T().Logf("failed to delete %s %s/%s: %v",
-				obj.GetObjectKind().GroupVersionKind().Kind, obj.GetNamespace(), obj.GetName(), err)
-		}
-	}
+	transformedFp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_transformed_manifests.yaml")
+	s.Require().NoError(os.WriteFile(transformedFp, []byte(strings.Join(transformedCfgs, "\n---\n")), 0o600))
+	s.Require().NoError(s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", transformedFp))
 }
 
 func (s *BaseTestingSuite) setupHelpers() {

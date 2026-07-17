@@ -35,15 +35,17 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 	}
 	// Register cleanup before applying so partially applied manifests are still removed.
 	testutils.Cleanup(t, func() {
-		objects, err := ObjectsFromManifests(manifests...)
-		if err != nil {
-			t.Logf("failed to parse base config manifests for deletion: %v", err)
-			return
+		// Delete through the Istio client so resources whose manifests omit metadata.namespace
+		// resolve to the same default namespace the apply used.
+		if err := installation.ClusterContext.IstioClient.DeleteYAMLFiles("", manifests...); err != nil {
+			t.Logf("failed to delete base config manifests %v: %v", manifests, err)
 		}
+		// Wait for the namespaces these manifests create to be fully deleted before returning, so a
+		// gotestsum rerun (a fresh process) does not try to apply into a still-terminating namespace.
 		waitCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		if err := DeleteObjects(waitCtx, installation.ClusterContext.Client, objects); err != nil {
-			t.Logf("failed to delete base config objects: %v", err)
+		if err := waitForManifestNamespacesDeleted(waitCtx, installation.ClusterContext.Client, manifests...); err != nil {
+			t.Logf("failed waiting for base config namespaces to delete: %v", err)
 		}
 	})
 	// Apply manifests one at a time to avoid the concurrent-apply race where a namespace and
@@ -92,32 +94,35 @@ func ObjectsFromContent(content string) ([]client.Object, error) {
 	return objects, nil
 }
 
-// DeleteObjects deletes all objects and waits for them to be fully removed from the API server.
-// Waiting for namespace deletion ensures that a subsequent apply (e.g., on test retry) does not
-// race against a still-terminating namespace.
-func DeleteObjects(ctx context.Context, c client.Client, objects []client.Object) error {
+// waitForManifestNamespacesDeleted polls until every Namespace declared in the given manifests is
+// absent from the cluster, or ctx expires. Only Namespace objects are checked: they are the slow,
+// race-prone part of teardown, and being cluster-scoped they can be looked up by name alone (no
+// namespace needed), avoiding the empty-namespace problem that affects namespace-scoped resources
+// whose manifests omit metadata.namespace.
+func waitForManifestNamespacesDeleted(ctx context.Context, c client.Client, manifests ...string) error {
+	objects, err := ObjectsFromManifests(manifests...)
+	if err != nil {
+		return err
+	}
+	var namespaces []client.Object
 	for _, obj := range objects {
-		if err := c.Delete(ctx, obj); client.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("delete %s %s/%s: %w",
-				obj.GetObjectKind().GroupVersionKind().Kind,
-				obj.GetNamespace(), obj.GetName(), err)
+		if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" {
+			namespaces = append(namespaces, obj)
 		}
 	}
-	return waitForObjectsDeleted(ctx, c, objects)
-}
-
-// waitForObjectsDeleted polls until all objects are absent from the cluster or ctx expires.
-func waitForObjectsDeleted(ctx context.Context, c client.Client, objects []client.Object) error {
+	if len(namespaces) == 0 {
+		return nil
+	}
 	return retry.UntilSuccess(func() error {
-		for _, obj := range objects {
+		for _, ns := range namespaces {
 			probe := &unstructured.Unstructured{}
-			probe.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
-			err := c.Get(ctx, client.ObjectKeyFromObject(obj), probe)
+			probe.SetGroupVersionKind(ns.GetObjectKind().GroupVersionKind())
+			err := c.Get(ctx, client.ObjectKey{Name: ns.GetName()}, probe)
 			if err == nil {
-				return fmt.Errorf("%s %s/%s still exists", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetNamespace(), obj.GetName())
+				return fmt.Errorf("namespace %s still exists", ns.GetName())
 			}
 			if !apierrors.IsNotFound(err) {
-				return fmt.Errorf("get %s %s/%s: %w", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetNamespace(), obj.GetName(), err)
+				return fmt.Errorf("get namespace %s: %w", ns.GetName(), err)
 			}
 		}
 		return nil
