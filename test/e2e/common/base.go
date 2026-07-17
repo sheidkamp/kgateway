@@ -87,7 +87,11 @@ func ObjectsFromContent(content string) ([]client.Object, error) {
 			}
 			return nil, fmt.Errorf("decode YAML: %w", err)
 		}
-		if obj.GetName() != "" {
+		// Require apiVersion (Version), kind, and name. Empty or malformed YAML documents can decode
+		// into an Unstructured that has a name but no GVK, which would later break client Get/Delete
+		// calls ("object has no kind").
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if obj.GetName() != "" && gvk.Kind != "" && gvk.Version != "" {
 			objects = append(objects, obj)
 		}
 	}
@@ -113,6 +117,11 @@ func waitForManifestNamespacesDeleted(ctx context.Context, c client.Client, mani
 	if len(namespaces) == 0 {
 		return nil
 	}
+	// Honor the caller's deadline for the retry loop; fall back to 2 minutes if ctx has none.
+	timeout := 2 * time.Minute
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
+	}
 	return retry.UntilSuccess(func() error {
 		for _, ns := range namespaces {
 			probe := &unstructured.Unstructured{}
@@ -126,7 +135,7 @@ func waitForManifestNamespacesDeleted(ctx context.Context, c client.Client, mani
 			}
 		}
 		return nil
-	}, retry.Timeout(2*time.Minute), retry.Delay(2*time.Second))
+	}, retry.Timeout(timeout), retry.Delay(2*time.Second))
 }
 
 // SetupSharedNginxBackend applies the shared nginx pod (ns nginx-shared)
