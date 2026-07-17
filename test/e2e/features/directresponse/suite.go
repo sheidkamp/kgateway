@@ -25,9 +25,9 @@ func NewTestingSuite(
 	ctx context.Context,
 	testInst *e2e.TestInstallation,
 ) suite.TestingSuite {
-	setup := base.TestCase{
-		Manifests: []string{setupManifest},
-	}
+	// The suite needs no setup of its own: it routes through the base gateway to the shared
+	// httpbin backend applied at base level by common.SetupSharedHttpbinBackend.
+	setup := base.TestCase{}
 	// Only include functional test manifests - negative test cases moved to gateway translator suite
 	testCases := map[string]*base.TestCase{
 		"TestBasicDirectResponse":   {Manifests: []string{basicDirectResponseManifests}},

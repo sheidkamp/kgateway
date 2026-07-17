@@ -23,6 +23,10 @@ import (
 // SetupSharedNginxBackend.
 const SharedNginxNamespace = "nginx-shared"
 
+// SharedHttpbinNamespace is the namespace of the shared httpbin backend applied by
+// SetupSharedHttpbinBackend.
+const SharedHttpbinNamespace = "httpbin"
+
 func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, manifests ...string) {
 	for _, s := range log.Scopes() {
 		s.SetOutputLevel(log.DebugLevel)
@@ -47,6 +51,14 @@ func SetupSharedNginxBackend(ctx context.Context, t *testing.T, installation *e2
 	SetupBaseConfig(ctx, t, installation, testdefaults.NginxPodManifest)
 	installation.AssertionsT(t).EventuallyPodsRunning(ctx, SharedNginxNamespace, metav1.ListOptions{
 		LabelSelector: testdefaults.WellKnownAppLabel + "=nginx",
+	}, 2*time.Minute)
+}
+
+// SetupSharedHttpbinBackend applies the shared httpbin backend (ns httpbin)
+func SetupSharedHttpbinBackend(ctx context.Context, t *testing.T, installation *e2e.TestInstallation) {
+	SetupBaseConfig(ctx, t, installation, testdefaults.HttpbinSharedManifest)
+	installation.AssertionsT(t).EventuallyPodsRunning(ctx, SharedHttpbinNamespace, metav1.ListOptions{
+		LabelSelector: testdefaults.WellKnownAppLabel + "=httpbin",
 	}, 2*time.Minute)
 }
 

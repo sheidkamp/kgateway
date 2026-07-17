@@ -1,3 +1,8 @@
+# Shared httpbin backend applied once at base level by common.SetupSharedHttpbinBackend,
+# before any suite runs. Suites reference the Service (httpbin.httpbin:8000) via backendRefs
+# instead of each deploying their own copy. Per-suite objects created in this namespace
+# (HTTPRoutes, policies) must use suite-unique names so suites never collide here.
+---
 apiVersion: v1
 kind: Namespace
 metadata:

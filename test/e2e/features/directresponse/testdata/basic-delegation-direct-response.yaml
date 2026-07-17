@@ -2,7 +2,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: gateway
+  name: direct-response-parent
   namespace: kgateway-base
 spec:
   hostnames:
@@ -34,10 +34,10 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: httpbin
+  name: direct-response-child
   namespace: httpbin
   labels:
-    app: httpbin
+    app: direct-response
 spec:
   rules:
   - matches:

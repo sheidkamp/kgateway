@@ -82,13 +82,14 @@ func TestKgateway(t *testing.T) {
 		gatewayManifest = "kgateway-base-gateway-listenersets.yaml"
 	}
 
-	// Apply the base gateway once, then the shared nginx backend that suites reference
-	// instead of each deploying their own.
+	// Apply the base gateway once, then the shared nginx and httpbin backends that suites
+	// reference instead of each deploying their own.
 	common.SetupBaseConfig(ctx, t, testInstallation,
 		filepath.Join("manifests", "kgateway-base.yaml"),
 		filepath.Join("manifests", gatewayManifest),
 	)
 	common.SetupSharedNginxBackend(ctx, t, testInstallation)
+	common.SetupSharedHttpbinBackend(ctx, t, testInstallation)
 	common.SetupBaseGateway(ctx, t, testInstallation, types.NamespacedName{
 		Namespace: "kgateway-base",
 		Name:      "gateway",
