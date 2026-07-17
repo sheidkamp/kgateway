@@ -13,6 +13,7 @@ import (
 
 	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test/util/retry"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -58,63 +59,44 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 	}
 }
 
-// ObjectsFromManifests parses manifest files and returns all Kubernetes objects found.
-func ObjectsFromManifests(manifests ...string) ([]client.Object, error) {
-	var objects []client.Object
+// namespacesFromManifests parses the given manifest files and returns the names of every Namespace
+// they declare. Documents that are not a named Namespace are ignored, so empty or malformed YAML
+// documents are harmless.
+func namespacesFromManifests(manifests ...string) ([]string, error) {
+	var names []string
 	for _, manifest := range manifests {
 		data, err := os.ReadFile(manifest)
 		if err != nil {
 			return nil, fmt.Errorf("read manifest %s: %w", manifest, err)
 		}
-		objs, err := ObjectsFromContent(string(data))
-		if err != nil {
-			return nil, fmt.Errorf("parse manifest %s: %w", manifest, err)
-		}
-		objects = append(objects, objs...)
-	}
-	return objects, nil
-}
-
-// ObjectsFromContent parses YAML content and returns all Kubernetes objects found.
-func ObjectsFromContent(content string) ([]client.Object, error) {
-	var objects []client.Object
-	decoder := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(content)), 4096)
-	for {
-		obj := &unstructured.Unstructured{}
-		if err := decoder.Decode(obj); err != nil {
-			if err == io.EOF {
-				break
+		decoder := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+		for {
+			obj := &unstructured.Unstructured{}
+			if err := decoder.Decode(obj); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, fmt.Errorf("decode manifest %s: %w", manifest, err)
 			}
-			return nil, fmt.Errorf("decode YAML: %w", err)
-		}
-		// Require apiVersion (Version), kind, and name. Empty or malformed YAML documents can decode
-		// into an Unstructured that has a name but no GVK, which would later break client Get/Delete
-		// calls ("object has no kind").
-		gvk := obj.GetObjectKind().GroupVersionKind()
-		if obj.GetName() != "" && gvk.Kind != "" && gvk.Version != "" {
-			objects = append(objects, obj)
+			if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" && obj.GetName() != "" {
+				names = append(names, obj.GetName())
+			}
 		}
 	}
-	return objects, nil
+	return names, nil
 }
 
 // waitForManifestNamespacesDeleted polls until every Namespace declared in the given manifests is
-// absent from the cluster, or ctx expires. Only Namespace objects are checked: they are the slow,
+// absent from the cluster, or ctx expires. Only Namespaces are checked: they are the slow,
 // race-prone part of teardown, and being cluster-scoped they can be looked up by name alone (no
 // namespace needed), avoiding the empty-namespace problem that affects namespace-scoped resources
 // whose manifests omit metadata.namespace.
 func waitForManifestNamespacesDeleted(ctx context.Context, c client.Client, manifests ...string) error {
-	objects, err := ObjectsFromManifests(manifests...)
+	names, err := namespacesFromManifests(manifests...)
 	if err != nil {
 		return err
 	}
-	var namespaces []client.Object
-	for _, obj := range objects {
-		if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" {
-			namespaces = append(namespaces, obj)
-		}
-	}
-	if len(namespaces) == 0 {
+	if len(names) == 0 {
 		return nil
 	}
 	// Honor the caller's deadline for the retry loop; fall back to 2 minutes if ctx has none.
@@ -123,15 +105,14 @@ func waitForManifestNamespacesDeleted(ctx context.Context, c client.Client, mani
 		timeout = time.Until(deadline)
 	}
 	return retry.UntilSuccess(func() error {
-		for _, ns := range namespaces {
-			probe := &unstructured.Unstructured{}
-			probe.SetGroupVersionKind(ns.GetObjectKind().GroupVersionKind())
-			err := c.Get(ctx, client.ObjectKey{Name: ns.GetName()}, probe)
+		for _, name := range names {
+			ns := &corev1.Namespace{}
+			err := c.Get(ctx, client.ObjectKey{Name: name}, ns)
 			if err == nil {
-				return fmt.Errorf("namespace %s still exists", ns.GetName())
+				return fmt.Errorf("namespace %s still exists", name)
 			}
 			if !apierrors.IsNotFound(err) {
-				return fmt.Errorf("get namespace %s: %w", ns.GetName(), err)
+				return fmt.Errorf("get namespace %s: %w", name, err)
 			}
 		}
 		return nil
