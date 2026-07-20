@@ -26,12 +26,10 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
 
-// SharedNginxNamespace is the namespace of the shared nginx backend applied by
-// SetupSharedNginxBackend.
+// SharedNginxNamespace is the namespace of the shared nginx backend applied by SetupSharedNginxBackend.
 const SharedNginxNamespace = "nginx-shared"
 
-// SharedHttpbinNamespace is the namespace of the shared httpbin backend applied by
-// SetupSharedHttpbinBackend.
+// SharedHttpbinNamespace is the namespace of the shared httpbin backend applied by SetupSharedHttpbinBackend.
 const SharedHttpbinNamespace = "httpbin"
 
 // SetupBaseConfig applies the given base manifests and registers their teardown.
