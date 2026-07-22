@@ -117,10 +117,10 @@ BUG_REPORT_DIR := $(TEST_ASSET_DIR)/bug_report
 $(BUG_REPORT_DIR):
 	mkdir -p $(BUG_REPORT_DIR)
 
-# Base Alpine image used for SDS and dummy-idp containers. Exported for use in goreleaser.yaml.
+# Base Alpine image used for the dummy-idp container. Exported for use in goreleaser.yaml.
 export ALPINE_BASE_IMAGE ?= alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 
-# Distroless glibc base used for the kgateway controller container. Exported for use in goreleaser.yaml.
+# Distroless glibc base used for the kgateway controller and SDS containers. Exported for use in goreleaser.yaml.
 # Tracked as :latest (unpinned) on purpose: this distroless image has no package manager, so the only way
 # to receive Chainguard's CVE fixes is to pull a newer build. A pinned digest would freeze CVEs in place and
 # may be garbage-collected on the free tier. Release builds set DOCKER_NO_CACHE=1, which adds --pull so each
@@ -283,7 +283,10 @@ osv-scan: ## Run OSV-Scanner locally; set OSV_SCAN_IMAGES="image-ref ..." to als
 			image_arch="$${image_platform#*/}"; \
 			image_arch="$${image_arch%%/*}"; \
 			rm -f "$$host_image_archive"; \
-			if command -v skopeo > /dev/null 2>&1; then \
+			if docker image inspect "$$image" > /dev/null 2>&1; then \
+				echo "Image $$image found in local Docker daemon, using docker save"; \
+				docker save "$$image" -o "$$host_image_archive"; \
+			elif command -v skopeo > /dev/null 2>&1; then \
 				if skopeo copy \
 					--override-os "$$image_os" \
 					--override-arch "$$image_arch" \
@@ -363,6 +366,10 @@ osv-scan: ## Run OSV-Scanner locally; set OSV_SCAN_IMAGES="image-ref ..." to als
 .PHONY: osv-scan-latest-main-images
 osv-scan-latest-main-images:
 	$(MAKE) osv-scan OSV_SCAN_IMAGES="ghcr.io/kgateway-dev/kgateway:$(ROLLING_MAIN_VERSION) ghcr.io/kgateway-dev/sds:$(ROLLING_MAIN_VERSION) ghcr.io/kgateway-dev/envoy-wrapper:$(ROLLING_MAIN_VERSION)"
+
+.PHONY: osv-scan-local-images
+osv-scan-local-images: kgateway-docker sds-docker envoy-wrapper-docker ## Build images from the current branch and run OSV-Scanner against them
+	$(MAKE) osv-scan OSV_SCAN_IMAGES="$(IMAGE_REGISTRY)/$(CONTROLLER_IMAGE_REPO):$(VERSION) $(IMAGE_REGISTRY)/$(SDS_IMAGE_REPO):$(VERSION) $(IMAGE_REGISTRY)/$(ENVOYINIT_IMAGE_REPO):$(VERSION)"
 
 #----------------------------------------------------------------------------------
 # Ginkgo Tests
@@ -808,7 +815,7 @@ $(SDS_OUTPUT_DIR)/Dockerfile.sds: cmd/sds/Dockerfile
 $(SDS_OUTPUT_DIR)/.docker-stamp-$(VERSION)-$(GOARCH): $(SDS_OUTPUT_DIR)/sds-linux-$(GOARCH) $(SDS_OUTPUT_DIR)/Dockerfile.sds
 	$(BUILDX_BUILD) --load $(PLATFORM) $(SDS_OUTPUT_DIR) -f $(SDS_OUTPUT_DIR)/Dockerfile.sds \
 		--build-arg GOARCH=$(GOARCH) \
-		--build-arg BASE_IMAGE=$(ALPINE_BASE_IMAGE) \
+		--build-arg BASE_IMAGE=$(DISTROLESS_BASE_IMAGE) \
 		$(SDS_CACHE_FROM) \
 		-t $(IMAGE_REGISTRY)/$(SDS_IMAGE_REPO):$(VERSION)
 	@touch $@
