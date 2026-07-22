@@ -28,7 +28,8 @@ permissions:
   security-events: write
 
 env:
-  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_REGISTRY: ghcr.io/kgateway-dev
+  UPSTREAM_REPO: kgateway-dev/kgateway
   OSV_SCANNER_IMAGE: ghcr.io/google/osv-scanner-action:v2.3.5
 
 concurrency:
@@ -45,6 +46,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+          repository: ${{ env.UPSTREAM_REPO }}
           ref: ${{ inputs.branch }}
 
       - name: Collect upload metadata
@@ -114,6 +116,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+          repository: ${{ env.UPSTREAM_REPO }}
           ref: ${{ inputs.branch }}
 
       - name: Collect upload metadata
