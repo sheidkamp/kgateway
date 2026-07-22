@@ -283,10 +283,7 @@ osv-scan: ## Run OSV-Scanner locally; set OSV_SCAN_IMAGES="image-ref ..." to als
 			image_arch="$${image_platform#*/}"; \
 			image_arch="$${image_arch%%/*}"; \
 			rm -f "$$host_image_archive"; \
-			if docker image inspect "$$image" > /dev/null 2>&1; then \
-				echo "Image $$image found in local Docker daemon, using docker save"; \
-				docker save "$$image" -o "$$host_image_archive"; \
-			elif command -v skopeo > /dev/null 2>&1; then \
+			if command -v skopeo > /dev/null 2>&1; then \
 				if skopeo copy \
 					--override-os "$$image_os" \
 					--override-arch "$$image_arch" \
@@ -366,10 +363,6 @@ osv-scan: ## Run OSV-Scanner locally; set OSV_SCAN_IMAGES="image-ref ..." to als
 .PHONY: osv-scan-latest-main-images
 osv-scan-latest-main-images:
 	$(MAKE) osv-scan OSV_SCAN_IMAGES="ghcr.io/kgateway-dev/kgateway:$(ROLLING_MAIN_VERSION) ghcr.io/kgateway-dev/sds:$(ROLLING_MAIN_VERSION) ghcr.io/kgateway-dev/envoy-wrapper:$(ROLLING_MAIN_VERSION)"
-
-.PHONY: osv-scan-local-images
-osv-scan-local-images: kgateway-docker sds-docker envoy-wrapper-docker ## Build images from the current branch and run OSV-Scanner against them
-	$(MAKE) osv-scan OSV_SCAN_IMAGES="$(IMAGE_REGISTRY)/$(CONTROLLER_IMAGE_REPO):$(VERSION) $(IMAGE_REGISTRY)/$(SDS_IMAGE_REPO):$(VERSION) $(IMAGE_REGISTRY)/$(ENVOYINIT_IMAGE_REPO):$(VERSION)"
 
 #----------------------------------------------------------------------------------
 # Ginkgo Tests
