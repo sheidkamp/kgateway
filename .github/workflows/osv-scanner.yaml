@@ -1,20 +1,25 @@
-name: OSV Security Vulnerability Scan
+name: OSV Security Vulnerability Scan (Local/Development)
+
+# Development-only variant of osv-scanner.yaml for branches without a GA release
+# tag (e.g. v2.4.x). Instead of auto-resolving the image version from git tags,
+# it accepts an explicit image_version input so you can point it at a nightly or
+# PR-build image.
+#
+# NOT intended for merge. Trigger via Actions -> workflow_dispatch.
 
 on:
-  schedule:
-    - cron: "0 17 * * *"
   workflow_dispatch:
     inputs:
-      branches:
-        description: "Allowlisted branch or branches to scan"
-        type: choice
-        default: all
-        options:
-          - all
-          - main
-          - v2.2.x
-          - v2.3.x
-          - v2.4.x
+      branch:
+        description: "Branch to check out for source scan and osv-scanner.toml"
+        type: string
+        default: "v2.4.x"
+      image_version:
+        description: |
+          Image tag to scan. For PR builds the format is <last-tag>-pr.<number>-<short-sha>
+          (e.g. v2.3.0-pr.14446-064ad5b144bf). For the main rolling tag use v2.5.0-main.
+        type: string
+        required: true
 
 permissions:
   actions: read
@@ -31,75 +36,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  determine_branches:
-    name: Determine Branches
-    runs-on: ubuntu-22.04
-    outputs:
-      branches: ${{ steps.determine.outputs.branches }}
-    steps:
-      - name: Determine branch matrix
-        id: determine
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          branches='["main","v2.2.x","v2.3.x","v2.4.x"]'
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            case "${{ inputs.branches }}" in
-              all)
-                ;;
-              main)
-                branches='["main"]'
-                ;;
-              v2.2.x)
-                branches='["v2.2.x"]'
-                ;;
-              v2.3.x)
-                branches='["v2.3.x"]'
-                ;;
-              v2.4.x)
-                branches='["v2.4.x"]'
-                ;;
-              *)
-                echo "::error::Unsupported branch selection: ${{ inputs.branches }}"
-                exit 1
-                ;;
-            esac
-          fi
-
-          {
-            echo "branches=${branches}"
-          } >> "$GITHUB_OUTPUT"
-
-  # Source dependency scan (one analysis per branch, platform-independent).
-  # Uploaded under category: osv-scanner-<branch>
   scan_source:
-    needs: determine_branches
-    name: Scan source (${{ matrix.branch }})
+    name: Scan source (${{ inputs.branch }})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        branch: ${{ fromJson(needs.determine_branches.outputs.branches) }}
     steps:
       - name: Checkout branch
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-          ref: ${{ matrix.branch }}
+          ref: ${{ inputs.branch }}
 
       - name: Collect upload metadata
         id: metadata
         shell: bash
         run: |
           set -euo pipefail
-
           {
-            echo "ref=refs/heads/${{ matrix.branch }}"
+            echo "ref=refs/heads/${{ inputs.branch }}"
             echo "sha=$(git rev-parse HEAD)"
-            echo "category=osv-scanner-$(echo '${{ matrix.branch }}' | tr '/.' '--')"
+            echo "category=osv-scanner-$(echo '${{ inputs.branch }}' | tr '/.' '--')"
           } >> "$GITHUB_OUTPUT"
 
       - name: Run source scanner
@@ -136,22 +92,16 @@ jobs:
         if: ${{ !cancelled() && hashFiles('results.sarif') != '' }}
         shell: bash
         run: |
-          echo "View the branch-specific OSV-Scanner results in Security -> Code scanning:"
-          echo "GitHub defaults that page to the repository default branch, so use the branch filter in this link:"
-          echo "${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=is%3Aopen+branch%3A${{ matrix.branch }}+tool%3Aosv-scanner"
+          echo "View results in Security -> Code scanning:"
+          echo "${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=is%3Aopen+branch%3A${{ inputs.branch }}+tool%3Aosv-scanner"
 
-  # Container image scan. One analysis per (branch, image, platform) so each
-  # alert names the exact image it came from.
-  # Uploaded under category: osv-scanner-<branch>-images-<image>-<platform>
   scan_image:
-    needs: determine_branches
-    name: Scan image (${{ matrix.branch }}, ${{ matrix.image }}, ${{ matrix.platform }})
+    name: Scan image (${{ matrix.image }}, ${{ matrix.platform }})
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        branch: ${{ fromJson(needs.determine_branches.outputs.branches) }}
         platform:
           - linux/amd64
           - linux/arm64
@@ -164,58 +114,27 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-          ref: ${{ matrix.branch }}
+          ref: ${{ inputs.branch }}
 
       - name: Collect upload metadata
         id: metadata
         shell: bash
         run: |
           set -euo pipefail
-
           {
-            echo "ref=refs/heads/${{ matrix.branch }}"
+            echo "ref=refs/heads/${{ inputs.branch }}"
             echo "sha=$(git rev-parse HEAD)"
-            echo "image_category=osv-scanner-$(echo '${{ matrix.branch }}' | tr '/.' '--')-images-$(echo '${{ matrix.image }}' | tr '/.' '--')-$(echo '${{ matrix.platform }}' | tr '/.' '--')"
+            echo "image_category=osv-scanner-$(echo '${{ inputs.branch }}' | tr '/.' '--')-images-$(echo '${{ matrix.image }}' | tr '/.' '--')-$(echo '${{ matrix.platform }}' | tr '/.' '--')"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Resolve image scan target
+      - name: Set image target
         id: image-target
         shell: bash
         run: |
           set -euo pipefail
-
-          branch="${{ matrix.branch }}"
-          case "${branch}" in
-            main)
-              image_version="$(make --no-print-directory print-ROLLING_MAIN_VERSION)"
-              ;;
-            v[0-9]*.[0-9]*.x)
-              series="${branch%.x}"
-              series_regex="${series//./\\.}"
-              image_version="$(
-                git ls-remote --tags --refs origin "${series}.*" \
-                  | sed -E 's#.*refs/tags/##' \
-                  | grep -E "^${series_regex}\\.[0-9]+$" \
-                  | sort -V \
-                  | tail -n 1 || true
-              )"
-              if [[ -z "${image_version}" ]]; then
-                echo "::error::No stable patch release tag found for ${branch}"
-                exit 1
-              fi
-              ;;
-            *)
-              echo "::error::Unsupported branch for image scan: ${branch}"
-              exit 1
-              ;;
-          esac
-
-          {
-            echo "image_version=${image_version}"
-            echo "image=${IMAGE_REGISTRY}/${{ matrix.image }}:${image_version}"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Resolved image for ${branch}: ${IMAGE_REGISTRY}/${{ matrix.image }}:${image_version}"
+          image="${IMAGE_REGISTRY}/${{ matrix.image }}:${{ inputs.image_version }}"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "Scanning image: ${image}"
 
       - name: Log in to GHCR for image scans
         shell: bash
@@ -316,11 +235,6 @@ jobs:
           safe_platform="$(printf '%s' "${OSV_DOCKER_PLATFORM}" | sed 's/[^A-Za-z0-9_.-]/-/g')"
           safe_image_version="$(printf '%s' "${image_version}" | sed 's/[^A-Za-z0-9_.-]/-/g')"
           safe_image_name="$(printf '%s' "${OSV_DOCKER_IMAGE_NAME}" | sed 's/[^A-Za-z0-9_.-]/-/g')"
-          # Rewrite in-container file paths to a synthetic, image-qualified path so the
-          # uploaded alert's location names the exact image:
-          #   container-images/<image>/<version>/<platform>/<path>
-          # Also rename the SARIF tool driver to "osv-image-scanner" so it is
-          # distinguishable from the source scan (osvtool keys image findings off this).
           jq \
             --arg image "${image}" \
             --arg image_name "${OSV_DOCKER_IMAGE_NAME}" \
