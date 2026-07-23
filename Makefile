@@ -44,7 +44,7 @@ BUILD_TOOLS_VERSION ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo
 OSV_SCANNER_IMAGE ?= ghcr.io/google/osv-scanner-action:v2.3.5
 OSV_SCAN_IMAGES ?=
 OSV_SCAN_IMAGE_PLATFORM ?= linux/$(GOARCH)
-# Set to 1 to read images from the local Docker daemon (docker save) instead of pulling from a registry.
+# Set to any value to read images from the local Docker daemon (docker save) instead of pulling from a registry.
 # Used by osv-scan-local-images; not set by default so osv-scan always pulls fresh remote images.
 OSV_SCAN_LOCAL ?=
 
