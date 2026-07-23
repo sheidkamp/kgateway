@@ -371,7 +371,8 @@ osv-scan-latest-main-images:
 	$(MAKE) osv-scan OSV_SCAN_IMAGES="ghcr.io/kgateway-dev/kgateway:$(ROLLING_MAIN_VERSION) ghcr.io/kgateway-dev/sds:$(ROLLING_MAIN_VERSION) ghcr.io/kgateway-dev/envoy-wrapper:$(ROLLING_MAIN_VERSION)"
 
 .PHONY: osv-scan-local-images
-osv-scan-local-images: kgateway-docker sds-docker envoy-wrapper-docker ## Build images from the current branch and run OSV-Scanner against them
+osv-scan-local-images: ## Build images from the current branch and run OSV-Scanner against them
+	$(MAKE) -B kgateway-docker sds-docker envoy-wrapper-docker
 	$(MAKE) osv-scan \
 		OSV_SCAN_LOCAL=1 \
 		OSV_SCAN_IMAGES="$(IMAGE_REGISTRY)/$(CONTROLLER_IMAGE_REPO):$(VERSION) $(IMAGE_REGISTRY)/$(SDS_IMAGE_REPO):$(VERSION) $(IMAGE_REGISTRY)/$(ENVOYINIT_IMAGE_REPO):$(VERSION)"
