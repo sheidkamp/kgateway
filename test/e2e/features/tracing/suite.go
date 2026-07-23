@@ -6,18 +6,20 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
-	"github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
+	"github.com/kgateway-dev/kgateway/v2/test/e2e/common"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e/tests/base"
 	"github.com/kgateway-dev/kgateway/v2/test/gomega/matchers"
 )
@@ -26,11 +28,31 @@ var _ e2e.NewSuiteFunc = NewTestingSuite
 
 type testingSuite struct {
 	*base.BaseTestingSuite
+	// gateway is a curl-able handle for this suite's own Gateway (gw/default), which uses
+	// custom GatewayParameters and so cannot be the shared base gateway. It is resolved in
+	// SetupSuite and curled natively from the test host.
+	gateway common.Gateway
 }
 
 func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
 	return &testingSuite{
-		base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, testCases),
+	}
+}
+
+func (s *testingSuite) SetupSuite() {
+	s.BaseTestingSuite.SetupSuite()
+
+	s.gateway = common.Gateway{
+		NamespacedName: types.NamespacedName{
+			Name:      proxyObjectMeta.Name,
+			Namespace: proxyObjectMeta.Namespace,
+		},
+		Address: s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayAddress(
+			s.Ctx,
+			proxyObjectMeta.Name,
+			proxyObjectMeta.Namespace,
+		),
 	}
 }
 
@@ -51,20 +73,17 @@ func (s *testingSuite) testOTelTracing() {
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification is acceptable
 	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g gomega.Gomega) {
 		// make curl request to httpbin service with the custom header
-		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
+		s.gateway.SendWithRetry(
 			s.Ctx,
-			defaults.CurlPodExecOpt,
-			[]curl.Option{
-				curl.WithHostHeader("www.example.com"),
-				curl.WithHeader("x-header-tag", headerValue),
-				curl.WithPath("/status/200"),
-				curl.WithHost(kubeutils.ServiceFQDN(proxyService.ObjectMeta)),
-			},
+			s.T(),
 			&matchers.HttpResponse{
-				StatusCode: 200,
+				StatusCode: http.StatusOK,
 			},
-			20*time.Second,
-			2*time.Second,
+			[]retry.Option{retry.Timeout(20 * time.Second), retry.Delay(2 * time.Second)},
+			curl.WithPort(8080),
+			curl.WithHostHeader("www.example.com"),
+			curl.WithHeader("x-header-tag", headerValue),
+			curl.WithPath("/status/200"),
 		)
 
 		// Example trace found in the otel-collector logs
@@ -117,20 +136,17 @@ func (s *testingSuite) TestRouteTracingCustomAttributes() {
 
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification is acceptable
 	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g gomega.Gomega) {
-		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
+		s.gateway.SendWithRetry(
 			s.Ctx,
-			defaults.CurlPodExecOpt,
-			[]curl.Option{
-				curl.WithHostHeader("www.example.com"),
-				curl.WithHeader("x-route-header", headerValue),
-				curl.WithPath("/status/200"),
-				curl.WithHost(kubeutils.ServiceFQDN(proxyService.ObjectMeta)),
-			},
+			s.T(),
 			&matchers.HttpResponse{
-				StatusCode: 200,
+				StatusCode: http.StatusOK,
 			},
-			20*time.Second,
-			2*time.Second,
+			[]retry.Option{retry.Timeout(20 * time.Second), retry.Delay(2 * time.Second)},
+			curl.WithPort(8080),
+			curl.WithHostHeader("www.example.com"),
+			curl.WithHeader("x-route-header", headerValue),
+			curl.WithPath("/status/200"),
 		)
 
 		expectedLines := []string{
@@ -170,20 +186,17 @@ func (s *testingSuite) TestRouteTracingDisable() {
 
 	// Make several requests with the unique marker header
 	for range 5 {
-		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
+		s.gateway.SendWithRetry(
 			s.Ctx,
-			defaults.CurlPodExecOpt,
-			[]curl.Option{
-				curl.WithHostHeader("www.example.com"),
-				curl.WithHeader("x-header-tag", marker),
-				curl.WithPath("/status/200"),
-				curl.WithHost(kubeutils.ServiceFQDN(proxyService.ObjectMeta)),
-			},
+			s.T(),
 			&matchers.HttpResponse{
-				StatusCode: 200,
+				StatusCode: http.StatusOK,
 			},
-			20*time.Second,
-			2*time.Second,
+			[]retry.Option{retry.Timeout(20 * time.Second), retry.Delay(2 * time.Second)},
+			curl.WithPort(8080),
+			curl.WithHostHeader("www.example.com"),
+			curl.WithHeader("x-header-tag", marker),
+			curl.WithPath("/status/200"),
 		)
 	}
 

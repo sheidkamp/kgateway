@@ -26,9 +26,11 @@ import (
 	"github.com/kgateway-dev/kgateway/v2/test/testutils"
 )
 
-// SharedNginxNamespace is the namespace of the shared nginx backend applied by
-// SetupSharedNginxBackend.
+// SharedNginxNamespace is the namespace of the shared nginx backend applied by SetupSharedNginxBackend.
 const SharedNginxNamespace = "nginx-shared"
+
+// SharedHttpbinNamespace is the namespace of the shared httpbin backend applied by SetupSharedHttpbinBackend.
+const SharedHttpbinNamespace = "httpbin"
 
 // SetupBaseConfig applies the given base manifests and registers their teardown.
 //
@@ -136,6 +138,14 @@ func SetupSharedNginxBackend(ctx context.Context, t *testing.T, installation *e2
 	SetupBaseConfig(ctx, t, installation, testdefaults.NginxPodManifest)
 	installation.AssertionsT(t).EventuallyPodsRunning(ctx, SharedNginxNamespace, metav1.ListOptions{
 		LabelSelector: testdefaults.WellKnownAppLabel + "=nginx",
+	}, 2*time.Minute)
+}
+
+// SetupSharedHttpbinBackend applies the shared httpbin backend (ns httpbin)
+func SetupSharedHttpbinBackend(ctx context.Context, t *testing.T, installation *e2e.TestInstallation) {
+	SetupBaseConfig(ctx, t, installation, testdefaults.HttpbinSharedManifest)
+	installation.AssertionsT(t).EventuallyPodsRunning(ctx, SharedHttpbinNamespace, metav1.ListOptions{
+		LabelSelector: testdefaults.WellKnownAppLabel + "=httpbin",
 	}, 2*time.Minute)
 }
 

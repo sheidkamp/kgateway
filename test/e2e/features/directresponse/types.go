@@ -9,7 +9,6 @@ import (
 )
 
 var (
-	setupManifest                  = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
 	basicDirectResponseManifests   = filepath.Join(fsutils.MustGetThisDir(), "testdata", "basic-direct-response.yaml")
 	basicDelegationManifests       = filepath.Join(fsutils.MustGetThisDir(), "testdata", "basic-delegation-direct-response.yaml")
 	bodyFormatTextManifests        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "body-format-text.yaml")

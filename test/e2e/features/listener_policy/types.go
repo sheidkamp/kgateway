@@ -60,10 +60,19 @@ var (
 	forwardClientCertSanitize       = filepath.Join(fsutils.MustGetThisDir(), "testdata", "forward-client-cert", "policy-sanitize.yaml")
 	forwardClientCertForwardOnly    = filepath.Join(fsutils.MustGetThisDir(), "testdata", "forward-client-cert", "policy-forward-only.yaml")
 
+	// In-cluster curl pod for the tests that need the real curl binary and cannot use native
+	// curl from the test host: TestProxyProtocol (--haproxy-protocol) and
+	// TestPreserveHttp1HeaderCase (exact header case on the wire).
+	curlPodExecOpt = kubectl.PodExecOptions{
+		Name:      "curl",
+		Namespace: "curl-listener-policy",
+		Container: "curl",
+	}
+
 	// Cert-mounted curl pod for outgoing mTLS requests in TestForwardClientCert*.
 	curlMtlsPodExecOpt = kubectl.PodExecOptions{
 		Name:      "curl-mtls",
-		Namespace: "curl",
+		Namespace: "curl-listener-policy",
 		Container: "curl",
 	}
 

@@ -84,8 +84,8 @@ func Run(t *testing.T, factory e2e.InstallationFactory) {
 		gatewayManifest = "kgateway-base-gateway-listenersets.yaml"
 	}
 
-	// Apply the base gateway once, then the shared nginx backend that suites reference
-	// instead of each deploying their own. Manifest paths are anchored to this
+	// Apply the base gateway once, then the shared nginx and httpbin backends that suites
+	// reference instead of each deploying their own. Manifest paths are anchored to this
 	// package's directory so external callers can run this from anywhere.
 	manifestsDir := filepath.Join(fsutils.MustGetThisDir(), "..", "manifests")
 	common.SetupBaseConfig(ctx, t, testInstallation.Underlying(),
@@ -93,6 +93,7 @@ func Run(t *testing.T, factory e2e.InstallationFactory) {
 		filepath.Join(manifestsDir, gatewayManifest),
 	)
 	common.SetupSharedNginxBackend(ctx, t, testInstallation.Underlying())
+	common.SetupSharedHttpbinBackend(ctx, t, testInstallation.Underlying())
 	common.SetupBaseGateway(ctx, t, testInstallation.Underlying(), types.NamespacedName{
 		Namespace: "kgateway-base",
 		Name:      "gateway",

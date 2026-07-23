@@ -322,7 +322,7 @@ Default test "infrastructure" pods are defined in [`defaults/defaults.go`](../..
 
 ### Curl Pod
 
-A minimal pod named `curl` in the `curl` namespace. Used as the origin for all in-cluster HTTP requests.
+A minimal pod named `curl` in the `curl` namespace. Used as the origin for in-cluster HTTP requests in tests that need the real curl binary — prefer native curl from the test process for everything else (see [Suite Isolation and Shared Fixtures](#suite-isolation-and-shared-fixtures)).
 
 ```go
 CurlPodExecOpt = kubectl.PodExecOptions{
@@ -337,9 +337,14 @@ The assertion helpers `AssertEventualCurlResponse` and related methods default t
 
 ### httpbin
 
-A standard HTTP echo/inspection service (`httpbin`) deployed in the `default` namespace. Commonly used as the backend service for routing tests.
+A standard HTTP echo/inspection service (`httpbin`). Commonly used as the backend service for routing tests. Two variants exist:
 
 ```go
+// Shared backend in the `httpbin` namespace, applied once per test entry point by
+// common.SetupSharedHttpbinBackend — preferred for routing tests
+HttpbinSharedManifest = ".../testdata/httpbin_shared.yaml"
+
+// Standalone copy in the `default` namespace, applied per suite
 HttpbinDeployment = &appsv1.Deployment{Name: "httpbin", Namespace: "default"}
 HttpbinService    = &corev1.Service{Name: "httpbin", Namespace: "default"}
 HttpbinManifest   = ".../testdata/httpbin.yaml"
@@ -351,7 +356,7 @@ A lightweight HTTP echo pod (`http-echo` in the `http-echo` namespace) that retu
 
 ### nginx
 
-An nginx pod in the `nginx` namespace. Used as a backend in basic routing and TLS tests. `NginxResponse` is the expected default nginx welcome page body.
+An nginx pod in the `nginx-shared` namespace, applied once per test entry point by `common.SetupSharedNginxBackend`. Used as a backend in basic routing and TLS tests. `NginxResponse` is the expected default nginx welcome page body.
 
 ### tcp-echo
 
@@ -363,11 +368,74 @@ An external processing gRPC service for ExtProc tests (`ExtProcManifest`).
 
 ---
 
+## Suite Isolation and Shared Fixtures
+
+Suites registered with an unordered `SuiteRunner` run sequentially in **randomized order** against the same cluster. Two framework behaviors make cross-suite naming collisions dangerous:
+
+- `DeleteManifests()` strips `Namespace` resources, so namespaces (and anything a suite leaks into them) persist for the lifetime of the cluster.
+- Teardown deletes are fire-and-forget — `DeleteManifests()` does not wait for deletion to finish. A later suite can apply an object with the same name and namespace while the previous suite's copy is still terminating, producing flakes that only reproduce under certain suite orderings.
+
+This leads to one invariant:
+
+> [!IMPORTANT]
+> No two suites may create same-named objects in a shared namespace.
+
+The conventions below keep that invariant easy to maintain.
+
+### Use base-level shared fixtures for standard backends
+
+When a suite just needs a stock backend to route to, do not apply a per-suite copy. Use the shared backends applied once per test entry point (e.g. `kgateway_test.go`) before any suite runs:
+
+| Helper (`test/e2e/common`) | Namespace | Backend |
+|---|---|---|
+| `SetupSharedNginxBackend` | `nginx-shared` | nginx |
+| `SetupSharedHttpbinBackend` | `httpbin` | httpbin |
+
+These are applied via `common.SetupBaseConfig`, which registers cleanup with the entry point's `t.Cleanup` — suites must never modify or delete them. A suite that only routes to a shared backend may need no setup manifests of its own (`base.TestCase{}` is valid).
+
+### Give per-suite objects suite-unique names
+
+Anything a suite creates in a shared namespace — HTTPRoutes attached to a shared backend, policies targeting those routes — must have a name unique to the suite, conventionally derived from the feature name. For example, the tracing suite's route in the `httpbin` namespace is named `tracing`, not `httpbin`.
+
+### Put customized fixtures in suite-unique namespaces
+
+If a suite needs a nonstandard variant of a common fixture — e.g. a curl pod with extra cert volume mounts — it must live in a namespace unique to that suite (e.g. `curl-frontendtls`), not the shared `curl` namespace. Pod specs are immutable, so two suites creating a pod named `curl` with different specs in one namespace fail on apply — and even identical specs can race a still-terminating copy from the previous suite.
+
+### Prefer native curl over the in-cluster curl pod
+
+Send data-plane requests from the test process itself using `common.Gateway` rather than exec-ing into an in-cluster curl pod — it avoids the shared pod entirely and produces faster, more debuggable failures:
+
+```go
+gw := common.Gateway{
+    NamespacedName: types.NamespacedName{Name: "gw", Namespace: "default"},
+    Address:        s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayAddress(s.Ctx, "gw", "default"),
+}
+gw.SendWithRetry(s.Ctx, s.T(), &matchers.HttpResponse{StatusCode: http.StatusOK},
+    []retry.Option{retry.Timeout(30 * time.Second), retry.Delay(1 * time.Second)},
+    curl.WithPort(8080),
+    curl.WithHostHeader("example.com"),
+    curl.WithPath("/status/200"),
+)
+```
+
+Suites that route through the shared base gateway can use `common.BaseGateway` directly (populated by `SetupBaseGateway`, which is also the only place the `GATEWAY_ADDRESS_OVERRIDE` env var applies).
+
+Native curl is implemented with Go's `net/http`, so it cannot express everything the real curl binary can. Keep an in-cluster curl pod only when the test genuinely requires:
+
+- the PROXY protocol preamble (`--haproxy-protocol`)
+- client certificates / mTLS initiated by the client
+- exact header case on the wire (Go's HTTP client canonicalizes header names)
+- TLS cipher, curve, or signature-algorithm selection, or explicit SNI control
+
+Tests that do need a curl pod should use the standard `defaults.CurlPodManifest` / `defaults.CurlPodExecOpt` unchanged; if the pod spec must differ, move it to a suite-unique namespace per the previous convention.
+
+---
+
 ## Common Test Patterns
 
 ### Pattern 1: Apply → Curl → Assert (Most Common)
 
-The dominant pattern is to define Kubernetes manifests for Gateway, HTTPRoute, and backend service, apply them in `BeforeTest`, send an HTTP request via the curl pod, and assert the response.
+The dominant pattern is to define Kubernetes manifests for Gateway, HTTPRoute, and backend service, apply them in `BeforeTest`, send an HTTP request, and assert the response. Prefer sending the request with native curl via `common.Gateway` (see [Suite Isolation and Shared Fixtures](#suite-isolation-and-shared-fixtures)); the example below shows the in-cluster curl pod variant for tests that need the real curl binary.
 
 ```go
 // 1. Declare manifests and test cases

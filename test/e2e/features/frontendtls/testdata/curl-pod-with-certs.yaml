@@ -3,7 +3,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: curl
-  namespace: curl
+  namespace: curl-frontendtls
   labels:
     app: curl
     version: v1

@@ -11,15 +11,14 @@ import (
 
 var (
 	// manifests
-	setupManifest         = filepath.Join(fsutils.MustGetThisDir(), "testdata", "setup.yaml")
 	exactManifest         = filepath.Join(fsutils.MustGetThisDir(), "testdata", "exact.yaml")
 	prefixManifest        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "prefix.yaml")
 	regexManifest         = filepath.Join(fsutils.MustGetThisDir(), "testdata", "regex.yaml")
 	prefixRewriteManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "prefix-rewrite.yaml")
 
-	setup = base.TestCase{
-		Manifests: []string{setupManifest},
-	}
+	// The suite needs no setup of its own: it routes through the base gateway to the shared
+	// httpbin backend applied at base level by common.SetupSharedHttpbinBackend.
+	setup = base.TestCase{}
 
 	// test cases
 	testCases = map[string]*base.TestCase{

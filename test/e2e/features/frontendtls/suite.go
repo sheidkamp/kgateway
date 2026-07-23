@@ -14,6 +14,7 @@ import (
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/fsutils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils"
+	"github.com/kgateway-dev/kgateway/v2/pkg/utils/kubeutils/kubectl"
 	"github.com/kgateway-dev/kgateway/v2/pkg/utils/requestutils/curl"
 	"github.com/kgateway-dev/kgateway/v2/test/e2e"
 	testdefaults "github.com/kgateway-dev/kgateway/v2/test/e2e/defaults"
@@ -31,10 +32,19 @@ var (
 	tlsECDSAP256SecretManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "tls-ecdsa-p256-secret.yaml")
 	clientCertsSecret          = filepath.Join(fsutils.MustGetThisDir(), "testdata", "certs", "ca1", "client-certs-8443-9443-secret.yaml")
 	curlPodWithCerts           = filepath.Join(fsutils.MustGetThisDir(), "testdata", "curl-pod-with-certs.yaml")
-	// curlNamespaceManifest creates the 'curl' namespace. The curl pod and its
-	// mounted client-cert Secrets live in this namespace, so it must exist before
-	// either is applied. It is applied first (and sequentially) by SetupSuite.
+	// curlNamespaceManifest creates the suite-unique 'curl-frontendtls' namespace. The curl
+	// pod and its mounted client-cert Secrets live in this namespace, so it must exist before
+	// either is applied. It is applied first (and sequentially) by SetupSuite. The pod does
+	// not live in the shared 'curl' namespace because its cert volume mounts differ from the
+	// standard curl pod's immutable spec.
 	curlNamespaceManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "curl-namespace.yaml")
+
+	// curlPodExecOpt targets this suite's cert-bearing curl pod.
+	curlPodExecOpt = kubectl.PodExecOptions{
+		Name:      "curl",
+		Namespace: "curl-frontendtls",
+		Container: "curl",
+	}
 
 	// client certificate paths inside the curl pod (for verify-certificate-hash tests)
 	clientCertPath8443   = "/etc/client-certs/client-8443.crt"
@@ -143,8 +153,8 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 // delegates to the base SetupSuite (which applies the Pod/Gateway/httpbin). The
 // base suite applies a TestCase's manifests in parallel via errgroup, so the
 // ordering below cannot be expressed as a single manifest list:
-//  1. The 'curl' namespace must exist before its namespaced Secrets, so it is
-//     applied first and on its own.
+//  1. The 'curl-frontendtls' namespace must exist before its namespaced Secrets,
+//     so it is applied first and on its own.
 //  2. The mounted Secrets/ConfigMaps must exist before the pod is scheduled,
 //     otherwise kubelet can fail the volume mount and back off past the 60s
 //     readiness timeout.
@@ -172,9 +182,9 @@ func (s *testingSuite) SetupSuite() {
 // TearDownSuite removes the Pod/Gateway/httpbin via the base teardown, then the
 // prerequisite Secrets/ConfigMaps. The prerequisites are not part of the base
 // setup TestCase, so they are deleted here explicitly. DeleteManifests strips
-// Namespace resources, so the 'ca-cert-2' namespace is preserved; the 'curl'
-// namespace is likewise never deleted, consistent with the framework's
-// avoid-deleting-namespaces rule.
+// Namespace resources, so the 'ca-cert-2' namespace is preserved; the
+// 'curl-frontendtls' namespace is likewise never deleted, consistent with the
+// framework's avoid-deleting-namespaces rule.
 func (s *testingSuite) TearDownSuite() {
 	s.BaseTestingSuite.TearDownSuite()
 
@@ -387,7 +397,7 @@ func (s *testingSuite) assertEventualCurlResponse(opts ...curl.Option) {
 	curlOpts := append(commonCurlOpts(), opts...)
 	s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
 		s.Ctx,
-		testdefaults.CurlPodExecOpt,
+		curlPodExecOpt,
 		curlOpts,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
@@ -402,7 +412,7 @@ func (s *testingSuite) assertEventualCurlError(opts ...curl.Option) {
 	curlOpts := append(commonCurlOpts(), opts...)
 	s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlError(
 		s.Ctx,
-		testdefaults.CurlPodExecOpt,
+		curlPodExecOpt,
 		curlOpts,
 		35, // CURLE_HTTP2_STREAM_ERROR
 		10*time.Second,
@@ -414,7 +424,7 @@ func (s *testingSuite) assertEventualCurlResponseForMTLS(hostname string, port i
 	curlOpts := append(commonCurlOptsForMTLS(hostname, port), opts...)
 	s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
 		s.Ctx,
-		testdefaults.CurlPodExecOpt,
+		curlPodExecOpt,
 		curlOpts,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
@@ -429,7 +439,7 @@ func (s *testingSuite) assertEventualCurlErrorForMTLS(hostname string, port int,
 	curlOpts := append(commonCurlOptsForMTLS(hostname, port), opts...)
 	s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlError(
 		s.Ctx,
-		testdefaults.CurlPodExecOpt,
+		curlPodExecOpt,
 		curlOpts,
 		55, // CURLE_SEND_ERROR
 		10*time.Second,
@@ -443,7 +453,7 @@ func (s *testingSuite) TestFrontendTLSConfig() {
 		curlOpts := append(commonCurlOpts(), curl.WithPort(8445))
 		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlError(
 			s.Ctx,
-			testdefaults.CurlPodExecOpt,
+			curlPodExecOpt,
 			curlOpts,
 			55, // CURLE_SEND_ERROR
 			10*time.Second,
@@ -487,7 +497,7 @@ func (s *testingSuite) TestMultipleCACertificates() {
 			curl.WithClientCert(commonClientCertPath, commonClientKeyPath))
 		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
 			s.Ctx,
-			testdefaults.CurlPodExecOpt,
+			curlPodExecOpt,
 			curlOpts,
 			&testmatchers.HttpResponse{
 				StatusCode: http.StatusOK,
@@ -504,7 +514,7 @@ func (s *testingSuite) TestMultipleCACertificates() {
 			curl.WithClientCert(commonClientCertPath, commonClientKeyPath))
 		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
 			s.Ctx,
-			testdefaults.CurlPodExecOpt,
+			curlPodExecOpt,
 			curlOpts,
 			&testmatchers.HttpResponse{
 				StatusCode: http.StatusOK,
@@ -520,7 +530,7 @@ func (s *testingSuite) TestMultipleCACertificates() {
 		curlOpts := commonCurlOptsForMTLS(wildcardHostname, 8446)
 		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlError(
 			s.Ctx,
-			testdefaults.CurlPodExecOpt,
+			curlPodExecOpt,
 			curlOpts,
 			55, // CURLE_SEND_ERROR
 			10*time.Second,
@@ -552,7 +562,7 @@ func (s *testingSuite) TestVerifySubjectAltNames() {
 		// client-non-matching-san.crt has "DNS:mtls-alt.example.com" SAN - should fail
 		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlError(
 			s.Ctx,
-			testdefaults.CurlPodExecOpt,
+			curlPodExecOpt,
 			append(curlOpts8447, curl.WithClientCert(nonMatchingSanCertPath, nonMatchingSanKeyPath)),
 			55, // CURLE_SEND_ERROR - client cert rejected due to SAN mismatch
 			10*time.Second,
@@ -584,7 +594,7 @@ func (s *testingSuite) TestClientSignatureAlgorithms() {
 		// client-non-matching-signature.crt was signed with ECDSA - should fail
 		s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlError(
 			s.Ctx,
-			testdefaults.CurlPodExecOpt,
+			curlPodExecOpt,
 			append(curlOpts8448, curl.WithClientCert(nonMatchingSignatureCertPath, nonMatchingSignatureKeyPath)),
 			55, // CURLE_SEND_ERROR - client cert rejected due to signature mismatch
 			10*time.Second,

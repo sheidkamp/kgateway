@@ -45,6 +45,11 @@ var (
 
 	HttpbinManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "httpbin.yaml")
 
+	// HttpbinSharedManifest is the shared httpbin backend (namespace httpbin) applied once at
+	// base level by common.SetupSharedHttpbinBackend. It is distinct from HttpbinManifest,
+	// which deploys httpbin into the default namespace.
+	HttpbinSharedManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "httpbin_shared.yaml")
+
 	HttpbinLabelSelector = fmt.Sprintf("%s=%s", WellKnownAppLabel, "httpbin")
 
 	HttpbinDeployment = &appsv1.Deployment{

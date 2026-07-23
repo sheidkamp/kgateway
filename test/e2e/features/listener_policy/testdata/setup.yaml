@@ -24,18 +24,21 @@ spec:
         - containerPort: 80
           name: http-web-svc
 ---
+# The curl pods live in a suite-unique namespace (not the shared 'curl' namespace) so this
+# suite never races other suites that delete/re-create same-named curl pods.
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: curl
+  name: curl-listener-policy
 ---
-# Immutable pod spec fields should be consistent with test/e2e/defaults/testdata/curl_pod.yaml
-# due to https://github.com/kgateway-dev/kgateway/issues/13408.
+# In-cluster curl client. Most route assertions in this suite curl the gateway natively from
+# the test host; this pod remains for the tests that need the real curl binary
+# (TestProxyProtocol's --haproxy-protocol and TestPreserveHttp1HeaderCase's exact header case).
 apiVersion: v1
 kind: Pod
 metadata:
   name: curl
-  namespace: curl
+  namespace: curl-listener-policy
   labels:
     app: curl
     app.kubernetes.io/name: curl
@@ -65,7 +68,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: curl-mtls
-  namespace: curl
+  namespace: curl-listener-policy
   labels:
     app: curl-mtls
     app.kubernetes.io/name: curl-mtls

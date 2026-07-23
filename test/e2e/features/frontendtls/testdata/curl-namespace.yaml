@@ -1,4 +1,8 @@
+# Suite-unique namespace for this suite's cert-bearing curl client. It deliberately does not
+# reuse the shared 'curl' namespace: this pod is named 'curl' but has different (immutable)
+# volume mounts than the standard curl pod, so sharing the name/namespace with other suites
+# would race their delete/re-create cycles.
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: curl
+  name: curl-frontendtls
