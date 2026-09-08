@@ -452,6 +452,20 @@ e2e-test: go-test
 e2e-test: TEST_TAG = e2e
 e2e-test: GO_TEST_ARGS = $(E2E_GO_TEST_ARGS)
 
+# Run e2e tests against an already-running kgateway (e.g. from `tilt up` or `make run`).
+# PERSIST_INSTALL makes the framework skip install when the kgateway/kgateway-crds Helm
+# releases already exist, and skip uninstall, so kgateway is left installed; per-test
+# resources are still cleaned up on success. INSTALL_NAMESPACE must match where kgateway
+# is installed (kgateway-system for tilt/make run); the test default is otherwise
+# kgateway-test, which would miss the running release and install a second copy.
+# Set SKIP_EXTPROC_SERVER_SETUP=true to skip building/loading extproc-server if your run
+# does not exercise the extproc tests.
+.PHONY: e2e-test-installed
+e2e-test-installed: export PERSIST_INSTALL := true
+e2e-test-installed: export INSTALL_NAMESPACE := $(INSTALL_NAMESPACE)
+e2e-test-installed: TEST_PKG := ./test/e2e/tests
+e2e-test-installed: e2e-test ## Run e2e tests against an already-installed kgateway, leaving it installed
+
 .PHONY: e2e-shared-images-docker
 e2e-shared-images-docker: kgateway-docker envoy-wrapper-docker sds-docker dummy-idp-docker extproc-server-docker ## Build shared docker images for e2e shards
 

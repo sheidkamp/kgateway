@@ -123,6 +123,7 @@ type TestingT interface {
 
 // ShouldSkipCleanup returns true if cleanup should be skipped.
 // Cleanup is skipped if:
+// - ShouldSkipAllTeardown() returns true (SKIP_ALL_TEARDOWN env var), or
 // - The test failed AND ShouldFailFastAndPersist() returns true (FAIL_FAST_AND_PERSIST env var)
 func ShouldSkipCleanup(t TestingT) bool {
 	if ShouldSkipAllTeardown() {
@@ -137,10 +138,14 @@ func ShouldSkipCleanup(t TestingT) bool {
 // Cleanup registers a cleanup function that will only run if cleanup should not be skipped.
 // Use this instead of t.Cleanup() to automatically handle cleanup based on environment variables.
 //
-// Cleanup will be skipped if:
-// - SKIP_INSTALL is set (skip all cleanup)
-// - PERSIST_INSTALL is set (persist resources across test runs)
+// Whether the function runs is governed entirely by ShouldSkipCleanup, so it is skipped if:
+// - SKIP_ALL_TEARDOWN is set, or
 // - FAIL_FAST_AND_PERSIST is set AND the test failed (skip cleanup on failure for debugging)
+//
+// Note that SKIP_INSTALL and PERSIST_INSTALL do NOT skip this cleanup. They instead leave the
+// kgateway installation in place via their own early-returns in the Install/Uninstall helpers
+// (see TestInstallation.UninstallKgatewayCore/UninstallKgatewayCRDs), while per-test resources
+// registered here are still cleaned up.
 //
 // By default, cleanup runs even if tests fail (to clean up resources).
 // Set FAIL_FAST_AND_PERSIST=true to skip cleanup on failure for debugging.

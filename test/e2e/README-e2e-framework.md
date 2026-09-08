@@ -163,6 +163,44 @@ PERSIST_INSTALL=true ./hack/run-test.sh SessionPersistence
 
 Set to `true`/`1`/`yes`/`y` to enable.
 
+With `PERSIST_INSTALL`, only the kgateway install/uninstall is skipped: per-test
+resources are still applied and cleaned up on success (cleanup is only skipped by
+`SKIP_ALL_TEARDOWN`, or by `FAIL_FAST_AND_PERSIST` on a failing test).
+
+#### Running against an already-installed kgateway (tilt up / make run)
+
+To run e2e tests against a kgateway you started with `tilt up` or `make run` -- using
+the installed kgateway, cleaning up only the per-test resources, and leaving kgateway
+installed -- use the `e2e-test-installed` make target:
+
+```shell
+make e2e-test-installed GO_TEST_USER_ARGS="-run '^TestKgateway$/^BasicRouting$'"
+```
+
+This sets `PERSIST_INSTALL=true` and `INSTALL_NAMESPACE=kgateway-system` for you. The
+namespace matters: `tilt up` and `make run` install kgateway into `kgateway-system`,
+but `TestKgateway` otherwise defaults the install namespace to `kgateway-test`. If that
+default is used, the framework's "is it already installed?" check looks in the wrong
+namespace, misses the running release, and installs a *second* kgateway. Always run
+with `INSTALL_NAMESPACE` pointing at where kgateway actually is.
+
+The equivalent raw command:
+
+```shell
+INSTALL_NAMESPACE=kgateway-system PERSIST_INSTALL=true \
+  ./hack/run-test.sh BasicRouting
+```
+
+Caveats:
+- Because install is skipped, tests run against whatever config the installed controller
+  has. `TestKgateway`'s own install sets extra helm args (e.g. AWS EC2 discovery, a global
+  policy namespace, and ExtProc DeepMerge) that a plain `tilt up` install does not. Suites
+  depending on those settings can fail; install kgateway with matching values to run them.
+- If your cluster is not named `kind` (context `kind-kind`), also set `CLUSTER_NAME`
+  and/or `KUBE_CTX`.
+- Set `SKIP_EXTPROC_SERVER_SETUP=true` to skip building/loading the extproc-server image
+  if your run does not exercise the ExtProc tests.
+
 #### FAIL_FAST_AND_PERSIST (Debugging Test Failures)
 
 **Quick Start:**
