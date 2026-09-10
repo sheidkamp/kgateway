@@ -26,9 +26,11 @@ import (
 const (
 	runLoadTestsEnv = "KGATEWAY_RUN_LOAD_TESTS"
 
-	// General operation timeouts
-	gatewayReadinessTimeout      = 60 * time.Second
-	routeConditionTimeout        = 60 * time.Second
+	// General operation timeouts: safety nets only. Keep them above every
+	// performance threshold below, so a slow run fails the threshold assertion
+	// with real numbers rather than an opaque timeout.
+	gatewayReadinessTimeout      = 3 * time.Minute
+	routeConditionTimeout        = 5 * time.Minute
 	translationCompletionTimeout = 5 * time.Minute
 
 	// Cleanup and sleep intervals
@@ -39,7 +41,8 @@ const (
 	gatewayPollingInterval     = 1 * time.Second
 	teardownPollingInterval    = 100 * time.Millisecond
 
-	// Performance threshold timeouts
+	// Performance thresholds: the suite's only pass/fail limits, selected by
+	// baseline route count.
 	baselineMaxUserTime       = 30 * time.Second
 	baselineMaxTeardownTime   = 10 * time.Second
 	productionMaxUserTime     = 90 * time.Second
