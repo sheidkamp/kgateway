@@ -220,7 +220,7 @@ func (ltm *LoadTestManager) proxyPodSummary() string {
 			continue
 		}
 		if len(pods.Items) == 0 {
-			snapshots = append(snapshots, fmt.Sprintf("%s: no pods", gateway.Namespace))
+			snapshots = append(snapshots, gateway.Namespace+": no pods")
 			continue
 		}
 
