@@ -189,7 +189,7 @@ func (ltm *LoadTestManager) gatewayReadiness(gateway *gwv1.Gateway) (bool, strin
 	listenerDetails := make([]string, 0, len(currentGateway.Status.Listeners))
 	for _, listener := range currentGateway.Status.Listeners {
 		for _, condition := range listener.Conditions {
-			if condition.Type == "Programmed" && condition.Status == "True" {
+			if condition.Type == string(gwv1.ListenerConditionProgrammed) && condition.Status == metav1.ConditionTrue {
 				return true, ""
 			}
 		}
