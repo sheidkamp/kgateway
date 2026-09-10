@@ -135,9 +135,8 @@ func (ltm *LoadTestManager) CreateGateways(gatewayNames []string) error {
 	return nil
 }
 
-// WaitForGatewayReadiness blocks until every created gateway reports a
-// Programmed listener. The timeout error carries the last observed listener
-// conditions and proxy pod state, which a bare timeout cannot distinguish.
+// WaitForGatewayReadiness blocks until every created gateway reports a Programmed listener.
+// The timeout error reports the last observed listener conditions and proxy pod state.
 func (ltm *LoadTestManager) WaitForGatewayReadiness(timeout time.Duration) error {
 	timeoutCh := time.After(timeout)
 	ticker := time.NewTicker(2 * time.Second)
@@ -149,7 +148,7 @@ func (ltm *LoadTestManager) WaitForGatewayReadiness(timeout time.Duration) error
 		select {
 		case <-timeoutCh:
 			return fmt.Errorf("timeout waiting for gateways to be ready after %v: %s; proxy pods: %s",
-				timeout, blocker, ltm.proxyPodSnapshot())
+				timeout, blocker, ltm.proxyPodSummary())
 		case <-ticker.C:
 			allReady := true
 
@@ -202,8 +201,8 @@ func (ltm *LoadTestManager) gatewayReadiness(gateway *gwv1.Gateway) (bool, strin
 		namespacedName, strings.Join(listenerDetails, " | "))
 }
 
-// proxyPodSnapshot summarizes the pods in each namespace a gateway was created in.
-func (ltm *LoadTestManager) proxyPodSnapshot() string {
+// proxyPodSummary summarizes the pods in each namespace a gateway was created in.
+func (ltm *LoadTestManager) proxyPodSummary() string {
 	seen := make(map[string]struct{}, len(ltm.createdGateways))
 	snapshots := []string{}
 

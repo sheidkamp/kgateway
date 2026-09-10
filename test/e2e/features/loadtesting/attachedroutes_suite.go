@@ -26,12 +26,18 @@ import (
 const (
 	runLoadTestsEnv = "KGATEWAY_RUN_LOAD_TESTS"
 
-	// General operation timeouts: safety nets only. Keep them above every
-	// performance threshold below, so a slow run fails the threshold assertion
-	// with real numbers rather than an opaque timeout.
+	// General operation timeouts: safety nets only. Keep them above every performance threshold below.
 	gatewayReadinessTimeout      = 3 * time.Minute
 	routeConditionTimeout        = 5 * time.Minute
 	translationCompletionTimeout = 5 * time.Minute
+
+	// Performance thresholds: the suite's only pass/fail limits, selected by baseline route count.
+	baselineMaxUserTime       = 30 * time.Second
+	baselineMaxTeardownTime   = 10 * time.Second
+	productionMaxUserTime     = 90 * time.Second
+	productionMaxTeardownTime = 20 * time.Second
+	largeScaleMaxUserTime     = 2 * time.Minute
+	largeScaleMaxTeardownTime = 30 * time.Second
 
 	// Cleanup and sleep intervals
 	monitoringSleepInterval = 500 * time.Millisecond
@@ -40,15 +46,6 @@ const (
 	translationPollingInterval = 5 * time.Second
 	gatewayPollingInterval     = 1 * time.Second
 	teardownPollingInterval    = 100 * time.Millisecond
-
-	// Performance thresholds: the suite's only pass/fail limits, selected by
-	// baseline route count.
-	baselineMaxUserTime       = 30 * time.Second
-	baselineMaxTeardownTime   = 10 * time.Second
-	productionMaxUserTime     = 90 * time.Second
-	productionMaxTeardownTime = 20 * time.Second
-	largeScaleMaxUserTime     = 2 * time.Minute
-	largeScaleMaxTeardownTime = 30 * time.Second
 )
 
 var _ e2e.NewSuiteFunc = NewAttachedRoutesSuite

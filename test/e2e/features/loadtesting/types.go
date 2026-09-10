@@ -173,8 +173,7 @@ type VClusterMetrics struct {
 	APICallsPerSecond float64 `json:"apiCallsPerSecond"`
 }
 
-// ScaleConfig controls how fast a scenario drives the cluster. Performance
-// thresholds live with the assertion, in attachedroutes_suite.go.
+// ScaleConfig controls the rate of resource creation: BatchSize at a time, pausing GracePeriod between batches.
 type ScaleConfig struct {
 	BatchSize   int
 	GracePeriod time.Duration
