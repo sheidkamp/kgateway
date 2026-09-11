@@ -8,7 +8,7 @@ env:
 
 on:
   schedule:
-    - cron: "0 14 * * *" # every day @ 05:00 UTC, run tests against main and supported LTS branches
+    - cron: "0 18 * * *" # every day @ 05:00 UTC, run tests against main and supported LTS branches
   workflow_dispatch:
     inputs:
       target_ref:
@@ -96,7 +96,7 @@ jobs:
   kube_gateway_api_conformance_tests:
     name: Conformance (ref=${{ matrix.ref.display_ref }}, type=Kubernetes Gateway API, k8s=${{ matrix.env-versions.label }}, gw-api=${{matrix.gateway-api-channel}})
     needs: determine_refs
-    if: ${{ needs.determine_refs.outputs.should_run == 'true' && ((github.event_name == 'workflow_dispatch' && inputs.run-conformance ) || github.event.schedule == '0 5 * * *') }}
+    if: ${{ needs.determine_refs.outputs.should_run == 'true' && ((github.event_name == 'workflow_dispatch' && inputs.run-conformance ) || github.event.schedule == '0 18 * * *') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     strategy:
