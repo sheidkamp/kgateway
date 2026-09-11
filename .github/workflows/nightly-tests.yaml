@@ -8,7 +8,7 @@ env:
 
 on:
   schedule:
-    - cron: "0 5 * * *" # every day @ 05:00 UTC, run tests against main and supported LTS branches
+    - cron: "0 14 * * *" # every day @ 05:00 UTC, run tests against main and supported LTS branches
   workflow_dispatch:
     inputs:
       target_ref:
