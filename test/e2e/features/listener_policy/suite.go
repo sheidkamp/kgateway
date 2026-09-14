@@ -183,13 +183,6 @@ func (s *testingSuite) TestPreserveHttp1HeaderCase() {
 }
 
 func (s *testingSuite) TestAccessLogEmittedToStdout() {
-	// The access log policy rolls the gateway Deployment. Let it finish before sending any
-	// requests, so the pod that serves them is the one whose logs are read below.
-	s.TestInstallation.AssertionsT(s.T()).EventuallyDeploymentsRolledOut(
-		s.Ctx, proxyDeployment.ObjectMeta.GetNamespace(),
-		wellknown.GatewayNameLabel+"="+proxyObjectMeta.GetName(),
-	)
-
 	// First: trigger a 404 that SHOULD be logged (filter is GE 400)
 	s.TestInstallation.AssertionsT(s.T()).AssertEventualCurlResponse(
 		s.Ctx,
