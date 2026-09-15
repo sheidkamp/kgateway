@@ -67,7 +67,7 @@ jobs:
           fi
           refs="$(jq -c . <<< "${refs}")"
           echo "refs=${refs}" >> "$GITHUB_OUTPUT"
-          
+
           # Nightly tests don't have much of a reason to run in forks, and will fail if the expected
           # LTS branches are present. Don't run in forks, unless enabled via the ENABLE_NIGHTLY_TESTS_ON_FORK variable.
           # Manual runs are always honored
