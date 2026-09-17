@@ -30,9 +30,6 @@ Uses the upstream [Kubernetes Gateway API Conformance suite](https://github.com/
 ### [Kubernetes End-to-End Tests](./e2e.yaml)
 Runs the suite of [Kubernetes End-To-End Tests](/test/e2e).
 
-**Note**: This Github Action will not run by default on a Draft Pull Request.
-After a Pull Request is marked as `Ready for Review` it will trigger the action to run.
-
 ## Scheduled Workflows
 
 ### [Nightly Tests](./nightly-tests.yaml)
