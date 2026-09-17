@@ -30,6 +30,14 @@ Uses the upstream [Kubernetes Gateway API Conformance suite](https://github.com/
 ### [Kubernetes End-to-End Tests](./e2e.yaml)
 Runs the suite of [Kubernetes End-To-End Tests](/test/e2e).
 
+## Scheduled Workflows
+
+### [Nightly Tests](./nightly-tests.yaml)
+Runs the conformance, load, and e2e suites against `main` and each supported LTS branch every day at 05:00 UTC.
+
+**Forks:** the nightly schedule is disabled on forks by default, as there is usually not a reason to run them there,
+and they will fail if the expected LTS branches have not been synched. Set repository variable `ENABLE_NIGHTLY_TESTS_ON_FORK` to a truthy value to enable. Manually dispatched tests will always run.
+
 ## Interacting with CI
 
 ### Comments That Trigger Workflows
