@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/endpoints"
+	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/proxy_syncer/sharedproto"
 	kgtranslator "github.com/kgateway-dev/kgateway/v2/pkg/kgateway/translator"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/xds"
@@ -62,7 +63,13 @@ func TestPerClientEnvoyEndpointsUsesResolvedReplacementHash(t *testing.T) {
 	ucc := ir.NewUniquelyConnectedClient("client", "ns", nil, ir.PodLocality{})
 	uccs := krt.NewStaticCollection(nil, []ir.UniquelyConnectedClient{ucc}, krtopts.ToOptions("ReplacementHashClients")...)
 	sources := krt.NewStaticCollection(nil, []ir.EndpointsForBackend{*source}, krtopts.ToOptions("ReplacementHashEndpoints")...)
-	perClient := NewPerClientEnvoyEndpoints(krtopts, uccs, sources, translator.TranslateEndpoints)
+	perClient := NewPerClientEnvoyEndpoints(
+		krtopts,
+		uccs,
+		sources,
+		translator.ResolveEndpoints,
+		translator.BuildClusterLoadAssignment,
+	)
 
 	var initialHash uint64
 	g.Eventually(func() string {
@@ -71,7 +78,7 @@ func TestPerClientEnvoyEndpointsUsesResolvedReplacementHash(t *testing.T) {
 			return ""
 		}
 		initialHash = rows[0].EndpointsHash
-		return endpointPipePath(rows[0].Endpoints)
+		return endpointPipePath(rows[0].Endpoints.Clone())
 	}, time.Second, 20*time.Millisecond).Should(gomega.Equal("replacement-a"))
 	g.Expect(initialHash).ToNot(gomega.Equal(sourceHash),
 		"the row key must use the replacement set's resolved hash, not the source hash")
@@ -89,7 +96,7 @@ func TestPerClientEnvoyEndpointsUsesResolvedReplacementHash(t *testing.T) {
 			return ""
 		}
 		updatedHash = rows[0].EndpointsHash
-		return endpointPipePath(rows[0].Endpoints)
+		return endpointPipePath(rows[0].Endpoints.Clone())
 	}, time.Second, 20*time.Millisecond).Should(gomega.Equal("replacement-b"),
 		"a replacement-only update must not be suppressed by stale KRT equality")
 	g.Expect(updatedHash).ToNot(gomega.Equal(initialHash))
@@ -258,6 +265,27 @@ func TestFilterEndpointResourcesForErroredClusters(t *testing.T) {
 	g.Expect(recovered.Items).To(gomega.HaveKey("errored-cluster"))
 }
 
+func TestMergeBackendResources(t *testing.T) {
+	gateway := envoycache.NewResourcesWithTTL("gw-1", []envoycachetypes.ResourceWithTTL{
+		{Resource: &envoylistenerv3.Listener{Name: "http", StatPrefix: "gateway"}},
+	})
+	withBackendListener := func(statPrefix string) envoycache.Resources {
+		return mergeBackendResources(gateway, wrapBaseResources([]*envoylistenerv3.Listener{{Name: "tunnel_dest", StatPrefix: statPrefix}}))
+	}
+
+	g := gomega.NewWithT(t)
+	g.Expect(mergeBackendResources(gateway, baseResources[*envoylistenerv3.Listener]{})).To(gomega.Equal(gateway),
+		"without backend resources the Gateway's resources must be used as is")
+
+	merged := withBackendListener("first")
+	g.Expect(merged.Items).To(gomega.HaveKey("http"))
+	g.Expect(merged.Items).To(gomega.HaveKey("tunnel_dest"))
+	g.Expect(merged.Version).ToNot(gomega.Equal(gateway.Version), "adding resources must change the version")
+	g.Expect(withBackendListener("second").Version).ToNot(gomega.Equal(merged.Version),
+		"a changed backend resource must change the version")
+	g.Expect(gateway.Items).To(gomega.HaveLen(1), "the Gateway's resources are shared and must not be modified")
+}
+
 // TestSnapshotPerClientStillPublishesWhenReferencedClusterErrored pins the
 // fail-closed behavior for errored clusters: a cluster whose backend
 // translation failed is excluded from the CDS payload (routes to it get
@@ -305,17 +333,17 @@ func TestSnapshotPerClientStillPublishesWhenReferencedClusterErrored(t *testing.
 		Routes:         routes,
 		Listeners:      listeners,
 	}})
-	clusterCol := krt.NewStaticCollection[uccWithCluster](nil, []uccWithCluster{
+	pcc, _ := newTestPerClientClusters([]uccWithCluster{
 		{
 			Client:         ucc,
 			Name:           "cluster-a",
-			Cluster:        &envoyclusterv3.Cluster{Name: "cluster-a"},
+			Cluster:        sharedproto.Wrap(&envoyclusterv3.Cluster{Name: "cluster-a"}),
 			ClusterVersion: 1,
 		},
 		{
 			Client:         ucc,
 			Name:           "cluster-b",
-			Cluster:        &envoyclusterv3.Cluster{Name: "cluster-b"},
+			Cluster:        sharedproto.Wrap(&envoyclusterv3.Cluster{Name: "cluster-b"}),
 			ClusterVersion: 2,
 			Error:          errors.New("boom"),
 		},
@@ -332,12 +360,7 @@ func TestSnapshotPerClientStillPublishesWhenReferencedClusterErrored(t *testing.
 				return []string{ep.Client.ResourceName()}
 			}),
 		},
-		PerClientEnvoyClusters{
-			clusters: clusterCol,
-			index: krtpkg.UnnamedIndex(clusterCol, func(cluster uccWithCluster) []string {
-				return []string{cluster.Client.ResourceName()}
-			}),
-		},
+		pcc,
 	)
 
 	g.Eventually(func() int {
@@ -399,11 +422,11 @@ func TestSnapshotPerClientPublishesEvenWithUnresolvableBackendRef(t *testing.T) 
 		Listeners:      listeners,
 	}})
 
-	clusterCol := krt.NewStaticCollection[uccWithCluster](nil, []uccWithCluster{
+	pcc, _ := newTestPerClientClusters([]uccWithCluster{
 		{
 			Client:         ucc,
 			Name:           "cluster-a",
-			Cluster:        &envoyclusterv3.Cluster{Name: "cluster-a"},
+			Cluster:        sharedproto.Wrap(&envoyclusterv3.Cluster{Name: "cluster-a"}),
 			ClusterVersion: 1,
 		},
 	})
@@ -419,12 +442,7 @@ func TestSnapshotPerClientPublishesEvenWithUnresolvableBackendRef(t *testing.T) 
 				return []string{ep.Client.ResourceName()}
 			}),
 		},
-		PerClientEnvoyClusters{
-			clusters: clusterCol,
-			index: krtpkg.UnnamedIndex(clusterCol, func(cluster uccWithCluster) []string {
-				return []string{cluster.Client.ResourceName()}
-			}),
-		},
+		pcc,
 	)
 
 	g.Eventually(func() int {
@@ -472,11 +490,11 @@ func TestSnapshotPerClientKeepsPublishingWhenMisconfiguredBackendRefArrivesAtRun
 	}
 	mostXdsSnapshots := krt.NewStaticCollection[GatewayXdsResources](nil, []GatewayXdsResources{initial})
 
-	clusterCol := krt.NewStaticCollection[uccWithCluster](nil, []uccWithCluster{
+	pcc, _ := newTestPerClientClusters([]uccWithCluster{
 		{
 			Client:         ucc,
 			Name:           "cluster-a",
-			Cluster:        &envoyclusterv3.Cluster{Name: "cluster-a"},
+			Cluster:        sharedproto.Wrap(&envoyclusterv3.Cluster{Name: "cluster-a"}),
 			ClusterVersion: 1,
 		},
 	})
@@ -492,12 +510,7 @@ func TestSnapshotPerClientKeepsPublishingWhenMisconfiguredBackendRefArrivesAtRun
 				return []string{ep.Client.ResourceName()}
 			}),
 		},
-		PerClientEnvoyClusters{
-			clusters: clusterCol,
-			index: krtpkg.UnnamedIndex(clusterCol, func(cluster uccWithCluster) []string {
-				return []string{cluster.Client.ResourceName()}
-			}),
-		},
+		pcc,
 	)
 
 	g.Eventually(func() int {

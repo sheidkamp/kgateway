@@ -24,8 +24,6 @@ const (
 	// (e.g. RDS, CDS, and security-related policies). Routes that fail these
 	// checks are also replaced with direct responses, and helps prevent unsafe
 	// config from reaching Envoy.
-	// Strict Validation is not supported with Rustformation yet,
-	// see docs/guides/transformation.md for details
 	ValidationStrict ValidationMode = "STRICT"
 )
 
@@ -282,18 +280,20 @@ type Settings struct {
 	// - "STRICT": Builds on STANDARD by running targeted validation
 	ValidationMode ValidationMode `split_words:"true" default:"STANDARD"`
 
-	// ValidatorMode selects the strict-validation execution strategy. Has no effect
-	// when ValidationMode is "STANDARD". Supported values:
-	// - "BINARY": fork envoy --mode validate per call (the pre-cache behavior).
-	// - "CACHE": wrap BINARY with an LRU result cache keyed on bootstrap content
-	//   hash (default). A validation verdict is a pure function of the config
-	//   bytes, so memoization cannot change outcomes, only skip redundant envoy
-	//   invocations; transient failures are never cached.
+	// ValidatorMode selects how strict validation executes unseen bootstraps.
+	// Has no effect when ValidationMode is "STANDARD". Supported values:
+	// - "BINARY": run envoy --mode validate for each submitted bootstrap.
+	// - "CACHE": cache BINARY results in an LRU keyed by bootstrap content (default).
+	//   Transient failures are not cached.
+	//
+	// In both modes, backend translation caches cluster verdicts by content before
+	// building a bootstrap. Identical clusters therefore reuse a verdict in BINARY
+	// mode too.
 	ValidatorMode ValidatorMode `split_words:"true" default:"CACHE"`
 
-	// ValidatorCacheSize is the LRU capacity used by the CACHE validator mode.
-	// Ignored when ValidatorMode is BINARY. A value <= 0 (the default) selects the
-	// implementation default, validator.DefaultCacheSize.
+	// ValidatorCacheSize sets the LRU capacity of the CACHE mode's bootstrap cache
+	// and the translator's cluster verdict cache in every ValidatorMode.
+	// A value <= 0 selects validator.DefaultCacheSize.
 	ValidatorCacheSize int `split_words:"true"`
 
 	// EnableBuiltinDefaultMetrics enables the default builtin controller-runtime metrics and go runtime metrics.
@@ -314,6 +314,18 @@ type Settings struct {
 	// AwsEc2RefreshInterval controls how often the controller refreshes EC2 instance discovery
 	// for Backend resources when AWS EC2 discovery is enabled.
 	AwsEc2RefreshInterval time.Duration `split_words:"true" default:"30s"`
+
+	// TranslationDebounce batches changes to translation inputs before they trigger Gateway translation: changes
+	// are delivered once no further change has arrived for this long. Each change otherwise rebuilds the whole
+	// translation of every Gateway it affects, so batching a burst saves a rebuild per change, at the cost of
+	// delaying each change by about this much. It currently applies to route changes. Set to 0 to deliver every
+	// change immediately.
+	TranslationDebounce time.Duration `split_words:"true" default:"10ms"`
+
+	// TranslationDebounceMax bounds how long changes can be held while new changes keep arriving.
+	// It is the main trade-off between translation work during a burst of changes and how stale
+	// Gateway configuration and status can get. Values below TranslationDebounce are raised to it.
+	TranslationDebounceMax time.Duration `split_words:"true" default:"100ms"`
 
 	PolicyMerge string `split_words:"true" default:"{}"`
 
