@@ -478,19 +478,23 @@ type Settings struct {
 	//
 	// REFERENCED is what shrinks config_dump and per-proxy stats cardinality on
 	// clusters with many Services and few routed ones. It is experimental: a
-	// route retarget publishes the new cluster in the same coherent snapshot as
-	// the route that names it, and Envoy does not necessarily apply CDS before
-	// RDS within one snapshot, so a retarget can briefly 503 NC where ALL never
-	// would. The transition graces that close that window are separate work;
-	// until then, treat this as a trade of a transient retarget blip for a
-	// permanently smaller data plane.
+	// cluster now enters and leaves a proxy's CDS as configuration starts and
+	// stops naming it, and Envoy does not necessarily apply CDS before RDS
+	// within one snapshot, so either transition could briefly 503 NC where ALL
+	// never would. Two windows close that: ClusterReferenceAhead delivers a new
+	// cluster before the configuration that names it, and
+	// ClusterDereferenceGrace keeps a de-referenced one until the configuration
+	// that stopped naming it has landed. Both are elapsed time, not
+	// acknowledgements: each must exceed the fleet's worst-case propagation. A
+	// gateway whose routes pick a destination at request time stays unscoped.
 	ClusterDiscoveryMode ClusterDiscoveryMode `split_words:"true" default:"ALL"`
 
 	// ClusterDereferenceGrace is how long a cluster that left the emitted set stays
 	// published, in REFERENCED mode only. Removing it at once can let CDS remove it
 	// before RDS updates the route still targeting it, causing 503 NC. The clock
-	// starts when the controller first publishes a build without the cluster, not
-	// when Envoy gets the route update. The grace gives that update time to land;
+	// starts when the controller publishes the route update that stops naming the
+	// cluster, not when Envoy gets it. A build held for a new or unready cluster
+	// does not start it; the release does. The grace gives that update time to land;
 	// it does not confirm Envoy received or applied it, so it narrows the race
 	// rather than closing it. Set it above the fleet's worst-case RDS propagation.
 	// Only clusters scoping stops emitting are kept: a cluster whose backend was
@@ -498,6 +502,32 @@ type Settings struct {
 	// Negative values act as 0:
 	// 0 removes immediately and accepts the race.
 	ClusterDereferenceGrace time.Duration `split_words:"true" default:"5s"`
+
+	// ClusterReferenceAhead is how long routes, listeners and secrets that name
+	// a cluster new to a proxy are held after the controller first publishes
+	// that cluster to it, in REFERENCED mode only. A cluster is new when the
+	// proxy's published snapshot lacks it. Clusters only a filter calls count
+	// too, such as a new ext_authz cluster.
+	//
+	// One snapshot carrying both is not enough. After a CDS response is sent
+	// its watch stays closed until Envoy ACKs, so a route update in that window
+	// goes out on the open RDS watch first. Any retarget during an un-ACKed CDS
+	// update hits this, and no server option prevents it.
+	//
+	// The clock starts at the publish that first carries the cluster, just
+	// before the controller installs it in its xDS cache. The send, Envoy's ACK,
+	// and Envoy applying and warming the cluster are later events that nothing
+	// observes. A send held back by an un-ACKed CDS response, or slow warming,
+	// can outlast the window, so it narrows the race rather than closing it.
+	//
+	// Only edits that introduce a cluster the proxy's published snapshot lacks
+	// pay the latency. 0 or a negative value publishes cluster and route
+	// together and accepts that race. With PerClientPublishBudget positive, a
+	// hold ends at most one budget after it began, so a misconfigured window or
+	// a stream of new clusters cannot pin updates. With the budget at 0 or
+	// less, a hold still ends when its windows close, but new clusters that
+	// keep arriving can extend it.
+	ClusterReferenceAhead time.Duration `split_words:"true" default:"2s"`
 
 	// ReferenceGrantMode controls how cross-namespace references are validated via ReferenceGrant.
 	// Supported values are:

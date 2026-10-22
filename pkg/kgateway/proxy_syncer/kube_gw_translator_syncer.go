@@ -52,21 +52,15 @@ func (s *ProxyTranslator) syncXds(
 		return
 	}
 
-	// The snapshot publishes no unrequested resource by construction:
-	// snapshotPerClient drops CLAs for clusters absent from CDS, and the
-	// per-cluster resolution only carries cluster/CLA pairs — so we do not
-	// rely on a post-hoc MakeConsistent() pass, which would also have mutated
-	// the snapshot shared with the krt cache. Publication goes through the
-	// publish gate so it settles synthesized CLAs, cancels any pending bounded
-	// publish or flip release, and cannot race an expiring budget timer.
-	// A de-reference produces a perfectly coherent build -- nothing is missing,
-	// a cluster simply stopped being emitted -- so the removal side cannot ride
-	// on the deferred path above. When a grace is configured, a coherent
-	// snapshot is published through the same carry-forward resolution, with no
-	// holds, so a cluster that just left the emitted set stays published until
-	// its window closes.
-	if s.gate.retainsDereferenced() {
-		if err := s.gate.publishWithDereferenceGrace(ctx, s.xdsCache, snapWrap); err != nil {
+	// The snapshot carries no unrequested resource: snapshotPerClient drops
+	// CLAs for clusters absent from CDS, and resolution carries only
+	// cluster/CLA pairs. MakeConsistent() would mutate the snapshot shared with
+	// the krt cache. The gate settles synthesized CLAs, cancels pending bounded
+	// publishes and flip releases, and cannot race a budget timer. A transition
+	// alone never makes a build deferred, so with either window configured,
+	// coherent builds publish through publishWithTransitionGraces.
+	if s.gate.appliesTransitionGraces() {
+		if err := s.gate.publishWithTransitionGraces(ctx, s.xdsCache, snapWrap); err != nil {
 			logPublishFailure(proxyKey, err)
 		}
 		return
@@ -135,6 +129,37 @@ func (m *referencedClustersMemo) get(
 	return refs
 }
 
+// flipBlockingClusters returns the clusters a deferred build would hold its
+// flip for: missing ones the published configuration does not yet reference.
+// Missing clusters still in published CDS are carried instead.
+func flipBlockingClusters(snapWrap XdsSnapWrapper, published envoycache.ResourceSnapshot) []string {
+	publishedRefs := publishedReferencedClusters(published)
+	oldClusters := published.GetResourcesAndTTL(envoyresourcev3.ClusterType)
+	var flipBlocking []string
+	for _, name := range snapWrap.missingReferenced {
+		if _, wasReferenced := publishedRefs[name]; wasReferenced {
+			continue // already live, including a missing cluster published at budget expiry
+		}
+		if _, wasPublished := oldClusters[name]; wasPublished {
+			continue // carried forward
+		}
+		flipBlocking = append(flipBlocking, name)
+	}
+	for _, name := range snapWrap.missingEndpointsReferenced {
+		// Previously referenced: the client keeps its endpoints. When scoped, a
+		// dropped backend's listener still ships and can name a cluster scoping
+		// left out of CDS; the client has no endpoints for that one.
+		_, wasReferenced := publishedRefs[name]
+		_, wasPublished := oldClusters[name]
+		if wasReferenced && (wasPublished || !snapWrap.scopesClusters) {
+			continue
+		}
+		flipBlocking = append(flipBlocking, name)
+	}
+	slices.Sort(flipBlocking)
+	return flipBlocking
+}
+
 // resolveDeferredPerCluster composes the snapshot to publish for a deferred
 // wrapper against the one published on the client's current connection:
 //
@@ -154,33 +179,8 @@ func (m *referencedClustersMemo) get(
 // Returns the snapshot, the flip-blocking clusters if held (else nil), and the
 // EDS contributions.
 func resolveDeferredPerCluster(snapWrap XdsSnapWrapper, published envoycache.ResourceSnapshot, holdFlips bool, graced map[string]struct{}, lastPublished func(string) (uint64, bool)) (*envoycache.Snapshot, []string, map[string]uint64) {
-	publishedRefs := publishedReferencedClusters(published)
 	oldClusters := published.GetResourcesAndTTL(envoyresourcev3.ClusterType)
-
-	// Only gaps the published config does not yet reference block the flip.
-	// Missing clusters still in published CDS are carried instead.
-	var flipBlocking []string
-	for _, name := range snapWrap.missingReferenced {
-		if _, wasReferenced := publishedRefs[name]; wasReferenced {
-			continue // already live, including a missing cluster published at budget expiry
-		}
-		if _, wasPublished := oldClusters[name]; wasPublished {
-			continue // carried forward below
-		}
-		flipBlocking = append(flipBlocking, name)
-	}
-	for _, name := range snapWrap.missingEndpointsReferenced {
-		// Previously referenced: the client keeps its endpoints. When scoped, a
-		// dropped backend's listener still ships and can name a cluster scoping
-		// left out of CDS; the client has no endpoints for that one.
-		_, wasReferenced := publishedRefs[name]
-		_, wasPublished := oldClusters[name]
-		if wasReferenced && (wasPublished || !snapWrap.scopesClusters) {
-			continue
-		}
-		flipBlocking = append(flipBlocking, name)
-	}
-	slices.Sort(flipBlocking)
+	flipBlocking := flipBlockingClusters(snapWrap, published)
 
 	composed := &envoycache.Snapshot{}
 	*composed = *snapWrap.snap
@@ -308,6 +308,9 @@ func resolveDeferredPerCluster(snapWrap XdsSnapWrapper, published envoycache.Res
 		)
 	}
 	deps.apply(composed)
+	if len(heldBlocking) > 0 {
+		addBuiltClusterListeners(composed, snapWrap.snap)
+	}
 
 	return composed, heldBlocking, edsHashes
 }

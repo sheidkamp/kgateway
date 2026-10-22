@@ -2,6 +2,7 @@ package proxy_syncer
 
 import (
 	"testing"
+	"time"
 
 	envoylistenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	envoyroutev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -71,4 +72,39 @@ func TestDisabledScopingLeavesTheGatewayProjectionEmpty(t *testing.T) {
 		emittedClustersFor(clusterScoping{}, envoycache.Resources{}, envoycache.Resources{}).
 			Equals(emittedClusters{}),
 		"a disabled projection must equal the zero value, so it never invalidates the row")
+}
+
+// TestDisabledScopingHasNoTransitionWindows: unscoped CDS ignores both
+// configured windows, so coherent builds take the plain publish path.
+func TestDisabledScopingHasNoTransitionWindows(t *testing.T) {
+	configured := clusterScopingFrom(apisettings.Settings{
+		ClusterDiscoveryMode:    apisettings.ClusterDiscoveryAll,
+		ClusterDereferenceGrace: time.Hour,
+		ClusterReferenceAhead:   time.Hour,
+	})
+
+	assert.Zero(t, configured.DereferenceGrace(),
+		"a de-reference window is meaningless when no cluster ever leaves the emitted set")
+	assert.Zero(t, configured.ReferenceAhead(),
+		"a reference-ahead window is meaningless when every cluster was delivered long ago")
+
+	gate := newPublishGate(time.Minute, false, nil, configured)
+	assert.False(t, gate.appliesTransitionGraces(),
+		"the coherent publish path must be untouched when CDS is not scoped")
+}
+
+// TestScopedClustersUsesTheConfiguredWindows: with scoping on, the configured
+// durations must reach the gate.
+func TestScopedClustersUsesTheConfiguredWindows(t *testing.T) {
+	configured := clusterScopingFrom(apisettings.Settings{
+		ClusterDiscoveryMode:    apisettings.ClusterDiscoveryReferenced,
+		ClusterDereferenceGrace: 7 * time.Second,
+		ClusterReferenceAhead:   3 * time.Second,
+	})
+
+	assert.Equal(t, 7*time.Second, configured.DereferenceGrace())
+	assert.Equal(t, 3*time.Second, configured.ReferenceAhead())
+
+	gate := newPublishGate(time.Minute, false, nil, configured)
+	assert.True(t, gate.appliesTransitionGraces())
 }
