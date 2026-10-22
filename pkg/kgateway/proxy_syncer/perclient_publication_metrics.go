@@ -74,6 +74,14 @@ var (
 		},
 		nil,
 	)
+	snapshotPerClientReclaimedTotal = metrics.NewCounter(
+		metrics.CounterOpts{
+			Subsystem: snapshotSubsystem,
+			Name:      "perclient_reclaimed_total",
+			Help:      "Per-client xDS snapshot cache entries reclaimed after their client left and stayed gone for the grace period",
+		},
+		nil,
+	)
 )
 
 // recordSnapshotDefer counts one deferred build for the client's gateway, per
@@ -145,4 +153,14 @@ func recordInconsistentSnapshot() {
 		return
 	}
 	snapshotPerClientInconsistentTotal.Inc()
+}
+
+// recordSnapshotReclaim counts a reclaimed cache entry. It has no gateway
+// labels: the client is gone, often with its gateway, so a labeled series
+// would outlive what it names.
+func recordSnapshotReclaim() {
+	if !metrics.Active() {
+		return
+	}
+	snapshotPerClientReclaimedTotal.Inc()
 }
