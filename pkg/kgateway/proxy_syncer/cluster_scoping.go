@@ -1,6 +1,8 @@
 package proxy_syncer
 
 import (
+	"time"
+
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 
 	apisettings "github.com/kgateway-dev/kgateway/v2/api/settings"
@@ -11,16 +13,34 @@ import (
 //
 // It exists so that "is this feature on" is one question with one answer,
 // asked in the handful of places that would otherwise each re-derive it from
-// the mode. Every path it touches -- collecting the emitted set and filtering
-// CDS -- is guarded by ScopesClusters, and when that is false none of them run:
-// no walk over the generated protos, no filtering, and the published snapshot
-// is the one the syncer built.
+// the mode. Every path it touches -- collecting the emitted set, filtering CDS,
+// and the transition windows that make the emitted set safe to change -- is
+// guarded by ScopesClusters, and when that is false none of them run: no walk
+// over the generated protos, no filtering, no per-client state, and the
+// published snapshot is the one the syncer built.
 type clusterScoping struct {
 	mode apisettings.ClusterDiscoveryMode
+	// dereferenceGrace is the de-reference grace. Read it through
+	// DereferenceGrace, which is 0 when scoping is off.
+	dereferenceGrace time.Duration
 }
 
 func clusterScopingFrom(s apisettings.Settings) clusterScoping {
-	return clusterScoping{mode: s.ClusterDiscoveryMode}
+	return clusterScoping{
+		mode:             s.ClusterDiscoveryMode,
+		dereferenceGrace: s.ClusterDereferenceGrace,
+	}
+}
+
+// DereferenceGrace is how long a de-referenced cluster stays published, and 0
+// whenever CDS is not scoped: with every backend emitted unconditionally, no
+// cluster is ever de-referenced, so there is nothing to hold on to and the gate
+// keeps no state for it.
+func (c clusterScoping) DereferenceGrace() time.Duration {
+	if !c.ScopesClusters() {
+		return 0
+	}
+	return c.dereferenceGrace
 }
 
 // ScopesClusters reports whether CDS and EDS are scoped to referenced clusters.
@@ -48,4 +68,11 @@ func emittedClustersFor(scoping clusterScoping, routes, listeners envoycache.Res
 // disabled.
 func scopedClusters() clusterScoping {
 	return clusterScoping{mode: apisettings.ClusterDiscoveryReferenced}
+}
+
+// scopedClustersWithGrace is scopedClusters with a de-reference grace.
+func scopedClustersWithGrace(grace time.Duration) clusterScoping {
+	s := scopedClusters()
+	s.dereferenceGrace = grace
+	return s
 }

@@ -149,6 +149,11 @@ type publishGate struct {
 	// catch entries re-created after departure. Set before first use.
 	afterPublish func(proxyKey string)
 
+	// dereferenceGrace is how long a de-referenced cluster stays published;
+	// nonpositive disables retention, and it is 0 outside REFERENCED mode.
+	// Written once at construction.
+	dereferenceGrace time.Duration
+
 	mu           sync.Mutex
 	pending      map[string]*pendingFirstPublish
 	pendingFlips map[string]*pendingFlipRelease
@@ -171,6 +176,7 @@ type publishGate struct {
 	// publishedEDS holds each client's contributions as last installed on its
 	// current connection. Guarded by mu.
 	publishedEDS map[string]map[string]uint64
+	dereferenced map[string]*dereferenceState
 }
 
 type pendingFirstPublish struct {
@@ -212,15 +218,17 @@ type pendingFlipRelease struct {
 	timer    *time.Timer
 }
 
-func newPublishGate(budget time.Duration, checkConsistency bool, clientState krtcollections.XDSClientState) *publishGate {
+func newPublishGate(budget time.Duration, checkConsistency bool, clientState krtcollections.XDSClientState, scoping clusterScoping) *publishGate {
 	return &publishGate{
 		budget:           budget,
 		checkConsistency: checkConsistency,
 		clientState:      clientState,
+		dereferenceGrace: scoping.DereferenceGrace(),
 		pending:          make(map[string]*pendingFirstPublish),
 		pendingFlips:     make(map[string]*pendingFlipRelease),
 		published:        make(map[string]struct{}),
 		publishedEDS:     make(map[string]map[string]uint64),
+		dereferenced:     make(map[string]*dereferenceState),
 	}
 }
 
@@ -354,6 +362,8 @@ func (g *publishGate) publishLocked(ctx context.Context, cache envoycache.Snapsh
 	// This build supersedes the pending carry expiry's; a deferred build
 	// re-arms it after publishing.
 	g.cancelCarryExpiryLocked(proxyKey)
+	// Keep the de-reference timer: carried graced clusters still need it.
+	// graceDereferencedClustersLocked cancels it when the last window closes.
 	return g.setSnapshot(ctx, cache, proxyKey, snap, synthesized, edsHashes)
 }
 
@@ -438,7 +448,11 @@ func (g *publishGate) resolveDeferredLocked(
 	}
 	candidate := snapWrap
 	snapWrap = g.boundCarryLocked(snapWrap, published, time.Now())
-	resolved, heldBlocking, edsHashes := resolveDeferredPerCluster(snapWrap, published, true, g.lastPublishedEDSLocked(snapWrap.proxyKey))
+	// Retain clusters this build stopped emitting, briefly, so the route update
+	// that de-referenced them reaches Envoy before they disappear.
+	graced, soonestExpiry := g.graceDereferencedClustersLocked(
+		snapWrap.proxyKey, published, snapWrap.snap.Resources[envoycachetypes.Cluster], snapWrap.translatedClusters, time.Now())
+	resolved, heldBlocking, edsHashes := resolveDeferredPerCluster(snapWrap, published, true, graced, g.lastPublishedEDSLocked(snapWrap.proxyKey))
 	var publishErr error
 	if len(heldBlocking) > 0 {
 		// The held snapshot still publishes (CDS/EDS keep flowing); the
@@ -447,7 +461,9 @@ func (g *publishGate) resolveDeferredLocked(
 	} else {
 		publishErr = g.publishLocked(ctx, cache, snapWrap.proxyKey, resolved, snapWrap.synthesizedEndpoints, edsHashes)
 	}
-	// Armed after publishing, which cancels it on the no-hold path.
+	// Arm after publishing: publishLocked and publishHeldLocked cancel the carry
+	// expiry. The de-reference timer survives publishes.
+	g.armDereferenceTimerLocked(ctx, cache, snapWrap.proxyKey, snapWrap, soonestExpiry)
 	g.armCarryExpiryLocked(ctx, cache, candidate)
 	return publishErr
 }
@@ -698,13 +714,17 @@ func (g *publishGate) fireFlipRelease(ctx context.Context, cache envoycache.Snap
 	if published == nil {
 		return // nothing published to resolve against; nothing was held
 	}
-	released, _, edsHashes := resolveDeferredPerCluster(g.boundCarryLocked(pf.wrap, published, time.Now()), published, false, g.lastPublishedEDSLocked(proxyKey))
+	graced, soonestExpiry := g.graceDereferencedClustersLocked(
+		proxyKey, published, pf.wrap.snap.Resources[envoycachetypes.Cluster], pf.wrap.translatedClusters, time.Now())
+	released, _, edsHashes := resolveDeferredPerCluster(g.boundCarryLocked(pf.wrap, published, time.Now()), published, false, graced, g.lastPublishedEDSLocked(proxyKey))
 	logger.Warn("flip-hold budget expired; publishing held route flip, routes to still-unready clusters will fail until they become ready",
 		"proxy_key", proxyKey, "flip_blocking", pf.blocking)
 	if err := g.setSnapshot(ctx, cache, proxyKey, released, pf.wrap.synthesizedEndpoints, edsHashes); err != nil {
 		logPublishFailure(proxyKey, err)
 		return
 	}
+	// The release may grace clusters; arm their prune, or they linger until a later build.
+	g.armDereferenceTimerLocked(ctx, cache, proxyKey, pf.wrap, soonestExpiry)
 	recordBoundedPublish(proxyKey, boundedPublishFlipRelease)
 	g.armCarryExpiryLocked(ctx, cache, pf.wrap)
 }
@@ -770,9 +790,9 @@ func (g *publishGate) snapshotWithdrawn(proxyKey string) {
 	g.withdrawLocked(proxyKey)
 }
 
-// withdrawLocked cancels the client's pending bounded first publish and flip
-// release, keeping the warm episode for a reconnect to resume. Callers must
-// hold g.mu.
+// withdrawLocked cancels the client's pending first publish, flip release, carry
+// expiry and de-reference prune, keeping the first-publish and warm episodes for
+// a reconnect. Callers must hold g.mu.
 func (g *publishGate) withdrawLocked(proxyKey string) {
 	if st := g.pending[proxyKey]; st != nil {
 		if st.timer != nil {
@@ -786,6 +806,7 @@ func (g *publishGate) withdrawLocked(proxyKey string) {
 	}
 	g.cancelFlipReleaseLocked(proxyKey)
 	g.cancelCarryExpiryLocked(proxyKey)
+	g.cancelDereferenceTimerLocked(proxyKey)
 }
 
 // disconnectedRunner runs fn only while no xDS stream is connected under a

@@ -59,6 +59,16 @@ type XdsSnapWrapper struct {
 	// name a cluster scoping left out of CDS. The mode is fixed for the process.
 	// +noKrtEquals
 	scopesClusters bool
+	// translatedClusters is the client's translated clusters before scoping
+	// filters them, shared read-only with the per-client cluster row. The
+	// de-reference grace keeps only clusters still in it: one that is no longer
+	// translated (its backend was deleted, or its translation failed) leaves at
+	// once, as with scoping off. Nil means unknown, and graces every
+	// de-referenced cluster.
+	// +noKrtEquals a change here alone (a backend added or removed while not
+	// emitted) changes nothing published; at worst a graced cluster whose backend
+	// is then deleted stays until its grace ends.
+	translatedClusters map[string]envoycachetypes.ResourceWithTTL
 }
 
 // deferred reports whether some referenced cluster was unready at build
@@ -94,9 +104,9 @@ func (p XdsSnapWrapper) Equals(in XdsSnapWrapper) bool {
 	// erroredClusters is compared by name too. A cluster that is not in the
 	// CDS items, because the build no longer has it or scoping filtered it
 	// out, changes no version when it starts or stops erroring. A held flip
-	// can still carry it from the published snapshot, and only a new event
-	// lets the carry see the error and drop it (fail closed). Error-text-only
-	// changes stay suppressed: only names count.
+	// or a grace can still carry it from the published snapshot, and only a
+	// new event lets the carry see the error and drop it (fail closed).
+	// Error-text-only changes stay suppressed: only names count.
 	return slices.Equal(p.missingReferenced, in.missingReferenced) &&
 		slices.Equal(p.missingEndpointsReferenced, in.missingEndpointsReferenced) &&
 		slices.Equal(p.synthesizedEndpoints, in.synthesizedEndpoints) &&
