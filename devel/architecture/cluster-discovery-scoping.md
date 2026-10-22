@@ -9,6 +9,8 @@ carrying an `envoy_cluster_name` label.
 
 `KGW_CLUSTER_DISCOVERY_MODE=REFERENCED` scopes CDS and EDS to the clusters the
 generated configuration actually references. It is off by default.
+[xDS publication and cluster discovery settings](../../docs/guides/xds-publication-settings.md)
+summarizes this setting with the publication settings it interacts with.
 
 ## Why the default is emit-all
 
@@ -86,7 +88,10 @@ published for a bounded period after the controller publishes the route update
 that stops naming it, giving that update time to land first; it cannot make sure
 the update does. A build held for a new or unready cluster does not start the
 period: the hold keeps the cluster anyway, and the period starts at the release.
-Set this above worst-case RDS propagation for your fleet.
+Set this above worst-case RDS propagation for your fleet. The grace covers only
+clusters scoping stopped emitting: a cluster whose backend was deleted or fails
+translation leaves at once, as in `ALL`, since a request-time selector would
+otherwise keep routing to the deleted backend.
 
 Ordered ADS does not substitute for either window: it fixes CDS before RDS,
 which is the wrong order for removals, and it does not close the ACK-skew
@@ -118,6 +123,82 @@ matters more than it looks: a plugin like that usually falls back when its
 computed cluster is absent, so pruning a candidate does not produce a visible
 503 — every affected request quietly goes somewhere else instead. The metric is
 what turns that into something you can alert on.
+
+### Claiming, so one plugin does not cost the whole gateway
+
+A plugin can declare what it may route to, through `ClusterEmissionClaim` in
+`pkg/pluginsdk`. A gateway whose every request-time selector is claimed keeps
+scoping for every other backend, instead of reverting wholesale.
+
+A claim says three things: which selectors it accounts for (matched against the
+extension name the plugin puts in `cluster_specifier_plugin`, in either its
+referenced or inline form), which exact cluster names to keep, and which name
+prefixes to keep for candidates that cannot be enumerated ahead of time.
+
+Selectors match on the extension name alone, not on the type of its
+`typed_config`, so a plugin should use a name it owns, such as one prefixed with
+its API group. Under a generic name such as
+`envoy.router.cluster_specifier_plugin.lua`, another plugin's specifier of the
+same name counts as accounted for, and its candidates are pruned. Matching on
+the type as well would not help two plugins built on the same extension. Two
+plugins claiming one name is logged as an error.
+
+A claim can also derive each use's destinations from the configuration the
+gateway ships, through `DestinationsFor`. The scan resolves every use of a
+claimed selector to its extension's `typed_config`, inline or from the
+RouteConfiguration's `cluster_specifier_plugins`, and the function returns the
+names and prefixes that use may pick. It alone decides whether a use is claimed.
+A use it returns nothing for stays unaccounted, and the claim's own names and
+prefixes are kept only with uses it claims. So a plugin can check that a config
+is one it generated and decline the rest: a name collision then leaves the
+gateway unscoped instead of pruning another plugin's candidates. Deriving also
+makes candidates that depend on the route precise, such as one prefix per
+namespace. The function must be pure and cheap. It runs on each gateway
+rebuild, once per distinct config. A panic, an empty prefix or an empty result
+leaves the use unclaimed, and the unscoped gateway's warning names the reason.
+
+A plugin's unit tests can check its claim without a controller:
+`proxy_syncer.DecideClusterScoping` applies scoping to routes and listeners the
+plugin generates and reports whether the gateway stays scoped, why not, and
+which clusters it keeps. The golden-corpus sweep checks scopability in both
+directions: a fixture with no request-time selector, or only claimed ones, must
+stay scoped, and one with an unclaimed selector must not.
+
+A claim's names and prefixes **belong to its selectors**: they are kept only in
+a gateway whose configuration uses one of them. Claims are collected once for
+the whole controller, so this is what keeps one plugin's candidates out of
+gateways that never use it. A claim with no selectors therefore keeps nothing,
+and an error is logged; a cluster a plugin needs whatever the routes say belongs
+in the resources its translation pass adds, which scoping never filters.
+
+Three more rules are worth knowing. An **empty prefix is rejected**: it would
+re-admit the entire inventory while still reporting the gateway as scoped, which
+is worse than reverting because it is invisible. A claim **accounts for its
+selectors only if it keeps somewhere for them to go** — at least one name or
+prefix, and no rejected prefix — because accounting for a selector while keeping
+none of its candidates would prune exactly the clusters it computes; otherwise
+the claim contributes nothing, its selectors stay unaccounted, and an error is
+logged. And **only cluster specifier plugins can be claimed**: a cluster-header
+selector's destination is whatever the client sends, so nothing a plugin
+declares can bound it, and the other fallbacks above (filter-state overrides,
+undecodable typed configs, unknown specifier kinds) are not something a claim
+describes; such gateways stay unscoped.
+
+Claims are collected once, when the controller starts, before its caches sync,
+and hold for its lifetime: derive them from how the plugin names the clusters it
+computes, not from cluster state. A candidate set that depends on something only
+the route knows, such as its namespace, needs `DestinationsFor`, or a prefix
+that covers every value it could take.
+
+A claim is trusted as complete. A cluster the plugin can compute that the claim
+does not keep is pruned, and the plugin's fallback then takes its traffic with
+no 503 to show for it. Claiming fits destinations derived from the plugin's own
+naming; no claim can bound a destination taken freely from the request.
+
+A claim should also cover the plugin's own resources. A plugin of this shape
+commonly emits an endpointless placeholder cluster so an unmatched request fails
+closed; once no route names that placeholder, scoping would otherwise prune the
+very cluster that makes the feature safe.
 
 ## Settings
 

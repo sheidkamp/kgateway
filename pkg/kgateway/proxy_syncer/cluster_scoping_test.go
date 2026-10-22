@@ -11,18 +11,46 @@ import (
 	"github.com/stretchr/testify/require"
 
 	apisettings "github.com/kgateway-dev/kgateway/v2/api/settings"
+	sdk "github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk"
 )
 
 // TestClusterScopingIsOffByDefault: an upgrade must not change what proxies are sent.
 func TestClusterScopingIsOffByDefault(t *testing.T) {
-	assert.False(t, clusterScopingFrom(apisettings.Settings{}).ScopesClusters(),
+	assert.False(t, clusterScopingFrom(apisettings.Settings{}, nil).ScopesClusters(),
 		"the zero Settings must not scope clusters")
 	assert.False(t, clusterScopingFrom(apisettings.Settings{
 		ClusterDiscoveryMode: apisettings.ClusterDiscoveryAll,
-	}).ScopesClusters())
+	}, nil).ScopesClusters())
 	assert.True(t, clusterScopingFrom(apisettings.Settings{
 		ClusterDiscoveryMode: apisettings.ClusterDiscoveryReferenced,
-	}).ScopesClusters())
+	}, nil).ScopesClusters())
+}
+
+// TestUnscopedModeRunsNoPluginClaims: without REFERENCED, no plugin's claim
+// code runs and the transition windows are off, whatever they are set to.
+func TestUnscopedModeRunsNoPluginClaims(t *testing.T) {
+	plugins := sdk.ContributesPolicies{
+		{Group: "test", Kind: "Picker"}: {
+			Name: "picker",
+			ClaimEmittedClusters: func() sdk.ClusterEmissionClaim {
+				t.Error("a claim was collected while cluster scoping is off")
+				return sdk.ClusterEmissionClaim{}
+			},
+		},
+	}
+	for name, mode := range map[string]apisettings.ClusterDiscoveryMode{"zero": "", "ALL": apisettings.ClusterDiscoveryAll} {
+		t.Run(name, func(t *testing.T) {
+			scoping := clusterScopingFrom(apisettings.Settings{
+				ClusterDiscoveryMode:    mode,
+				ClusterDereferenceGrace: time.Minute,
+				ClusterReferenceAhead:   time.Minute,
+			}, plugins)
+			assert.False(t, scoping.ScopesClusters())
+			assert.Zero(t, scoping.DereferenceGrace())
+			assert.Zero(t, scoping.ReferenceAhead())
+			assert.Empty(t, scoping.Claims().bySelector)
+		})
+	}
 }
 
 // TestDisabledScopingSkipsTheEmissionWalkEntirely: disabled scoping must skip the
@@ -45,7 +73,7 @@ func TestDisabledScopingSkipsTheEmissionWalkEntirely(t *testing.T) {
 
 	disabled := emittedClustersFor(clusterScoping{}, routes, listeners)
 	assert.Empty(t, disabled.Names, "nothing is collected when CDS is not scoped")
-	assert.Empty(t, disabled.Unresolvable)
+	assert.Empty(t, disabled.RequestTimeSelectors)
 
 	enabled := emittedClustersFor(scopedClusters(), routes, listeners)
 	require.Contains(t, enabled.Names, "routed",
@@ -81,7 +109,7 @@ func TestDisabledScopingHasNoTransitionWindows(t *testing.T) {
 		ClusterDiscoveryMode:    apisettings.ClusterDiscoveryAll,
 		ClusterDereferenceGrace: time.Hour,
 		ClusterReferenceAhead:   time.Hour,
-	})
+	}, nil)
 
 	assert.Zero(t, configured.DereferenceGrace(),
 		"a de-reference window is meaningless when no cluster ever leaves the emitted set")
@@ -100,7 +128,7 @@ func TestScopedClustersUsesTheConfiguredWindows(t *testing.T) {
 		ClusterDiscoveryMode:    apisettings.ClusterDiscoveryReferenced,
 		ClusterDereferenceGrace: 7 * time.Second,
 		ClusterReferenceAhead:   3 * time.Second,
-	})
+	}, nil)
 
 	assert.Equal(t, 7*time.Second, configured.DereferenceGrace())
 	assert.Equal(t, 3*time.Second, configured.ReferenceAhead())

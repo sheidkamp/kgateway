@@ -50,8 +50,11 @@ const (
 	ClusterDiscoveryAll ClusterDiscoveryMode = "ALL"
 	// ClusterDiscoveryReferenced emits only referenced clusters, including filter
 	// dependencies (ext_authz, ext_proc, rate limit, access logs, JWKS). A gateway
-	// with a request-time selector, such as a cluster header or specifier plugin,
-	// reverts to ALL: pruning could silently select the plugin's fallback.
+	// with a request-time selector reverts to ALL, since pruning could silently
+	// select the plugin's fallback, unless every such selector is a cluster
+	// specifier plugin that a valid pluginsdk.ClusterEmissionClaim accounts for.
+	// Cluster headers, filter-state overrides, undecodable typed configs and
+	// unknown specifier kinds cannot be claimed and always revert.
 	ClusterDiscoveryReferenced ClusterDiscoveryMode = "REFERENCED"
 )
 
@@ -476,17 +479,16 @@ type Settings struct {
 	//   - "ALL" (default): every backend in discovery scope becomes a cluster.
 	//   - "REFERENCED": only clusters the generated configuration references.
 	//
-	// REFERENCED is what shrinks config_dump and per-proxy stats cardinality on
-	// clusters with many Services and few routed ones. It is experimental: a
-	// cluster now enters and leaves a proxy's CDS as configuration starts and
-	// stops naming it, and Envoy does not necessarily apply CDS before RDS
-	// within one snapshot, so either transition could briefly 503 NC where ALL
-	// never would. Two windows close that: ClusterReferenceAhead delivers a new
-	// cluster before the configuration that names it, and
-	// ClusterDereferenceGrace keeps a de-referenced one until the configuration
-	// that stopped naming it has landed. Both are elapsed time, not
-	// acknowledgements: each must exceed the fleet's worst-case propagation. A
-	// gateway whose routes pick a destination at request time stays unscoped.
+	// REFERENCED shrinks config_dump and per-proxy stats where many Services
+	// are discovered and few are routed. It is experimental: Envoy does not
+	// necessarily apply CDS before RDS within a snapshot, so a cluster entering
+	// or leaving CDS could briefly 503 NC. ClusterReferenceAhead and
+	// ClusterDereferenceGrace narrow the two transitions. Both are elapsed time
+	// from publication, not acknowledgements, so each must exceed the fleet's
+	// worst-case propagation, and neither makes a transition hitless. A gateway
+	// whose routes pick a destination at request time stays unscoped unless a
+	// valid claim accounts for each such selector (see
+	// ClusterDiscoveryReferenced).
 	ClusterDiscoveryMode ClusterDiscoveryMode `split_words:"true" default:"ALL"`
 
 	// ClusterDereferenceGrace is how long a cluster that left the emitted set stays
