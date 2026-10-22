@@ -76,12 +76,18 @@ type ConnectedClient struct {
 	// already-augmented) one, or augmentation compounds and every ACK looks
 	// like an identity change.
 	originalRole string
+	// connectedAt is when the stream was admitted.
+	connectedAt time.Time
+	// priorXDSVersion marks a stream that reported config held from an earlier
+	// stream (a reconnect, or a proxy that outlived a controller restart).
+	priorXDSVersion bool
 }
 
 func newConnectedClient(uniqueClientName, originalRole string) ConnectedClient {
 	return ConnectedClient{
 		uniqueClientName: uniqueClientName,
 		originalRole:     originalRole,
+		connectedAt:      time.Now(),
 	}
 }
 
@@ -113,7 +119,11 @@ type callbacksCollection struct {
 	// cluster once every stream currently in that bucket has confirmed it, or the same
 	// full-EDS-withholding this file exists to prevent reappears for the still-old siblings.
 	knownLocalClusterBySid map[int64]bool
-	stateLock              sync.RWMutex
+	// priorXDSVersions counts warm streams per resource name. A count, not a
+	// flag, so a shared name (pod locality off) stops being warm when its last
+	// warm stream closes, even with cold streams left.
+	priorXDSVersions map[string]int
+	stateLock        sync.RWMutex
 
 	trigger *krt.RecomputeTrigger
 }
@@ -162,14 +172,26 @@ func (x *callbacks) getPeerInfo(sid int64, r *envoy_service_discovery_v3.Discove
 // If augmentedPods is nil, we won't use the pod locality info, and all pods for the same gateway will receive the same config.
 type UniquelyConnectedClientsBuilder func(ctx context.Context, krtOpts krtutil.KrtOptions, augmentedPods krt.Collection[LocalityPod]) krt.Collection[ir.UniquelyConnectedClient]
 
+// XDSClientState exposes per-client connection state derived from the xDS
+// callbacks. HasPriorXDSVersion reports whether a stream of the client opened
+// its listener subscription with a version it had accepted before (an empty
+// nonce with a non-empty version) — i.e. the Envoy may already be serving
+// config accepted on a previous stream even though this controller has not
+// published to it (reconnect, controller restart). The mark belongs to the
+// resource name, so it covers every stream sharing it, and lasts until the
+// last of them closes.
+type XDSClientState interface {
+	HasPriorXDSVersion(resourceName string) bool
+}
+
 // THIS IS THE SET OF THINGS WE RUN TRANSLATION FOR
 // add returned callbacks to the xds server.
 
-// NewUniquelyConnectedClients returns kgateway's client-tracking callbacks and the
-// builder for the collection they feed. Extra callbacks are not passed here:
-// chain them ahead of these with setup.ChainCallbacks, which delivers every hook
-// to each.
-func NewUniquelyConnectedClients(xdsAuth bool) (xdsserver.Callbacks, UniquelyConnectedClientsBuilder) {
+// NewUniquelyConnectedClients returns kgateway's client-tracking callbacks, the
+// builder for the collection they feed, and the per-client xDS state the
+// callbacks record. Extra callbacks are not passed here: chain them ahead of
+// these with setup.ChainCallbacks, which delivers every hook to each.
+func NewUniquelyConnectedClients(xdsAuth bool) (xdsserver.Callbacks, UniquelyConnectedClientsBuilder, XDSClientState) {
 	cb := &callbacks{xdsAuth: xdsAuth}
 
 	envoycb := xdsserver.CallbackFuncs{
@@ -178,7 +200,7 @@ func NewUniquelyConnectedClients(xdsAuth bool) (xdsserver.Callbacks, UniquelyCon
 		StreamRequestFunc: cb.OnStreamRequest,
 		FetchRequestFunc:  cb.OnFetchRequest,
 	}
-	return envoycb, buildCollection(cb)
+	return envoycb, buildCollection(cb), cb
 }
 
 func buildCollection(callbacks *callbacks) UniquelyConnectedClientsBuilder {
@@ -191,6 +213,7 @@ func buildCollection(callbacks *callbacks) UniquelyConnectedClientsBuilder {
 			uniqClientsCount:       make(map[string]uint64),
 			uniqClients:            make(map[string]ir.UniquelyConnectedClient),
 			knownLocalClusterBySid: make(map[int64]bool),
+			priorXDSVersions:       make(map[string]int),
 			trigger:                trigger,
 		}
 
@@ -248,12 +271,20 @@ func (x *callbacksCollection) del(sid int64) *ir.UniquelyConnectedClient {
 	delete(x.knownLocalClusterBySid, sid)
 	if ok {
 		resourceName := c.uniqueClientName
+		if c.priorXDSVersion {
+			if n := x.priorXDSVersions[resourceName] - 1; n > 0 {
+				x.priorXDSVersions[resourceName] = n
+			} else {
+				delete(x.priorXDSVersions, resourceName)
+			}
+		}
 		current := x.uniqClientsCount[resourceName]
 		x.uniqClientsCount[resourceName] = current - 1
 		if current == 1 {
 			ucc := x.uniqClients[resourceName]
 			delete(x.uniqClientsCount, resourceName)
 			delete(x.uniqClients, resourceName)
+			delete(x.priorXDSVersions, resourceName)
 			return &ucc
 		}
 	}
@@ -447,6 +478,9 @@ func (x *callbacksCollection) newStream(sid int64, r *envoy_service_discovery_v3
 		return fmt.Errorf("got empty unique client name for sid %d", sid)
 	}
 	x.observeLocalClusterRequest(sid, ucc, r)
+	if hasPriorXDSVersion(r) {
+		x.markPriorXDSVersion(sid, ucc)
+	}
 
 	nodeMd := r.GetNode().GetMetadata()
 	if nodeMd == nil {
@@ -474,6 +508,67 @@ func (x *callbacksCollection) newStream(sid int64, r *envoy_service_discovery_v3
 		time.Sleep(delay)
 	}
 	return nil
+}
+
+// hasPriorXDSVersion reports whether r is an initial listener request carrying
+// a previously accepted version. Only listeners count: warmth protects served
+// config, and a proxy whose stream broke during CDS warming serves none, so it
+// starts within the first-publish budget.
+func hasPriorXDSVersion(r *envoy_service_discovery_v3.DiscoveryRequest) bool {
+	return r.GetTypeUrl() == resource.ListenerType && r.GetResponseNonce() == "" && r.GetVersionInfo() != ""
+}
+
+// markPriorXDSVersion marks stream sid warm. Each stream counts once toward
+// its resource name.
+func (x *callbacksCollection) markPriorXDSVersion(sid int64, resourceName string) {
+	x.stateLock.Lock()
+	defer x.stateLock.Unlock()
+	c, ok := x.clients[sid]
+	if !ok || c.priorXDSVersion {
+		return
+	}
+	c.priorXDSVersion = true
+	x.clients[sid] = c
+	x.priorXDSVersions[resourceName]++
+}
+
+func (x *callbacks) HasPriorXDSVersion(resourceName string) bool {
+	c := x.collection.Load()
+	if c == nil {
+		return false
+	}
+	return c.hasPriorXDSVersion(resourceName)
+}
+
+func (x *callbacksCollection) hasPriorXDSVersion(resourceName string) bool {
+	x.stateLock.RLock()
+	defer x.stateLock.RUnlock()
+	return x.priorXDSVersions[resourceName] > 0
+}
+
+// HasColdStreamSince reports whether a cold stream has been connected under
+// resourceName for at least d. A cold proxy sharing a warm name has no
+// listeners until the shared snapshot publishes, so the gate uses this to lift
+// the warm withhold. It scans all streams: call it only at publication
+// deadlines.
+func (x *callbacks) HasColdStreamSince(resourceName string, d time.Duration) bool {
+	c := x.collection.Load()
+	if c == nil {
+		return false
+	}
+	return c.hasColdStreamSince(resourceName, d)
+}
+
+func (x *callbacksCollection) hasColdStreamSince(resourceName string, d time.Duration) bool {
+	x.stateLock.RLock()
+	defer x.stateLock.RUnlock()
+	cutoff := time.Now().Add(-d)
+	for _, c := range x.clients {
+		if c.uniqueClientName == resourceName && !c.priorXDSVersion && !c.connectedAt.After(cutoff) {
+			return true
+		}
+	}
+	return false
 }
 
 func (x *callbacksCollection) getClients() []ir.UniquelyConnectedClient {
