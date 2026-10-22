@@ -24,10 +24,8 @@ var UseDetailedUnmarshalling = !envutils.IsEnvTruthy("DISABLE_DETAILED_SNAP_UNMA
 
 type XdsSnapWrapper struct {
 	snap *envoycache.Snapshot
-	// erroredClusters lists clusters whose current translation failed. The
-	// publish-time per-cluster resolution treats them fail-closed: they are
-	// never resurrected from the previously-published snapshot (see
-	// resolveDeferredPerCluster). Sorted.
+	// erroredClusters lists clusters whose translation failed; resolution never
+	// carries them from the published snapshot. Sorted.
 	erroredClusters []string
 	// +noKrtEquals
 	proxyKey string
@@ -57,6 +55,10 @@ type XdsSnapWrapper struct {
 	// Folded into the EDS version compared by Equals.
 	// +noKrtEquals
 	endpointHashes map[string]uint64
+	// scopesClusters is set in REFERENCED mode, where a published listener can
+	// name a cluster scoping left out of CDS. The mode is fixed for the process.
+	// +noKrtEquals
+	scopesClusters bool
 }
 
 // deferred reports whether some referenced cluster was unready at build
@@ -90,10 +92,11 @@ func (p XdsSnapWrapper) Equals(in XdsSnapWrapper) bool {
 	// same applies to a referenced cluster arriving errored-from-birth
 	// (missingReferenced shrinks, no version changes).
 	// erroredClusters is compared by name too. A cluster that is not in the
-	// CDS items changes no version when it starts or stops erroring, yet a
-	// carry (a held flip) can still serve it from the published snapshot, and
-	// only a new event lets the carry see the error and drop it (fail closed).
-	// Error-text-only changes stay suppressed: only names count.
+	// CDS items, because the build no longer has it or scoping filtered it
+	// out, changes no version when it starts or stops erroring. A held flip
+	// can still carry it from the published snapshot, and only a new event
+	// lets the carry see the error and drop it (fail closed). Error-text-only
+	// changes stay suppressed: only names count.
 	return slices.Equal(p.missingReferenced, in.missingReferenced) &&
 		slices.Equal(p.missingEndpointsReferenced, in.missingEndpointsReferenced) &&
 		slices.Equal(p.synthesizedEndpoints, in.synthesizedEndpoints) &&

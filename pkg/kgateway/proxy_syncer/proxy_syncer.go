@@ -164,7 +164,9 @@ func sliceToResources[T proto.Message](slice []T) envoycache.Resources {
 	return envoycache.NewResourcesWithTTL(strconv.FormatUint(h, 10), r)
 }
 
-func toTranslationOutput(gw ir.Gateway, xdsSnap irtranslator.TranslationResult, r reports.ReportMap) *gatewayTranslationOutput {
+// toTranslationOutput projects one gateway translation into published xDS and
+// status. scoping gates the emitted-set walk (emittedClustersFor).
+func toTranslationOutput(gw ir.Gateway, xdsSnap irtranslator.TranslationResult, r reports.ReportMap, scoping clusterScoping) *gatewayTranslationOutput {
 	c, ch := sliceToResourcesHash(xdsSnap.ExtraClusters)
 	routes := sliceToResources(xdsSnap.Routes)
 	listeners := sliceToResources(xdsSnap.Listeners)
@@ -181,7 +183,7 @@ func toTranslationOutput(gw ir.Gateway, xdsSnap irtranslator.TranslationResult, 
 			Listeners:          listeners,
 			Secrets:            sliceToResources(xdsSnap.Secrets),
 			ReferencedClusters: collectReferencedClusters(routes, listeners),
-			EmittedClusters:    collectReferencedClustersForEmission(routes, listeners),
+			EmittedClusters:    emittedClustersFor(scoping, routes, listeners),
 		},
 		Status: GatewayStatusSnapshot{
 			NamespacedName: nn,
@@ -332,6 +334,9 @@ func (s *ProxySyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) {
 
 	s.translator.Init(ctx)
 
+	// Resolved once: every path this feature touches asks scoping.ScopesClusters(),
+	// and with it false none of them do anything.
+	scoping := clusterScopingFrom(s.commonCols.Settings)
 	translationOutputs := krt.NewCollection(s.commonCols.GatewayIndex.Gateways, func(kctx krt.HandlerContext, gw ir.Gateway) *gatewayTranslationOutput {
 		// Note: s.commonCols.GatewayIndex.Gateways is already filtered to only include Gateways
 		// with controllerName matching s.controllerName (envoy controller). The filtering happens
@@ -343,7 +348,7 @@ func (s *ProxySyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) {
 			return nil
 		}
 
-		return toTranslationOutput(gw, *xdsSnap, rm)
+		return toTranslationOutput(gw, *xdsSnap, rm, scoping)
 	}, krtopts.ToOptions("GatewayTranslationOutputs")...)
 	s.mostXdsSnapshots = krt.NewCollection(translationOutputs, func(_ krt.HandlerContext, output gatewayTranslationOutput) *GatewayXdsResources {
 		return &output.Xds
@@ -374,6 +379,7 @@ func (s *ProxySyncer) Init(ctx context.Context, krtopts krtutil.KrtOptions) {
 		s.mostXdsSnapshots,
 		epPerClient,
 		clustersPerClient,
+		scoping,
 		localClusterEpPerClient,
 	)
 

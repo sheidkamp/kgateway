@@ -48,6 +48,7 @@ func snapshotPerClient(
 	mostXdsSnapshots krt.Collection[GatewayXdsResources],
 	endpoints PerClientEnvoyEndpoints,
 	clusters PerClientEnvoyClusters,
+	scoping clusterScoping,
 	extraEndpointCollections ...PerClientEnvoyEndpoints,
 ) krt.Collection[XdsSnapWrapper] {
 	// PerClientEnvoyClusters stores each client's assembled CDS payload (shared bases plus the client's overlays).
@@ -97,15 +98,50 @@ func snapshotPerClient(
 
 		logger.Debug("found perclient clusters", "client", ucc.ResourceName(), "clusters", len(clustersForUcc.clusters.Items))
 		clusterResources := clustersForUcc.clusters
+		clustersHash := clustersForUcc.clustersHash
+		clusterVersions := clustersForUcc.clusterVersions
+
+		// Filter after shared backend translation, which stays O(backends). EDS
+		// alignment below drops CLAs for clusters removed here.
+		var filtered bool
+		clusterResources, clusterVersions, filtered = filterClustersToEmitted(
+			scoping,
+			listenerRouteSnapshot.EmittedClusters,
+			clusterResources,
+			clusterVersions,
+		)
+		if filtered {
+			clusterResources, clusterVersions, filtered = keepBackendListenerTargets(
+				clustersForUcc.clusters,
+				clustersForUcc.clusterVersions,
+				clusterResources,
+				clusterVersions,
+				clustersForUcc.backendListeners,
+			)
+		}
+		backendListeners, backendSecrets := clustersForUcc.listeners, clustersForUcc.secrets
+		if filtered {
+			// A dropped backend's own listeners and secrets go too: kept, they would
+			// sit on every proxy, naming a cluster it does not have.
+			backendListeners = keptBackendResources(clusterResources.Items, clustersForUcc.backendListeners)
+			backendSecrets = keptBackendResources(clusterResources.Items, clustersForUcc.backendSecrets)
+			// Re-version: an unchanged version would leave Envoy serving dropped clusters.
+			clustersHash = emittedClustersHash(clusterVersions)
+			clusterResources.Version = strconv.FormatUint(clustersHash, 10)
+			logger.Debug("emitting referenced clusters only",
+				"client", ucc.ResourceName(),
+				"emitted", len(clusterResources.Items),
+				"translated", len(clustersForUcc.clusters.Items))
+		}
 
 		snap := XdsSnapWrapper{}
 		if len(listenerRouteSnapshot.Clusters) > 0 {
-			clustersProto := make(map[string]envoycachetypes.ResourceWithTTL, len(listenerRouteSnapshot.Clusters)+len(clustersForUcc.clusters.Items))
-			maps.Copy(clustersProto, clustersForUcc.clusters.Items)
+			clustersProto := make(map[string]envoycachetypes.ResourceWithTTL, len(listenerRouteSnapshot.Clusters)+len(clusterResources.Items))
+			maps.Copy(clustersProto, clusterResources.Items)
 			for _, item := range listenerRouteSnapshot.Clusters {
 				clustersProto[envoycache.GetResourceName(item.Resource)] = item
 			}
-			clusterResources.Version = strconv.FormatUint(clustersForUcc.clustersHash^listenerRouteSnapshot.ClustersHash, 10)
+			clusterResources.Version = strconv.FormatUint(clustersHash^listenerRouteSnapshot.ClustersHash, 10)
 			clusterResources.Items = clustersProto
 		}
 		missingClusters := findMissingReferencedClusters(
@@ -143,13 +179,14 @@ func snapshotPerClient(
 		slices.Sort(snap.synthesizedEndpoints)
 		snap.erroredClusters = slices.Sorted(slices.Values(clustersForUcc.erroredClusters))
 		snap.proxyKey = ucc.ResourceName()
+		snap.scopesClusters = scoping.ScopesClusters()
 		snap.endpointHashes = endpointHashes
 		snapshot := &envoycache.Snapshot{}
 		snapshot.Resources[envoycachetypes.Cluster] = clusterResources
 		snapshot.Resources[envoycachetypes.Endpoint] = endpointRes
 		snapshot.Resources[envoycachetypes.Route] = listenerRouteSnapshot.Routes
-		snapshot.Resources[envoycachetypes.Listener] = mergeBackendResources(listenerRouteSnapshot.Listeners, clustersForUcc.listeners)
-		snapshot.Resources[envoycachetypes.Secret] = mergeBackendResources(listenerRouteSnapshot.Secrets, clustersForUcc.secrets)
+		snapshot.Resources[envoycachetypes.Listener] = mergeBackendResources(listenerRouteSnapshot.Listeners, backendListeners)
+		snapshot.Resources[envoycachetypes.Secret] = mergeBackendResources(listenerRouteSnapshot.Secrets, backendSecrets)
 		// envoycache.NewResources(version, resource)
 		snap.snap = snapshot
 		if snap.deferred() {
