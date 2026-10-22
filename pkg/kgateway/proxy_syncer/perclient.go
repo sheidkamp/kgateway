@@ -18,7 +18,6 @@ import (
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
 
-	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/utils"
 	"github.com/kgateway-dev/kgateway/v2/pkg/kgateway/wellknown"
 	"github.com/kgateway-dev/kgateway/v2/pkg/metrics"
 	"github.com/kgateway-dev/kgateway/v2/pkg/pluginsdk/ir"
@@ -26,7 +25,10 @@ import (
 )
 
 type endpointsWithUccName struct {
-	endpoints    envoycache.Resources
+	endpoints envoycache.Resources
+	// rowHashes maps assignment names to built-row contributions (eds_set_version.go).
+	// +noKrtEquals folded into endpoints.Version
+	rowHashes    map[string]uint64
 	resourceName string
 }
 
@@ -57,8 +59,10 @@ func snapshotPerClient(
 			endpointsForUcc = append(endpointsForUcc, extraEndpoints.FetchEndpointsForClient(kctx, ucc)...)
 		}
 		endpointsProto := make([]envoycachetypes.ResourceWithTTL, 0, len(endpointsForUcc))
+		rowHashes := make(map[string]uint64, len(endpointsForUcc))
 		var endpointsHash uint64
 		for _, ep := range endpointsForUcc {
+			rowHashes[ep.Endpoints.BorrowForRead().GetClusterName()] = ep.EndpointsHash
 			// ResourceWithTTL is the only exit for the interned CLA; it runs
 			// the mutation tripwire when armed. See package sharedproto.
 			endpointsProto = append(endpointsProto, ep.Endpoints.ResourceWithTTL())
@@ -68,6 +72,7 @@ func snapshotPerClient(
 		endpointResources := envoycache.NewResourcesWithTTL(strconv.FormatUint(endpointsHash, 10), endpointsProto)
 		return &endpointsWithUccName{
 			endpoints:    endpointResources,
+			rowHashes:    rowHashes,
 			resourceName: ucc.ResourceName(),
 		}
 	}, krtopts.ToOptions("EndpointResources")...)
@@ -116,10 +121,9 @@ func snapshotPerClient(
 		if ucc.KnowsLocalCluster {
 			bootstrapEndpoint, _, _ = ucc.LocalClusterInfo()
 		}
-		endpointRes, synthesizedEndpoints := filterEndpointResourcesForClusters(clusterResources, clientEndpointResources.endpoints, bootstrapEndpoint)
-		// Post-synthesis every EDS cluster has a CLA; the synthesized set
-		// identifies exactly the referenced clusters whose CLA was not
-		// derived (a derived-but-empty CLA is truth, not a gap).
+		endpointRes, endpointHashes, synthesizedEndpoints := filterEndpointResourcesForClusters(clusterResources, clientEndpointResources.endpoints, clientEndpointResources.rowHashes, bootstrapEndpoint)
+		// Every EDS cluster now has a CLA; synthesized ones mark underived rows.
+		// A derived empty CLA is not a gap.
 		missingEndpointClusters := findMissingReferencedEndpointResources(
 			listenerRouteSnapshot.ReferencedClusters,
 			clusterResources.Items,
@@ -139,6 +143,7 @@ func snapshotPerClient(
 		slices.Sort(snap.synthesizedEndpoints)
 		snap.erroredClusters = slices.Sorted(slices.Values(clustersForUcc.erroredClusters))
 		snap.proxyKey = ucc.ResourceName()
+		snap.endpointHashes = endpointHashes
 		snapshot := &envoycache.Snapshot{}
 		snapshot.Resources[envoycachetypes.Cluster] = clusterResources
 		snapshot.Resources[envoycachetypes.Endpoint] = endpointRes
@@ -264,23 +269,15 @@ func mergeBackendResources[M proto.Message](gateway envoycache.Resources, backen
 	}
 }
 
-// collectReferencedClusters returns the clusters the given routes and
-// listeners route to: the cluster or weighted clusters of every route action
-// and TCP proxy, including route configurations inlined in an HTTP connection
-// manager. It reads only those fields, so it never unpacks HTTP filter or
-// per-route configs.
+// collectReferencedClusters returns the routing targets of routes and
+// listeners: route-action and TCP-proxy clusters and weighted clusters,
+// including inlined route configurations. It never unpacks HTTP filter or
+// per-route configs. Translation computes it once per gateway, not per client.
 //
-// Clusters that filters call out to (ext_authz, ext_proc, JWKS, OAuth2, rate
-// limit, access logs) are not routing targets and are not collected. They are
-// ordinary backends in the same per-client CDS, so they can lag like any
-// other, but holding every route update of a gateway behind one side service
-// would starve it on a single unready dependency; the filter fails, or
-// degrades per its failure_mode_allow, until the cluster is ready. Their
-// endpoints on the client are still kept while their CLAs are not derived
-// (settleSynthesizedEndpoints).
-//
-// This is computed once per GatewayXdsResources (shared across all connected
-// clients for that role) rather than per client.
+// Filter-called clusters (ext_authz, ext_proc, JWKS, OAuth2, rate limit,
+// access logs) are not collected: one lagging side service must not block all
+// route updates. The filter fails or follows its failure_mode_allow until the
+// cluster is ready, and the gate keeps held endpoints for underived CLAs.
 func collectReferencedClusters(routes, listeners envoycache.Resources) map[string]struct{} {
 	referenced := make(map[string]struct{})
 	for _, item := range routes.Items {
@@ -437,26 +434,17 @@ func stringSet(values []string) map[string]struct{} {
 	return out
 }
 
-// filterEndpointResourcesForClusters returns the EDS resources that belong with
-// the EDS clusters in the same CDS snapshot. It drops CLAs for clusters that do
-// not use EDS or are not in CDS: Envoy requests EDS resources by the names CDS
-// gives it, so it never requests those, and an ADS cache withholds a whole
-// response that carries one (#14471; newSnapshotCache serves EDS per request
-// since #14865). It adds an empty CLA for every EDS
-// cluster with no derived one and returns their names, so the snapshot stays
-// EDS-consistent; the publish gate decides which of those synthesized CLAs the
-// client receives (settleSynthesizedEndpoints), because an empty CLA would
-// replace endpoints the client already holds. bootstrapEndpoint names the
-// gateway's bootstrap local cluster for clients that subscribed to it; its CLA
-// is kept although that cluster is not in dynamic CDS.
-//
-// The version is the input's when nothing was dropped or added, so leaving a
-// filtered state restores it. Otherwise the dropped and synthesized names are
-// folded into it: the input version already covers the content of every kept
-// CLA, so no CLA is hashed here.
-func filterEndpointResourcesForClusters(clusters envoycache.Resources, endpoints envoycache.Resources, bootstrapEndpoint string) (envoycache.Resources, map[string]struct{}) {
+// filterEndpointResourcesForClusters keeps only the CLAs that CDS's EDS clusters
+// name, plus bootstrapEndpoint's (the bootstrap local cluster, not in dynamic
+// CDS): Envoy never requests the others, and an ADS cache withholds a whole
+// response carrying one (#14471; newSnapshotCache serves EDS per request since
+// #14865). It adds an empty CLA for each EDS cluster without one and returns
+// their names; the gate decides which reach the client
+// (settleSynthesizedEndpoints), since an empty CLA replaces held endpoints. The
+// returned hashes version only the published set.
+func filterEndpointResourcesForClusters(clusters envoycache.Resources, endpoints envoycache.Resources, rowHashes map[string]uint64, bootstrapEndpoint string) (envoycache.Resources, map[string]uint64, map[string]struct{}) {
 	if endpointsMatchClusters(clusters, endpoints, bootstrapEndpoint) {
-		return endpoints, nil
+		return endpoints, rowHashes, nil
 	}
 	requiredEndpointNames := make(map[string]struct{}, len(clusters.Items)+1)
 	for _, item := range clusters.Items {
@@ -469,14 +457,12 @@ func filterEndpointResourcesForClusters(clusters envoycache.Resources, endpoints
 	}
 	covered := make(map[string]struct{}, len(requiredEndpointNames))
 	filteredEndpoints := make([]envoycachetypes.ResourceWithTTL, 0, len(endpoints.Items))
-	var namesHash uint64
 	for _, item := range endpoints.Items {
 		cla, ok := item.Resource.(*envoyendpointv3.ClusterLoadAssignment)
 		if !ok {
 			continue
 		}
 		if _, required := requiredEndpointNames[cla.GetClusterName()]; !required {
-			namesHash ^= utils.HashString("dropped:" + cla.GetClusterName())
 			continue
 		}
 		filteredEndpoints = append(filteredEndpoints, item)
@@ -492,12 +478,13 @@ func filterEndpointResourcesForClusters(clusters envoycache.Resources, endpoints
 		}
 		filteredEndpoints = append(filteredEndpoints, envoycachetypes.ResourceWithTTL{Resource: &envoyendpointv3.ClusterLoadAssignment{ClusterName: name}})
 		synthesized[name] = struct{}{}
-		namesHash ^= utils.HashString("synthesized:" + name)
 	}
 	if len(synthesized) == 0 && len(filteredEndpoints) == len(endpoints.Items) {
-		return endpoints, nil
+		return endpoints, rowHashes, nil
 	}
-	return envoycache.NewResourcesWithTTL(endpoints.Version+"-"+strconv.FormatUint(namesHash, 10), filteredEndpoints), synthesized
+	filtered := envoycache.NewResourcesWithTTL("", filteredEndpoints)
+	hashes := endpointSetHashes(filtered.Items, rowHashes, nil)
+	return versionEndpointSet(filtered, hashes), hashes, synthesized
 }
 
 // endpointsMatchClusters reports, without allocating, the common case: one
