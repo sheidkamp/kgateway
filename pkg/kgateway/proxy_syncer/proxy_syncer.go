@@ -475,13 +475,15 @@ func (s *ProxySyncer) Start(ctx context.Context) error {
 	s.proxyTranslator.gate.currentBuild = func(proxyKey string) *XdsSnapWrapper {
 		return s.perclientSnapCollection.GetKey(proxyKey)
 	}
-	// A client whose snapshot row was already gone when it disconnected gets
-	// no row Delete then; end its connection when the client itself leaves.
-	// The check skips a client that has already reconnected.
+	// A client whose snapshot row was already gone when it disconnected gets no
+	// row Delete, so end its connection here, unless it has reconnected. When
+	// it was its gateway's last client, drop the gateway's scoping series too;
+	// otherwise drop only its part of the gateway's scoping state.
 	s.uniqueClients.RegisterBatch(func(events []krt.Event[ir.UniquelyConnectedClient]) {
 		for _, e := range events {
 			if name := e.Latest().ResourceName(); e.Event == controllers.EventDelete && s.uniqueClients.GetKey(name) == nil {
 				s.proxyTranslator.gate.clientDeparted(name)
+				forgetClusterScopingClient(name, gatewayHasClients(name, s.uniqueClients.List()))
 			}
 		}
 	}, false)

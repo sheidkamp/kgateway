@@ -110,14 +110,20 @@ func snapshotPerClient(
 			clusterResources,
 			clusterVersions,
 		)
-		if filtered {
-			clusterResources, clusterVersions, filtered = keepBackendListenerTargets(
-				clustersForUcc.clusters,
-				clustersForUcc.clusterVersions,
-				clusterResources,
-				clusterVersions,
-				clustersForUcc.backendListeners,
-			)
+		// unscopedBy is why this client's CDS is not scoped: the gateway's own
+		// request-time selectors, else those in a kept backend's listeners.
+		var unscopedBy []string
+		if scoping.ScopesClusters() {
+			unscopedBy = listenerRouteSnapshot.EmittedClusters.Unresolvable
+			if len(unscopedBy) == 0 {
+				clusterResources, clusterVersions, filtered, unscopedBy = keepBackendListenerTargets(
+					clustersForUcc.clusters,
+					clustersForUcc.clusterVersions,
+					clusterResources,
+					clusterVersions,
+					clustersForUcc.backendListeners,
+				)
+			}
 		}
 		backendListeners, backendSecrets := clustersForUcc.listeners, clustersForUcc.secrets
 		if filtered {
@@ -132,6 +138,14 @@ func snapshotPerClient(
 				"client", ucc.ResourceName(),
 				"emitted", len(clusterResources.Items),
 				"translated", len(clustersForUcc.clusters.Items))
+		}
+		if scoping.ScopesClusters() {
+			// Recorded even when nothing was dropped: dropped_clusters at 0
+			// means scoping gains nothing, and disabled_gateways must read 0
+			// before it can go to 1.
+			recordClusterScopingDropped(ucc.ResourceName(),
+				len(clustersForUcc.clusters.Items)-len(clusterResources.Items))
+			reportClusterScopingDisabled(logger, ucc.ResourceName(), unscopedBy)
 		}
 
 		snap := XdsSnapWrapper{translatedClusters: clustersForUcc.clusters.Items}

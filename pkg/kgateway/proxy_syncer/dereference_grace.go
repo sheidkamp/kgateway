@@ -43,7 +43,10 @@ type dereferenceState struct {
 // versions (a held flip or a reference-ahead hold), so it opens no window:
 // timed from the held build, the hold would use up the grace, and the cluster
 // could leave right behind the route update. Every hold keeps all published
-// clusters, so nothing is lost meanwhile. Windows already open keep running.
+// clusters, so nothing is lost meanwhile. Windows already open keep running;
+// one that closes during a hold stays recorded, so the release removes the
+// cluster instead of opening a fresh grace, and the prune is counted once,
+// when the cluster leaves.
 //
 // The windows it opens are recorded at now, before the snapshot is installed;
 // the caller passes them to settleDereferenceWindowsLocked once it is.
@@ -72,6 +75,7 @@ func (g *publishGate) graceDereferencedClustersLocked(
 		}
 	}
 
+	var pruned int
 	for name := range publishedClusters {
 		if _, stillEmitted := building.Items[name]; stillEmitted {
 			// Still emitted: drop any record, so a later de-reference starts fresh.
@@ -104,8 +108,12 @@ func (g *publishGate) graceDereferencedClustersLocked(
 
 		remaining := g.dereferenceGrace - now.Sub(left)
 		if remaining <= 0 {
+			if holding {
+				continue // the hold still carries it; the release removes it
+			}
 			// Expired: drop it; a later re-reference is a fresh addition.
 			delete(state.since, name)
+			pruned++
 			continue
 		}
 		if graced == nil {
@@ -117,6 +125,7 @@ func (g *publishGate) graceDereferencedClustersLocked(
 	if state != nil && len(state.since) == 0 {
 		g.cancelDereferenceTimerLocked(proxyKey)
 	}
+	recordClusterScopingTransition(proxyKey, transitionDereferencePruned, pruned)
 	return graced, opened
 }
 
@@ -146,6 +155,11 @@ func (g *publishGate) settleDereferenceWindowsLocked(
 		} else {
 			delete(state.since, name)
 		}
+	}
+	if installed {
+		// Counted when the window opens, so the counter measures
+		// de-references, not publish frequency.
+		recordClusterScopingTransition(proxyKey, transitionDereferenceGraced, len(opened))
 	}
 	if len(state.since) == 0 {
 		g.cancelDereferenceTimerLocked(proxyKey)
