@@ -278,6 +278,18 @@ type Settings struct {
 	// older version is answered at once. Rejections are still logged and counted.
 	XdsSuppressNackResend bool `split_words:"true" default:"true"`
 
+	// XdsRespondOnReconnect answers a reconnecting proxy's first EDS, RDS and SDS
+	// request even when it asks at the version it already holds. Without it, if
+	// the controller has no snapshot for that proxy yet (after a restart, for
+	// example), go-control-plane parks the request, and a rebuilt snapshot at the
+	// same version never answers it. A cluster or listener warming on those
+	// resources then waits for Envoy's fetch timeout, and a warming cluster keeps
+	// CDS paused meanwhile. CDS and LDS requests are left alone, since nothing
+	// warms on them. The cost is one EDS, RDS and SDS response, with content the
+	// proxy already holds, per proxy that reconnects before its snapshot is
+	// rebuilt.
+	XdsRespondOnReconnect bool `split_words:"true" default:"true"`
+
 	// WeightedRoutePrecedence enables routes with a larger weight to take precedence over routes with a smaller weight.
 	// If two routes have the same weight, Gateway API route precedence rules apply.
 	// When enabled, the default weight for a route is 0.

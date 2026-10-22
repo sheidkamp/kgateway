@@ -314,6 +314,7 @@ func NewControlPlane(
 	certWatcher *certwatcher.CertWatcher,
 	orderedADS bool,
 	suppressNackResend bool,
+	respondOnReconnect bool,
 ) envoycache.SnapshotCache {
 	envoyLoggerAdapter := &slogAdapterForEnvoy{logger: controlPlaneLogger}
 	lnc := newLogNackCallback(xdsAuth)
@@ -327,14 +328,12 @@ func NewControlPlane(
 	kgwGRPCServer := grpc.NewServer(serverOpts...)
 
 	hasher := xds.NewNodeRoleHasher()
-	var snapshotCache envoycache.SnapshotCache = newSnapshotCache(hasher, envoyLoggerAdapter)
-	if suppressNackResend {
-		// See nackResendSuppressor: a NACK of the current snapshot version parks
-		// the watch instead of re-sending the rejected response.
-		suppressor := newNackResendSuppressor(snapshotCache, hasher)
-		allCallbacks = chainCallbacks(allCallbacks, suppressor.callbacks())
-		snapshotCache = suppressor
-	}
+	// watchPolicy answers a re-defined cluster's endpoint request even at the held
+	// version, and, when enabled, parks NACKs of the current version and answers a
+	// reconnect's first EDS, RDS and SDS requests even at the held version.
+	policy := newWatchPolicy(newSnapshotCache(hasher, envoyLoggerAdapter), hasher, suppressNackResend, respondOnReconnect)
+	allCallbacks = chainCallbacks(allCallbacks, policy.callbacks())
+	var snapshotCache envoycache.SnapshotCache = policy
 
 	var xdsOpts []serverconfig.XDSOption
 	if orderedADS {
