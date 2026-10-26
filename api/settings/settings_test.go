@@ -43,6 +43,9 @@ func allEnvVarsSet() map[string]string {
 		"KGW_ENABLE_BUILTIN_DEFAULT_METRICS":            "true",
 		"KGW_GLOBAL_POLICY_NAMESPACE":                   "foo",
 		"KGW_DISABLE_LEADER_ELECTION":                   "true",
+		"KGW_LEADER_ELECTION_LEASE_DURATION":            "30s",
+		"KGW_LEADER_ELECTION_RENEW_DEADLINE":            "20s",
+		"KGW_LEADER_ELECTION_RETRY_PERIOD":              "5s",
 		"KGW_ENABLE_AWS_EC2_DISCOVERY":                  "true",
 		"KGW_AWS_EC2_REFRESH_INTERVAL":                  "45s",
 		"KGW_TRANSLATION_DEBOUNCE":                      "25ms",
@@ -114,6 +117,9 @@ func TestSettings(t *testing.T) {
 				EnableBuiltinDefaultMetrics:           false,
 				GlobalPolicyNamespace:                 "",
 				DisableLeaderElection:                 false,
+				LeaderElectionLeaseDuration:           15 * time.Second,
+				LeaderElectionRenewDeadline:           10 * time.Second,
+				LeaderElectionRetryPeriod:             2 * time.Second,
 				EnableAwsEc2Discovery:                 false,
 				AwsEc2RefreshInterval:                 30 * time.Second,
 				TranslationDebounce:                   10 * time.Millisecond,
@@ -159,6 +165,9 @@ func TestSettings(t *testing.T) {
 				EnableBuiltinDefaultMetrics:           true,
 				GlobalPolicyNamespace:                 "foo",
 				DisableLeaderElection:                 true,
+				LeaderElectionLeaseDuration:           30 * time.Second,
+				LeaderElectionRenewDeadline:           20 * time.Second,
+				LeaderElectionRetryPeriod:             5 * time.Second,
 				EnableAwsEc2Discovery:                 true,
 				AwsEc2RefreshInterval:                 45 * time.Second,
 				TranslationDebounce:                   25 * time.Millisecond,
@@ -280,6 +289,34 @@ func TestSettings(t *testing.T) {
 			expectedErrorStr: `time: invalid duration "not-a-duration"`,
 		},
 		{
+			name: "errors on invalid leader election lease duration",
+			envVars: map[string]string{
+				"KGW_LEADER_ELECTION_LEASE_DURATION": "not-a-duration",
+			},
+			expectedErrorStr: `time: invalid duration "not-a-duration"`,
+		},
+		{
+			name: "errors on non-positive leader election duration",
+			envVars: map[string]string{
+				"KGW_LEADER_ELECTION_RETRY_PERIOD": "0s",
+			},
+			expectedErrorStr: "leader election durations must be greater than zero: leaseDuration=15s, renewDeadline=10s, retryPeriod=0s",
+		},
+		{
+			name: "errors when leader election lease duration is not greater than renew deadline",
+			envVars: map[string]string{
+				"KGW_LEADER_ELECTION_LEASE_DURATION": "10s",
+			},
+			expectedErrorStr: "leader election leaseDuration (10s) must be greater than renewDeadline (10s)",
+		},
+		{
+			name: "errors when leader election renew deadline is not greater than retry period with jitter",
+			envVars: map[string]string{
+				"KGW_LEADER_ELECTION_RETRY_PERIOD": "9s",
+			},
+			expectedErrorStr: "leader election renewDeadline (10s) must be greater than retryPeriod (9s) * 1.2",
+		},
+		{
 			name: "ignores other env vars",
 			envVars: map[string]string{
 				"KGW_DOES_NOT_EXIST":         "true",
@@ -306,6 +343,9 @@ func TestSettings(t *testing.T) {
 				ValidationMode:                        ValidationStandard,
 				ValidatorMode:                         ValidatorCache,
 				ValidatorCacheSize:                    0,
+				LeaderElectionLeaseDuration:           15 * time.Second,
+				LeaderElectionRenewDeadline:           10 * time.Second,
+				LeaderElectionRetryPeriod:             2 * time.Second,
 				EnableAwsEc2Discovery:                 false,
 				AwsEc2RefreshInterval:                 30 * time.Second,
 				TranslationDebounce:                   10 * time.Millisecond,
@@ -351,6 +391,16 @@ func TestSettings(t *testing.T) {
 			require.Emptyf(t, diff, "Settings do not match expected values (-expected +got):\n%s", diff)
 		})
 	}
+}
+
+// TestValidateLeaderElectionDisabled tests that leader election durations are not validated when leader election is disabled.
+func TestValidateLeaderElectionDisabled(t *testing.T) {
+	s := &Settings{
+		DisableLeaderElection:       true,
+		LeaderElectionLeaseDuration: time.Second,
+		LeaderElectionRenewDeadline: 10 * time.Second,
+	}
+	require.NoError(t, s.validateLeaderElection(), "invalid durations should be ignored when leader election is disabled")
 }
 
 // TestEnvVarCoverage tests that all settings are tested with non-default values.

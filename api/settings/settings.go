@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
+	"k8s.io/client-go/tools/leaderelection"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/kgateway-dev/kgateway/v2/pkg/logging"
@@ -357,6 +358,27 @@ type Settings struct {
 	// Controls if leader election is disabled. Defaults to false.
 	DisableLeaderElection bool `split_words:"true" default:"false"`
 
+	// LeaderElectionLeaseDuration is the duration that non-leader candidates will wait
+	// after observing a leadership renewal until attempting to acquire leadership of a
+	// led but unrenewed leader slot. It must be greater than LeaderElectionRenewDeadline.
+	// Only used when leader election is enabled (DisableLeaderElection is false).
+	// Defaults to 15s, matching the controller-runtime default.
+	LeaderElectionLeaseDuration time.Duration `split_words:"true" default:"15s"`
+
+	// LeaderElectionRenewDeadline is the interval between attempts by the acting leader to
+	// renew a leadership slot before it stops leading. It must be greater than
+	// LeaderElectionRetryPeriod and less than LeaderElectionLeaseDuration.
+	// Only used when leader election is enabled (DisableLeaderElection is false).
+	// Defaults to 10s, matching the controller-runtime default.
+	LeaderElectionRenewDeadline time.Duration `split_words:"true" default:"10s"`
+
+	// LeaderElectionRetryPeriod is the duration the leader and non-leaders should wait
+	// between attempting acquisition, and the leader between renewals, of leadership.
+	// It must be less than LeaderElectionRenewDeadline.
+	// Only used when leader election is enabled (DisableLeaderElection is false).
+	// Defaults to 2s, matching the controller-runtime default.
+	LeaderElectionRetryPeriod time.Duration `split_words:"true" default:"2s"`
+
 	// EnableAwsEc2Discovery enables dynamic discovery of AWS EC2 instances for Backend resources.
 	// This is disabled by default and must be explicitly enabled by the controller operator.
 	EnableAwsEc2Discovery bool `split_words:"true" default:"false"`
@@ -563,7 +585,31 @@ func BuildSettings() (*Settings, error) {
 	if err := applyDeprecatedEnableWaypoint(settings); err != nil {
 		return settings, err
 	}
+	if err := settings.validateLeaderElection(); err != nil {
+		return settings, err
+	}
 	return settings, nil
+}
+
+// validateLeaderElection mirrors the checks client-go runs when the leader elector is created,
+// so that invalid durations fail when settings are loaded rather than when the manager starts.
+func (s *Settings) validateLeaderElection() error {
+	if s.DisableLeaderElection {
+		return nil
+	}
+	if s.LeaderElectionLeaseDuration <= 0 || s.LeaderElectionRenewDeadline <= 0 || s.LeaderElectionRetryPeriod <= 0 {
+		return fmt.Errorf("leader election durations must be greater than zero: leaseDuration=%s, renewDeadline=%s, retryPeriod=%s",
+			s.LeaderElectionLeaseDuration, s.LeaderElectionRenewDeadline, s.LeaderElectionRetryPeriod)
+	}
+	if s.LeaderElectionLeaseDuration <= s.LeaderElectionRenewDeadline {
+		return fmt.Errorf("leader election leaseDuration (%s) must be greater than renewDeadline (%s)",
+			s.LeaderElectionLeaseDuration, s.LeaderElectionRenewDeadline)
+	}
+	if s.LeaderElectionRenewDeadline <= time.Duration(leaderelection.JitterFactor*float64(s.LeaderElectionRetryPeriod)) {
+		return fmt.Errorf("leader election renewDeadline (%s) must be greater than retryPeriod (%s) * %v",
+			s.LeaderElectionRenewDeadline, s.LeaderElectionRetryPeriod, leaderelection.JitterFactor)
+	}
+	return nil
 }
 
 var logger = logging.New("settings")
