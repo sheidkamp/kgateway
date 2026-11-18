@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,12 +17,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	istiosets "istio.io/istio/pkg/util/sets"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -32,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/kgateway-dev/kgateway/v2/api/conditions"
 	apisettings "github.com/kgateway-dev/kgateway/v2/api/settings"
 	"github.com/kgateway-dev/kgateway/v2/api/v1alpha1/kgateway"
 	"github.com/kgateway-dev/kgateway/v2/pkg/apiclient"
@@ -303,6 +310,63 @@ func (s *ControllerSuite) TestInvalidGatewayParameters() {
 		require.Equal(c, string(gwv1.GatewayReasonInvalidParameters), condition.Reason)
 		require.Equal(c, gw.Generation, condition.ObservedGeneration)
 	}, defaultPollTimeout, 500*time.Millisecond, "timed out waiting for Gateway to have GatewayReasonInvalidParameters")
+}
+
+// TestBootstrapPatchAppliedCondition tests that the Gateway reconciler reports the
+// kgateway.dev/BootstrapPatchApplied condition as the bootstrap patches in an existing
+// Gateway's GatewayParameters change.
+func (s *ControllerSuite) TestBootstrapPatchAppliedCondition() {
+	key := types.NamespacedName{Name: "bootstrap-patches", Namespace: defaultNamespace}
+
+	// Create a Gateway whose GatewayParameters have a valid overlay.
+	s.createGatewayWithOverlay(key, `{"stats_flush_interval": "10s"}`)
+	s.waitForBootstrapPatchApplied(key, metav1.ConditionTrue, conditions.KgatewayReasonBootstrapPatchApplied, false)
+
+	// An overlay with a template is rejected. The proxy keeps running, so the Gateway
+	// stays accepted.
+	s.updateOverlay(key, `{"layered_runtime": {"layers": [{"name": "{{ .Values.name }}", "static_layer": {}}]}}`)
+	s.waitForBootstrapPatchApplied(key, metav1.ConditionFalse, conditions.KgatewayReasonBootstrapInvalidOverlay, false)
+
+	// Removing the patches removes the condition.
+	s.updateOverlay(key, "")
+	s.waitForBootstrapPatchApplied(key, "", "", false)
+}
+
+// TestBootstrapPatchesInvalidOnNewGateway tests that a new Gateway whose bootstrap
+// patches cannot be applied gets no proxy and is not accepted until they are fixed.
+func (s *ControllerSuite) TestBootstrapPatchesInvalidOnNewGateway() {
+	ctx := context.Background()
+	key := types.NamespacedName{Name: "bootstrap-patches-new", Namespace: defaultNamespace}
+
+	// Create a Gateway whose GatewayParameters have an invalid overlay.
+	s.createGatewayWithOverlay(key, `{"layerd_runtime": {}}`)
+	s.waitForBootstrapPatchApplied(key, metav1.ConditionFalse, conditions.KgatewayReasonBootstrapInvalidOverlay, true)
+	err := s.client.Get(ctx, key, &appsv1.Deployment{})
+	s.Require().True(k8serrors.IsNotFound(err), "no proxy should be deployed, got %v", err)
+
+	// Fixing the overlay deploys the proxy and accepts the Gateway.
+	s.updateOverlay(key, `{"layered_runtime": {}}`)
+	s.waitForBootstrapPatchApplied(key, metav1.ConditionTrue, conditions.KgatewayReasonBootstrapPatchApplied, false)
+	s.Require().EventuallyWithT(func(c *assert.CollectT) {
+		require.NoError(c, s.client.Get(ctx, key, &appsv1.Deployment{}))
+	}, defaultPollTimeout, 500*time.Millisecond, "timed out waiting for the proxy Deployment")
+}
+
+// TestBootstrapPatchEvents tests that the Gateway reconciler records the events the
+// deployer reports on the Gateway, for applied patches and for patches that fail.
+func (s *ControllerSuite) TestBootstrapPatchEvents() {
+	key := types.NamespacedName{Name: "bootstrap-patch-events", Namespace: defaultNamespace}
+
+	// Patches that set a managed path record a Warning event that names it.
+	s.createGatewayWithOverlay(key, `{"static_resources": {"clusters": [{"name": "xds_cluster", "connect_timeout": "9s"}]}}`)
+	s.waitForBootstrapPatchApplied(key, metav1.ConditionTrue, conditions.KgatewayReasonBootstrapManagedPathsOverridden, false)
+	s.waitForGatewayEvent(key, conditions.KgatewayReasonBootstrapManagedPathsOverridden,
+		"set static_resources.clusters[name=xds_cluster] (GatewayParameters default/bootstrap-patch-events)")
+
+	// Patches that fail record a Warning event with the error.
+	s.updateOverlay(key, `{"layerd_runtime": {}}`)
+	s.waitForBootstrapPatchApplied(key, metav1.ConditionFalse, conditions.KgatewayReasonBootstrapInvalidOverlay, false)
+	s.waitForGatewayEvent(key, conditions.KgatewayReasonBootstrapInvalidOverlay, "Applied none of the bootstrap patches")
 }
 
 // TestGatewayClassStatus tests the Status conditions on GatewayClass
@@ -606,6 +670,125 @@ func (s *ControllerSuite) TestGatewayClass() {
 //
 // Add test helpers below. All suite tests should be placed together above
 //
+
+// createGatewayWithOverlay creates a Gateway and the GatewayParameters it uses, with
+// the given bootstrap overlay, both named by key, and deletes them when the test ends.
+func (s *ControllerSuite) createGatewayWithOverlay(key types.NamespacedName, overlayJSON string) {
+	ctx := context.Background()
+
+	// Build the GatewayParameters and the Gateway.
+	gwp := &kgateway.GatewayParameters{
+		ObjectMeta: metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace},
+		Spec: kgateway.GatewayParametersSpec{
+			Kube: &kgateway.KubernetesProxyConfig{
+				EnvoyContainer: &kgateway.EnvoyContainer{Bootstrap: &kgateway.EnvoyBootstrap{}},
+			},
+		},
+	}
+	setBootstrapOverlay(gwp, overlayJSON)
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: gwv1.ObjectName(gatewayClassName),
+			Infrastructure: &gwv1.GatewayInfrastructure{
+				ParametersRef: &gwv1.LocalParametersReference{
+					Group: kgateway.GroupName,
+					Kind:  gwv1.Kind(wellknown.GatewayParametersGVK.Kind),
+					Name:  gwp.Name,
+				},
+			},
+			Listeners: []gwv1.Listener{{
+				Name:     "listener",
+				Protocol: "HTTP",
+				Port:     80,
+			}},
+		},
+	}
+
+	// Create them, and delete them when the test ends.
+	s.T().Cleanup(func() {
+		s.NoError(s.client.Delete(ctx, gw))
+		s.NoError(s.client.Delete(ctx, gwp))
+	})
+	s.Require().NoError(s.client.Create(ctx, gwp))
+	s.Require().NoError(s.client.Create(ctx, gw))
+}
+
+// updateOverlay replaces the bootstrap overlay of the GatewayParameters named by key;
+// an empty overlay removes the patches.
+func (s *ControllerSuite) updateOverlay(key types.NamespacedName, overlayJSON string) {
+	ctx := context.Background()
+	s.Require().EventuallyWithT(func(c *assert.CollectT) {
+		gwp := &kgateway.GatewayParameters{}
+		require.NoError(c, s.client.Get(ctx, key, gwp))
+		setBootstrapOverlay(gwp, overlayJSON)
+		require.NoError(c, s.client.Update(ctx, gwp))
+	}, defaultPollTimeout, 500*time.Millisecond, "timed out updating GatewayParameters")
+}
+
+// waitForBootstrapPatchApplied waits until the Gateway named by key has the
+// kgateway.dev/BootstrapPatchApplied condition with status and reason, or none when
+// status is empty, and is or is not rejected with Accepted=False/InvalidParameters.
+func (s *ControllerSuite) waitForBootstrapPatchApplied(key types.NamespacedName, status metav1.ConditionStatus, reason string, invalidParameters bool) {
+	ctx := context.Background()
+	s.Require().EventuallyWithT(func(c *assert.CollectT) {
+		gw := &gwv1.Gateway{}
+		require.NoError(c, s.client.Get(ctx, key, gw))
+
+		// Check the bootstrap condition.
+		cond := meta.FindStatusCondition(gw.Status.Conditions, conditions.KgatewayConditionBootstrapPatchApplied)
+		if status == "" {
+			require.Nil(c, cond, "expected no %s condition", conditions.KgatewayConditionBootstrapPatchApplied)
+		} else {
+			require.NotNil(c, cond)
+			require.Equal(c, status, cond.Status)
+			require.Equal(c, reason, cond.Reason)
+			require.Equal(c, gw.Generation, cond.ObservedGeneration)
+		}
+
+		// Check whether the Gateway is rejected for its parameters.
+		accepted := meta.FindStatusCondition(gw.Status.Conditions, string(gwv1.GatewayConditionAccepted))
+		if invalidParameters {
+			require.NotNil(c, accepted)
+			require.Equal(c, metav1.ConditionFalse, accepted.Status)
+			require.Equal(c, string(gwv1.GatewayReasonInvalidParameters), accepted.Reason)
+		} else if accepted != nil {
+			require.NotEqual(c, string(gwv1.GatewayReasonInvalidParameters), accepted.Reason)
+		}
+	}, defaultPollTimeout, 500*time.Millisecond, "timed out waiting for %s=%s/%s", conditions.KgatewayConditionBootstrapPatchApplied, status, reason)
+}
+
+// waitForGatewayEvent waits until the Gateway named by key has a Warning event with
+// reason whose note contains noteSubstring.
+func (s *ControllerSuite) waitForGatewayEvent(key types.NamespacedName, reason, noteSubstring string) {
+	ctx := context.Background()
+	clientset, err := kubernetes.NewForConfig(s.env.Config)
+	s.Require().NoError(err)
+
+	s.Require().EventuallyWithT(func(c *assert.CollectT) {
+		// List the namespace's events.
+		evts, err := clientset.EventsV1().Events(key.Namespace).List(ctx, metav1.ListOptions{})
+		require.NoError(c, err)
+
+		// Find one for the Gateway with the reason and note.
+		found := slices.ContainsFunc(evts.Items, func(e eventsv1.Event) bool {
+			return e.Regarding.Kind == wellknown.GatewayKind && e.Regarding.Name == key.Name &&
+				e.Type == corev1.EventTypeWarning && e.Reason == reason && strings.Contains(e.Note, noteSubstring)
+		})
+		require.True(c, found, "no Warning event %s containing %q for Gateway %s", reason, noteSubstring, key)
+	}, defaultPollTimeout, 500*time.Millisecond, "timed out waiting for event %s on Gateway %s", reason, key)
+}
+
+// setBootstrapOverlay sets the bootstrap overlay of gwp; an empty overlay removes the
+// patches.
+func setBootstrapOverlay(gwp *kgateway.GatewayParameters, overlayJSON string) {
+	gwp.Spec.Kube.EnvoyContainer.Bootstrap.Patches = nil
+	if overlayJSON != "" {
+		gwp.Spec.Kube.EnvoyContainer.Bootstrap.Patches = &kgateway.BootstrapPatches{
+			Overlay: &kgateway.BootstrapOverlay{Value: apiextensionsv1.JSON{Raw: []byte(overlayJSON)}},
+		}
+	}
+}
 
 type fakeDiscoveryNamespaceFilter struct{}
 
