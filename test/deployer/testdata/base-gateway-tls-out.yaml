@@ -30,6 +30,7 @@ data:
     DEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmnopqrstuvwxyz123456
     wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
     -----END CERTIFICATE-----
+  envoy-8cd9b8a0ecd4acb2a3b814e7795df6ab5f1c8c1420a93d4865a9436723ed6689.yaml: <envoy.yaml>
   envoy.yaml: |
     admin:
       address:
@@ -321,6 +322,7 @@ spec:
     metadata:
       annotations:
         gateway.kgateway.dev/gateway-full-name: gw
+        kgateway.dev/checksum-config: 8cd9b8a0ecd4acb2a3b814e7795df6ab5f1c8c1420a93d4865a9436723ed6689
         prometheus.io/path: /metrics
         prometheus.io/port: "9091"
         prometheus.io/scrape: "true"
@@ -364,6 +366,8 @@ spec:
           value: "0"
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: service.namespace=$(POD_NAMESPACE),service.instance.id=$(POD_UID),service.version=1.0.0-ci1,k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.pod.uid=$(POD_UID),k8s.node.name=$(NODE_NAME),k8s.deployment.name=gw,k8s.container.name=kgateway-proxy
+        - name: INPUT_CONF
+          value: /etc/envoy/envoy-8cd9b8a0ecd4acb2a3b814e7795df6ab5f1c8c1420a93d4865a9436723ed6689.yaml
         image: ghcr.io/envoy-wrapper:v2.1.0-dev
         lifecycle:
           preStop:
