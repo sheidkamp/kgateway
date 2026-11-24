@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -16,8 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiserverschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -302,11 +303,10 @@ func (dt DeployerTester) RunHelmChartTestWithObjects(
 	// Get post-processed objects (what actually gets deployed)
 	deployObjs, err := deployer.GetObjsToDeploy(ctx, gtw)
 	assert.NoError(t, err, "error getting objects to deploy")
+	elideCurrentRevision(t, deployObjs)
 
 	got, err := objectsToYAML(deployObjs)
 	assert.NoError(t, err, "error converting objects to YAML")
-
-	got = sanitizeOutput(got)
 
 	if envutils.IsEnvTruthy("REFRESH_GOLDEN") {
 		t.Log("REFRESH_GOLDEN is set, writing output file", outputFile)
@@ -399,7 +399,18 @@ func validateObjectsAgainstAPIServer(
 			u.SetNamespace(defaultNamespace)
 		}
 
-		if err := ctrlClient.Create(ctx, u, client.DryRunAll); err != nil {
+		// Validate the object as a create, or as an update of the object the test
+		// inputs already created.
+		err = ctrlClient.Create(ctx, u, client.DryRunAll)
+		if apierrors.IsAlreadyExists(err) {
+			existing := &unstructured.Unstructured{}
+			existing.SetGroupVersionKind(gvk)
+			if err = ctrlClient.Get(ctx, client.ObjectKeyFromObject(u), existing); err == nil {
+				u.SetResourceVersion(existing.GetResourceVersion())
+				err = ctrlClient.Update(ctx, u, client.DryRunAll)
+			}
+		}
+		if err != nil {
 			if meta.IsNoMatchError(err) {
 				t.Logf("skipping dry-run for %s/%s: no API server mapping (CRD not installed): %v",
 					gvk.Kind, u.GetName(), err)
@@ -412,14 +423,58 @@ func validateObjectsAgainstAPIServer(
 	assert.NoError(t, errors.Join(errs...), "rendered objects must pass API server validation")
 }
 
-// configChecksumRegex matches the pod template's bootstrap checksum annotation line.
-var configChecksumRegex = regexp.MustCompile(`(?m)^[ \t]*kgateway\.dev/checksum-config: [0-9a-f]{64}\n`)
+// elideCurrentRevision checks the generated ConfigMap's bootstrap revision for the pod
+// template's checksum: INPUT_CONF points the proxy at it, and it holds the same content
+// as envoy.yaml. It then replaces that revision's value with "<envoy.yaml>", so the
+// golden files do not hold the bootstrap twice. The keys, the checksum annotation, and
+// any earlier revisions the ConfigMap keeps are left as they are.
+func elideCurrentRevision(t *testing.T, objs []client.Object) {
+	t.Helper()
 
-// sanitizeOutput removes things that change often but are not relevant to the tests.
-// The bootstrap checksum changes with any bootstrap edit, so the golden files leave it
-// out; pkg/kgateway/deployer/checksum_test.go covers the checksum itself.
-func sanitizeOutput(got []byte) []byte {
-	return configChecksumRegex.ReplaceAll(got, nil)
+	// Find the pod template's checksum and the bootstrap path INPUT_CONF gives the proxy.
+	var checksum, inputConf string
+	for _, obj := range objs {
+		dep, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			continue
+		}
+		checksum = dep.Spec.Template.Annotations["kgateway.dev/checksum-config"]
+		for _, c := range dep.Spec.Template.Spec.Containers {
+			for _, env := range c.Env {
+				if env.Name == "INPUT_CONF" {
+					inputConf = env.Value
+				}
+			}
+		}
+	}
+
+	// A proxy without INPUT_CONF reads no revision.
+	if inputConf == "" {
+		return
+	}
+
+	// Check INPUT_CONF names the pod template's revision.
+	key := "envoy-" + checksum + ".yaml"
+	assert.Equal(t, "/etc/envoy/"+key, inputConf, "INPUT_CONF should name the revision for the pod template's checksum")
+
+	// Check the generated ConfigMap holds that revision with envoy.yaml's content, and
+	// elide the value.
+	for _, obj := range objs {
+		cm, ok := obj.(*corev1.ConfigMap)
+		if !ok {
+			continue
+		}
+		bootstrap, ok := cm.Data["envoy.yaml"]
+		if !ok {
+			continue
+		}
+		value, ok := cm.Data[key]
+		if !assert.True(t, ok, "the generated ConfigMap should hold the revision INPUT_CONF names") {
+			continue
+		}
+		assert.Equal(t, bootstrap, value, "the revision should hold the same content as envoy.yaml")
+		cm.Data[key] = "<envoy.yaml>"
+	}
 }
 
 // objectsToYAML converts a slice of client.Object to YAML bytes, separated by "---"
